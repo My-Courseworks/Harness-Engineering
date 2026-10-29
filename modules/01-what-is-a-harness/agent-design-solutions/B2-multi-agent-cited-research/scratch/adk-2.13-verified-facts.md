@@ -1,0 +1,44 @@
+# ADK 2.13.0 facts verified for B2 (working notes)
+
+Paths are relative to `google/adk/` in the unpacked 2.13.0 source.
+
+- `agents/llm_agent.py:410-419`: `mode` is `chat | task | single_turn`. Default is chat as a sub-agent, single_turn as a workflow node.
+- `agents/llm_agent.py:1347-1370`: task mode adds `FinishTaskTool`. Sub-agents with mode single_turn are wrapped as `_SingleTurnAgentTool` and task-mode ones as `_TaskAgentTool`. An LlmAgent sub-agent with no mode becomes chat (a transfer target).
+- `tools/agent_tool.py:122-133`: the docstring discourages using `AgentTool` directly; it recommends `mode='single_turn'` under `sub_agents`.
+- `tools/agent_tool.py:270-318`: `AgentTool` builds a new `Runner` with an `InMemorySessionService`. It copies parent state into the child, except `_adk*` keys, and the child sees no parent history.
+- `tools/agent_tool.py:326-344`: the parent's `run_config` is inherited, including `max_llm_calls`, which is counted per nested run. Streaming is forced to NONE.
+- `tools/agent_tool.py:346-368`: the caller's abort signal propagates into the nested run.
+- `tools/agent_tool.py:391-393`: the child's `state_delta` is forwarded to the parent.
+- `tools/agent_tool.py:409-425`: pending long-running calls inside an `AgentTool` child cannot resume, because the nested session is discarded.
+- `tools/agent_tool.py:478-516`: `_SingleTurnAgentTool` runs through `tool_context.run_node` in the parent session, on a sub-branch keyed by the function_call_id. Exceptions come back as an error string.
+- `tools/agent_tool.py:561-566`: the task tool's description says "Do NOT call this tool in parallel with any other tools."
+- `flows/llm_flows/context/_contents.py:288-345`: a task or single_turn agent sees the delegating function-call args as its first user turn. Single-turn adds "You will not receive any user replies".
+- `flows/llm_flows/context/_contents.py:348-396`: events are visible only when `isolation_scope` matches. The chat coordinator sees only unscoped events; a scoped sub-agent sees only its own.
+- `flows/llm_flows/tools/_batch_executor.py:197-213`: parallel tool calls are gathered, and if one raises, the rest are cancelled.
+- `flows/llm_flows/tools/_batch_executor.py:62-145`: parallel state deltas are deep-merged in call order. For scalars the last writer wins.
+- `agents/parallel_agent.py:172-193`: `ParallelAgent` is DEPRECATED in favour of Workflow. History is isolated per branch, state is shared, and the last writer wins.
+- `workflow/_workflow.py:160-166`: `max_concurrency` applies to graph-scheduled nodes, but not to dynamic `ctx.run_node` nodes.
+- `workflow/_workflow.py:252-256` and `700-735`: resume scans prior events and replays completed nodes. A resumable session emits node-status checkpoints.
+- `workflow/_parallel_worker.py:67-193`: `parallel_worker` fans out over a list, with each item on its own sub-branch and capped by `max_parallel_workers`. The first item failure cancels the in-flight items.
+- `workflow/_node.py:47-155`: `node(..., retry_config, timeout, parallel_worker, max_parallel_workers, require_confirmation, auth_config)`.
+- `workflow/_base_node.py:69-113`: `rerun_on_resume`, `retry_config` (default None, so no retry), and `timeout`. A retried Workflow replays the children that already produced output or state.
+- `workflow/_retry_config.py`: when unset, the defaults are max_attempts 5, delay 1s, max 60s, backoff 2.0, jitter 1.0. `exceptions=None` means retry on all exceptions, matched by class name.
+- `workflow/utils/_workflow_graph_utils.py:146-178`: LlmAgent nodes default to `rerun_on_resume=True`. A single_turn node defaults to `include_contents='none'`, and `parallel_worker=True` turns the node into a `_ParallelWorker`.
+- `workflow/utils/_graph_validation.py:30-55`: unconditional cycles are rejected, so a loop must pass through a routed edge.
+- `apps/_configs.py:29-48`: `ResumabilityConfig` is @experimental. It is at-least-once, and temp/in-memory state is lost.
+- `apps/_configs.py:50+`: `EventsCompactionConfig` has two trigger pairs: token_threshold with event_retention_size, and compaction_interval with overlap_size.
+- `flows/llm_flows/context/_compaction.py:35-60`: token-threshold compaction also runs as a request processor before model calls, so it works within an invocation.
+- `runners.py:1129-1160`: `run_async(invocation_id=..., abort_signal=asyncio.Event)`. The invocation_id resumes an interrupted invocation.
+- `tools/long_running_tool.py`: `LongRunningFunctionTool` sets `is_long_running` and appends a "do not call again" note to the description.
+- `events/request_input.py`: `RequestInput` is a model-free pause yielded by a node.
+- `tools/google_search_tool.py:83`: raises ValueError on non-Gemini models.
+- `tools/mcp_tool/mcp_toolset.py:150-180`: the constructor takes `tool_filter`, `tool_name_prefix`, `auth_scheme`/`auth_credential`, `header_provider`, `require_confirmation`, `tool_list_cache_ttl_seconds`, and `credential_key`.
+- `tools/mcp_tool/mcp_session_manager.py:504-530`: `StreamableHTTPConnectionParams(url, headers, timeout=5, sse_read_timeout=300)`.
+- `tools/skill_toolset.py:125-250` and `2112`: `SkillToolset` has LAZY or EAGER discovery and PERSISTENT, BOUNDED or EPHEMERAL lifecycles.
+- `a2a/agent/_remote_a2a_agent.py:653-687`: `RemoteA2aAgent` state is local to each side, and only task mode is supported. `workflow/utils/_workflow_graph_utils.py:137-144` rejects task-mode `RemoteA2aAgent` as a standalone workflow node.
+- `sessions/base_session_service.py:195-222`: `temp:` keys live in memory for the invocation and are never persisted.
+- `agents/context.py:634-690`: `save_credential`, `load_credential`, `get_auth_response`, and `request_credential`, which is tool-context only.
+- `models/_fallback_model.py:207`: `FallbackModel(models=[...])` tries each model once, on retriable status codes only, and never after the first response.
+- `agents/run_config.py:37`: `max_llm_calls` defaults to 500 and is overridable via `ADK_MAX_LLM_CALLS`.
+- `agents/invocation_context.py:67-95`: exceeding `max_llm_calls` raises `LlmCallsLimitExceededError`.
+- `plugins/base_plugin.py`: callbacks are `on_user_message`, `before_run`, `on_event`, `after_run`, before/after agent, model and tool, and `on_model_error`, `on_tool_error`, `on_agent_error` and `on_run_error`.
