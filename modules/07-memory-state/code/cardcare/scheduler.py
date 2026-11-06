@@ -2,14 +2,17 @@
 
 Each record answers the module's five questions:
   action    - what should happen ("case_status_followup" or "customer_reminder")
-  trigger   - when (`trigger_at`, compared with the harness clock)
+  trigger   - when (`trigger_at`, a normalised UTC instant compared as a time, never as a string)
   resume    - what the woken-up agent needs to pick the task up cold (ids, not facts)
-  done flag - `status`, set to done by the harness on evidence, never on the model's word
-  approval  - who must sign off before it runs ("none" or "ops_reviewer")
+  done flag - `status`: pending, running, awaiting_approval, done, cancelled or failed; set by the
+              harness on evidence (a sent message), never on the model's word
+  approval  - who signs off before anything reaches the customer ("none" or "ops_reviewer"). The
+              reviewer approves the drafted message itself, after the agent has written it.
 
-The agent's interface is narrow: a tool writes a record. `fire_due_followups`
-wakes a fresh agent session when a record falls due; the record outlives the
-conversation that created it.
+The agent's interface is narrow: tools write a record, read the customer's own records, and cancel a
+customer reminder. `fire_due_followups` wakes a fresh agent session when a record falls due; the record
+outlives the conversation that created it. A record stuck in `running` (the process died mid-fire) is
+recovered on the next run: done if its message was already sent, pending otherwise.
 """
 
 import inspect
@@ -18,11 +21,14 @@ import sqlite3
 import uuid
 from collections.abc import Callable
 from contextlib import closing
+from datetime import timedelta
 from pathlib import Path
 
 from cardcare import world
+from cardcare.clock import format_instant, parse_instant
 
 MAX_ATTEMPTS = 3
+RUNNING_LEASE_MINUTES = 10
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS followups (
@@ -38,6 +44,7 @@ CREATE TABLE IF NOT EXISTS followups (
   created_at TEXT NOT NULL,
   fired_at TEXT,
   done_at TEXT,
+  cancelled_at TEXT,
   last_error TEXT
 );
 """
@@ -67,7 +74,8 @@ def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str,
         conn.execute(
             "INSERT INTO followups (followup_id, user_id, action, trigger_at, resume_json, approval, status, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-            (followup_id, user_id, action, trigger_at, json.dumps(resume), approval, now),
+            (followup_id, user_id, action, format_instant(parse_instant(trigger_at)), json.dumps(resume), approval,
+             format_instant(parse_instant(now))),
         )
         row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
     return _record_view(row)
@@ -79,24 +87,56 @@ def list_followups(db_path: Path) -> list[dict]:
     return [_record_view(row) for row in rows]
 
 
-def approve_followup(db_path: Path, followup_id: str, reviewer: str) -> dict:
-    """A human signs off a record that was parked for approval; it fires on the next run."""
+def get_followup(db_path: Path, followup_id: str) -> dict | None:
+    with closing(_connect(db_path)) as conn:
+        row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
+    return _record_view(row) if row else None
+
+
+def user_followups(db_path: Path, user_id: str) -> list[dict]:
+    return [f for f in list_followups(db_path) if f["user_id"] == user_id]
+
+
+def cancel_followup(db_path: Path, followup_id: str, user_id: str, now: str) -> dict | None:
+    """Cancel a record that has not fired yet. Returns the record, or None if it was not cancellable."""
     with closing(_connect(db_path)) as conn, conn:
-        conn.execute(
-            "UPDATE followups SET approved_by = ?, status = 'pending'"
-            " WHERE followup_id = ? AND status = 'awaiting_approval'",
-            (reviewer, followup_id),
+        cursor = conn.execute(
+            "UPDATE followups SET status = 'cancelled', cancelled_at = ?"
+            " WHERE followup_id = ? AND user_id = ? AND status IN ('pending', 'awaiting_approval')",
+            (format_instant(parse_instant(now)), followup_id, user_id),
         )
         row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
-    return _record_view(row)
+    return _record_view(row) if cursor.rowcount == 1 else None
+
+
+def approve_followup(db_path: Path, bank_db: Path, followup_id: str, reviewer: str, now: str) -> dict:
+    """A person signs off the drafted message itself: it is released to the customer and the record is done."""
+    held = [m for m in world.outbound_messages(bank_db) if m["followup_id"] == followup_id and m["status"] == "held"]
+    if not held:
+        raise ValueError(f"{followup_id} has no drafted message awaiting approval")
+    world.release_message(bank_db, held[-1]["message_id"], reviewer, now)
+    _set_status(db_path, followup_id, "awaiting_approval", "done", approved_by=reviewer, done_at=now)
+    return get_followup(db_path, followup_id)
+
+
+def reject_followup(db_path: Path, bank_db: Path, followup_id: str, reviewer: str, note: str, now: str) -> dict:
+    """The reviewer rejects the draft: nothing is sent, and the record goes back to pending with their note."""
+    for message in world.outbound_messages(bank_db):
+        if message["followup_id"] == followup_id and message["status"] == "held":
+            world.reject_message(bank_db, message["message_id"], reviewer, now)
+    record = get_followup(db_path, followup_id)
+    with closing(_connect(db_path)) as conn, conn:
+        conn.execute(
+            "UPDATE followups SET status = 'pending', resume_json = ?, last_error = ? WHERE followup_id = ? AND status = 'awaiting_approval'",
+            (json.dumps({**record["resume"], "reviewer_note": note}), f"draft rejected by {reviewer}", followup_id),
+        )
+    return get_followup(db_path, followup_id)
 
 
 def _due_records(db_path: Path, now: str) -> list[dict]:
-    with closing(_connect(db_path)) as conn:
-        rows = conn.execute(
-            "SELECT * FROM followups WHERE status = 'pending' AND trigger_at <= ? ORDER BY trigger_at", (now,)
-        ).fetchall()
-    return [_record_view(row) for row in rows]
+    instant = parse_instant(now)
+    pending = [r for r in list_followups(db_path) if r["status"] == "pending"]
+    return sorted((r for r in pending if parse_instant(r["trigger_at"]) <= instant), key=lambda r: parse_instant(r["trigger_at"]))
 
 
 def _set_status(db_path: Path, followup_id: str, from_status: str, to_status: str, **fields) -> bool:
@@ -110,25 +150,40 @@ def _set_status(db_path: Path, followup_id: str, from_status: str, to_status: st
     return cursor.rowcount == 1
 
 
+def _messages_for(bank_db: Path, followup_id: str, status: str) -> list[dict]:
+    return [m for m in world.outbound_messages(bank_db) if m["followup_id"] == followup_id and m["status"] == status]
+
+
+def recover_stale_running(db_path: Path, bank_db: Path, now: str) -> list[dict]:
+    """After a crash between `running` and `done`: done if the message went out, pending otherwise."""
+    recovered = []
+    for record in list_followups(db_path):
+        if record["status"] != "running" or not record["fired_at"]:
+            continue
+        if parse_instant(record["fired_at"]) + timedelta(minutes=RUNNING_LEASE_MINUTES) > parse_instant(now):
+            continue
+        sent = _messages_for(bank_db, record["followup_id"], "sent")
+        target = "done" if sent else "pending"
+        if _set_status(db_path, record["followup_id"], "running", target, last_error="recovered after an interrupted run"):
+            recovered.append({"followup_id": record["followup_id"], "user_id": record["user_id"], "outcome": f"recovered_{target}"})
+    return recovered
+
+
 async def fire_due_followups(
     scheduler_db: Path,
     bank_db: Path,
     now: str,
     run_followup_session: Callable[[dict, str], object],
 ) -> list[dict]:
-    """Wake the agent for every due record, then decide `done` from the outbound-message log.
+    """Wake the agent for every due record, then set its status from the outbound-message log.
 
     `run_followup_session(record, now)` is the framework's resume callback (sync or async).
-
-    Returns one outcome row per due record: fired_done, retry, failed, or awaiting_approval.
+    Returns one outcome row per record touched: fired_done, awaiting_approval, retry, failed, or recovered_*.
     """
-    outcomes = []
+    now = format_instant(parse_instant(now))
+    outcomes = recover_stale_running(scheduler_db, bank_db, now)
     for record in _due_records(scheduler_db, now):
         followup_id = record["followup_id"]
-        if record["approval"] != "none" and not record["approved_by"]:
-            _set_status(scheduler_db, followup_id, "pending", "awaiting_approval")
-            outcomes.append({"followup_id": followup_id, "user_id": record["user_id"], "outcome": "awaiting_approval"})
-            continue
         if not _set_status(scheduler_db, followup_id, "pending", "running", fired_at=now, attempts=record["attempts"] + 1):
             continue
         error = None
@@ -138,15 +193,17 @@ async def fire_due_followups(
                 await result
         except Exception as exc:  # the record must survive any agent failure
             error = f"{type(exc).__name__}: {exc}"
-        delivered = any(m["followup_id"] == followup_id for m in world.outbound_messages(bank_db))
-        if delivered:
+        if _messages_for(bank_db, followup_id, "sent"):
             _set_status(scheduler_db, followup_id, "running", "done", done_at=now, last_error=None)
             outcome = "fired_done"
+        elif _messages_for(bank_db, followup_id, "held"):
+            _set_status(scheduler_db, followup_id, "running", "awaiting_approval", last_error=None)
+            outcome = "awaiting_approval"
         else:
             exhausted = record["attempts"] + 1 >= MAX_ATTEMPTS
             _set_status(
                 scheduler_db, followup_id, "running", "failed" if exhausted else "pending",
-                last_error=error or "agent finished without sending the customer a message",
+                last_error=error or "agent finished without drafting a customer message",
             )
             outcome = "failed" if exhausted else "retry"
         outcomes.append({"followup_id": followup_id, "user_id": record["user_id"], "outcome": outcome, "error": error})
@@ -157,6 +214,17 @@ def followup_trigger_message(record: dict) -> str:
     """The message that resumes a fresh agent session when a record fires."""
     return (
         f"[scheduled follow-up {record['followup_id']}] action={record['action']} "
-        f"resume={json.dumps(record['resume'])}. The customer is not in this conversation. "
-        "Carry out the action using your tools, then send the customer exactly one message with notify_customer."
+        f"resume={json.dumps(record['resume'])}. The customer is not in this conversation and cannot reply to the "
+        "message you send. Carry out the action using your tools, then send the customer exactly one message with "
+        "notify_customer."
     )
+
+
+def customer_view(record: dict, channel_now: str) -> dict:
+    """What a customer may see of their own record."""
+    view = {"followup_id": record["followup_id"], "action": record["action"], "due": record["trigger_at"],
+            "status": record["status"], "sent_on": f"the contact channel on file when it is sent (currently {channel_now})"}
+    view.update({k: v for k, v in record["resume"].items() if k in ("case_id", "note")})
+    if record["approval"] != "none":
+        view["approval"] = "a Kestrel reviewer approves the message before it is sent"
+    return view

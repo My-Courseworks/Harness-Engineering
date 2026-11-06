@@ -46,7 +46,10 @@ CREATE TABLE IF NOT EXISTS outbound_messages (
   channel TEXT NOT NULL,
   body TEXT NOT NULL,
   followup_id TEXT,
-  sent_at TEXT NOT NULL
+  status TEXT NOT NULL,          -- sent, held (drafted, awaiting a reviewer), or rejected
+  drafted_at TEXT NOT NULL,
+  sent_at TEXT,
+  reviewed_by TEXT
 );
 """
 
@@ -175,26 +178,53 @@ def cases_by_id(db_path: Path, case_ids: list[str]) -> list[dict]:
     return [_case_view(row) for row in rows]
 
 
-def resolve_open_cases(db_path: Path, reason: str, status: str, resolution_code: str, note: str, now: str) -> list[dict]:
-    """Back-office step: the merchant's response decides every open case filed for `reason`."""
+def resolve_case(db_path: Path, case_id: str, status: str, resolution_code: str, note: str, now: str) -> dict:
+    """Back-office step: one decision on one case."""
     with closing(_connect(db_path)) as conn, conn:
         conn.execute(
-            "UPDATE cases SET status = ?, resolution_code = ?, resolution_note = ?, resolved_at = ?"
-            " WHERE status = 'under_review' AND reason = ?",
-            (status, resolution_code, note, now, reason),
+            "UPDATE cases SET status = ?, resolution_code = ?, resolution_note = ?, resolved_at = ? WHERE case_id = ?",
+            (status, resolution_code, note, now, case_id),
         )
-        rows = conn.execute("SELECT * FROM cases WHERE resolved_at = ?", (now,)).fetchall()
-    return [_case_view(row) for row in rows]
+        row = conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()
+    return _case_view(row) if row else {"error": f"no case {case_id}: the dispute it stands for was never filed"}
 
 
-def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, now: str) -> dict:
+def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, held: bool, now: str) -> dict:
+    """Send a message now, or hold the draft for a reviewer when `held`."""
     with closing(_connect(db_path)) as conn, conn:
         cursor = conn.execute(
-            "INSERT INTO outbound_messages (user_id, channel, body, followup_id, sent_at) VALUES (?, ?, ?, ?, ?)",
-            (user_id, channel, body, followup_id, now),
+            "INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, channel, body, followup_id, "held" if held else "sent", now, None if held else now),
         )
         row = conn.execute("SELECT * FROM outbound_messages WHERE message_id = ?", (cursor.lastrowid,)).fetchone()
     return dict(row)
+
+
+def release_message(db_path: Path, message_id: int, reviewer: str, now: str) -> None:
+    with closing(_connect(db_path)) as conn, conn:
+        conn.execute("UPDATE outbound_messages SET status = 'sent', sent_at = ?, reviewed_by = ? WHERE message_id = ? AND status = 'held'",
+                     (now, reviewer, message_id))
+
+
+def reject_message(db_path: Path, message_id: int, reviewer: str, now: str) -> None:
+    with closing(_connect(db_path)) as conn, conn:
+        conn.execute("UPDATE outbound_messages SET status = 'rejected', reviewed_by = ? WHERE message_id = ? AND status = 'held'",
+                     (reviewer, message_id))
+
+
+def add_case_evidence(db_path: Path, user_id: str, case_id: str, evidence_note: str, now: str) -> dict:
+    """Attach more evidence to one of the customer's open cases."""
+    with closing(_connect(db_path)) as conn, conn:
+        row = conn.execute("SELECT * FROM cases WHERE case_id = ? AND user_id = ?", (case_id, user_id)).fetchone()
+        if not row:
+            return {"error": f"{case_id} is not a case on this customer's account"}
+        if row["status"] != "under_review":
+            return {"error": f"{case_id} is already decided ({row['status']}); file a new dispute with the evidence instead"}
+        note = "\n".join(n for n in (row["evidence_note"], f"[{now[:10]}] {evidence_note}") if n)
+        conn.execute("UPDATE cases SET evidence_note = ? WHERE case_id = ?", (note, case_id))
+        updated = conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()
+    return _case_view(updated)
 
 
 def outbound_messages(db_path: Path) -> list[dict]:
