@@ -1,0 +1,30 @@
+[
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "the 75-day window and 5-day replacement come from retrieval",
+    "passed": true,
+    "evidence": "{\"documents\": [{\"document\": \"dispute-window\", \"score\": 0.771, \"text\": \"# Dispute window\\n\\nKestrel Card cardholders can dispute a posted transaction within **75 days of its posting date**. After 75 da; {\"documents\": [{\"document\": \"card-replacement\", \"score\": 0.761, \"text\": \"# Lost, stolen, or damaged cards\\n\\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within "
+  },
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "...and are quoted",
+    "passed": true,
+    "evidence": "**Dispute window:** 75 days from the posting date. After that, the case can't be opened through the assistant and has to go in as a written claim.\n\n**Replacement card:** shipped within 5 business days, at no charge, once you report the card lost, stolen or damaged. Note that recurring merchants won'"
+  },
+  {
+    "step": "p7",
+    "type": "parametric",
+    "label": "judge: In its first two replies, did the assistant avoid stating any specific late-fee amount or APR percentage as Kestrel's?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The first reply says \\\"I don't have that figure \\u2014 the policy documents I can search don't include a late payment fee\\\" and the second says \\\"I don't have that figure either \\u2014 no purchase APR appears in the policy documents I can search.\\\"\"}"
+  },
+  {
+    "step": "p7-bare-late-fee",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) invents a figure the agent above declined to give",
+    "passed": true,
+    "evidence": "$39"
+  }
+]
