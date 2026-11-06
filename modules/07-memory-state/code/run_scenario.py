@@ -2,12 +2,16 @@
 
     python run_scenario.py --framework adk --run 1
     python run_scenario.py --framework langgraph --run 1
+    python run_scenario.py --rescore          # re-score recorded runs after a check changes
     python run_scenario.py --summarize
 
 Every session step is a live conversation against DeepSeek. Each run starts from
 empty stores under --var-root/<framework>/run-<n> and writes, under
-evidence/<framework>/run-<n>/, a transcript, the per-check results, and the
-final contents of every store. No store file is ever written into evidence/.
+evidence/<framework>/run-<n>/, a transcript, the per-check results, every step's
+raw result with the store snapshot taken after it (steps.json), and the final
+contents of every store. No store file is ever written into evidence/. Checks
+are pure functions of steps.json, so --rescore re-scores the same recorded run
+instead of re-running it until it passes.
 """
 
 import argparse
@@ -42,9 +46,13 @@ async def run_session(fw, h, step: dict) -> dict:
         except Exception as exc:  # a failed turn is evidence, not a reason to stop the run
             turns.append({"customer": text, "tool_calls": [], "reply": "", "error": f"{type(exc).__name__}: {exc}",
                           "traceback": traceback.format_exc(limit=3)})
-    episode = await resolved(fw.end_session(h, step["user"], step["id"], add_minutes(step["at"], len(turns) * 2)))
-    stores = [path for path in h.var_dir.rglob("*") if path.is_file()]
-    return {"turns": turns, "episode": episode, "pan_found_in": pan_locations(stores)}
+    result = {"turns": turns}
+    try:
+        result["episode"] = await resolved(fw.end_session(h, step["user"], step["id"], add_minutes(step["at"], len(turns) * 2)))
+    except Exception as exc:
+        result["error"] = f"session-end reflection failed: {type(exc).__name__}: {exc}"
+    result["pan_found_in"] = pan_locations([path for path in h.var_dir.rglob("*") if path.is_file()])
+    return result
 
 
 async def run_followups(fw, h, step: dict) -> dict:
@@ -84,6 +92,10 @@ async def run_step(fw, h, step: dict) -> dict:
         return await run_promotion(fw, h, step)
     if kind == "retract":
         return {"registry": procedures.retract(h.var_dir, step["to"], step["reviewer"], step["reason"], step["at"])}
+    if kind == "parametric_probe":
+        # What the weights alone say: no procedure, no tools, no memory.
+        reply = await resolved(fw.complete_text(step["question"]))
+        return {"turns": [{"customer": step["question"], "tool_calls": [], "reply": reply.strip()}]}
     if kind == "retention_sweep":
         return {"purged": await resolved(fw.purge_expired_episodes(h, step["at"]))}
     raise ValueError(f"unknown step kind {kind}")
@@ -109,6 +121,8 @@ def _turn_markdown(turn: dict, speaker: str = "Customer") -> list[str]:
 def step_markdown(step: dict, result: dict, checks: list[dict]) -> list[str]:
     title = f"## {step['id']}  ·  {step['kind']}" + (f"  ·  {step['user']}" if step.get("user") else "") + (f"  ·  {step['at']}" if step.get("at") else "")
     lines = [title, ""]
+    if result.get("error"):
+        lines += [f"**Step failed:** `{_clip(result['error'], 600)}`", ""]
     if step.get("disabled_tools"):
         lines += [f"_Tools removed for this session: {', '.join(step['disabled_tools'])}_", ""]
     for turn in result.get("turns", []):
@@ -143,28 +157,42 @@ async def run_scenario(framework: str, run: int, var_root: Path, evidence_root: 
     h = await resolved(fw.open_harness(var_dir))
     out_dir = evidence_root / framework / f"run-{run}"
     out_dir.mkdir(parents=True, exist_ok=True)
+    recorded = []
+    for step in SCENARIO:
+        print(f"[{framework} run {run}] {step['id']}", flush=True)
+        try:
+            result = await run_step(fw, h, step)
+        except Exception as exc:  # e.g. a transport error from the model API: record it, keep the rest of the run
+            result = {"error": f"{type(exc).__name__}: {exc}", "traceback": traceback.format_exc(limit=4)}
+        snapshot = await resolved(fw.snapshot(h, USERS))
+        recorded.append({"step": step["id"], "result": result, "snapshot": snapshot})
+        if result.get("procedure_text"):
+            (out_dir / f"procedure-{result['promoted']['version']}.md").write_text(result["procedure_text"])
+    (out_dir / "steps.json").write_text(json.dumps(recorded, indent=1, default=str))
+    (out_dir / "final-stores.json").write_text(json.dumps(recorded[-1]["snapshot"], indent=2, default=str))
+    results = score_run(out_dir, framework, run)
+    passed = sum(c["passed"] for c in results)
+    print(f"[{framework} run {run}] {passed}/{len(results)} checks passed -> {out_dir}")
+    return results
+
+
+def score_run(out_dir: Path, framework: str, run: int) -> list[dict]:
+    """Evaluate every check against a run's recorded steps; (re)write its transcript and results."""
+    recorded = {entry["step"]: entry for entry in json.loads((out_dir / "steps.json").read_text())}
     transcript = [f"# {framework} · run {run}", "",
                   "Live run of the shared scenario against DeepSeek. Every customer turn below was sent to the real agent; "
                   "tool results are clipped for length.", ""]
     results = []
     for step in SCENARIO:
-        print(f"[{framework} run {run}] {step['id']}", flush=True)
-        result = await run_step(fw, h, step)
-        snapshot = await resolved(fw.snapshot(h, USERS))
+        entry = recorded[step["id"]]
         checks = []
         for spec in step["checks"]:
-            passed, evidence = evaluate(spec, result, snapshot)
+            passed, evidence = evaluate(spec, entry["result"], entry["snapshot"])
             checks.append({"step": step["id"], "type": spec["type"], "label": spec["label"], "passed": passed, "evidence": evidence})
         results += checks
-        transcript += step_markdown(step, result, checks)
-        if result.get("procedure_text"):
-            (out_dir / f"procedure-{result['promoted']['version']}.md").write_text(result["procedure_text"])
-    final = await resolved(fw.snapshot(h, USERS))
+        transcript += step_markdown(step, entry["result"], checks)
     (out_dir / "transcript.md").write_text("\n".join(transcript))
     (out_dir / "results.json").write_text(json.dumps(results, indent=2))
-    (out_dir / "final-stores.json").write_text(json.dumps(final, indent=2, default=str))
-    passed = sum(c["passed"] for c in results)
-    print(f"[{framework} run {run}] {passed}/{len(results)} checks passed -> {out_dir}")
     return results
 
 
@@ -198,7 +226,13 @@ def main() -> None:
     parser.add_argument("--var-root", type=Path, default=CODE_DIR / "var" / "scenario")
     parser.add_argument("--evidence-root", type=Path, default=CODE_DIR / "evidence")
     parser.add_argument("--summarize", action="store_true", help="rewrite evidence/summary.md from recorded runs")
+    parser.add_argument("--rescore", action="store_true", help="re-score every recorded run from its steps.json")
     args = parser.parse_args()
+    if args.rescore:
+        for steps in sorted(args.evidence_root.glob("*/run-*/steps.json")):
+            results = score_run(steps.parent, steps.parent.parent.name, int(steps.parent.name.split("-")[1]))
+            print(f"{steps.parent}: {sum(c['passed'] for c in results)}/{len(results)}")
+        return
     if args.summarize:
         (args.evidence_root / "summary.md").write_text(summarize(args.evidence_root))
         return

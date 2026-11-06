@@ -12,7 +12,11 @@ a failure means the live agent did not do it.
 import json
 import re
 
-PAN = "5412 7512 3412 4427"  # Luhn-valid test number ending in Priya's last 4; must never be stored anywhere
+PAN = "5555 5555 5555 4444"  # a published Mastercard test number (never a real card); must never be stored anywhere
+# Identifiers only Priya's own records contain. Marco naming "StreamMax" himself is not leakage; these would be.
+PRIYA_ONLY = ["C-5001", "T-1002", "15.99", "Lisbon"]
+NO_ACTIVE_NOTICE = ["no active", "not active", "isn't active", "nothing is active", "nothing active", "no longer active", "expired", "ended",
+                    "no travel notice", "don't have", "do not have", "none on file", "not on file", "no current"]
 
 MEMORY_TYPES = ("working", "semantic", "episodic", "procedural", "external", "parametric", "prospective", "guard")
 
@@ -49,7 +53,8 @@ SCENARIO = [
             check("parametric", "a general concept is answered from the weights, with no tool call", "no_tools", turn=3),
             check("parametric", "...and it is actually explained (dispute, reversal, refund)", "reply_mentions", turn=3,
                   any_of=["dispute", "revers", "refund"]),
-            check("external", "a Kestrel-specific number is retrieved from policy, not recalled", "tool_called", turn=4, tool="search_policy"),
+            check("external", "the Kestrel fee quoted at turn 4 was retrieved from policy in this session, not recalled from the weights",
+                  "tool_result_contains", turn=[0, 1, 2, 3, 4], tool="search_policy", text="1.25%"),
             check("external", "the retrieved fee (1.25%) is what the customer is told", "reply_mentions", turn=4, any_of=["1.25"]),
             check("episodic", "session end wrote a reflection episode about the StreamMax dispute",
                   "episode_mentions", user="priya", text="StreamMax"),
@@ -67,9 +72,10 @@ SCENARIO = [
         "checks": [
             check("episodic", "a new session recalls the last one on demand via load_memory", "tool_called", turn=0, tool="load_memory"),
             check("episodic", "the recall is used in the answer (mentions StreamMax)", "reply_mentions", turn=0, any_of=["StreamMax"]),
-            check("external", "case status is re-read from the case system, not trusted from memory",
-                  "tool_called", turn=1, tool="get_case_status"),
-            check("semantic", "the preloaded profile answers 'how will you contact me' with no tool call", "no_tools", turn=2),
+            check("external", "case status is re-read from the case system in this session before it is stated, not taken from the episode",
+                  "tool_called", turn=[0, 1], tool="get_case_status"),
+            check("semantic", "the channel comes from the preloaded profile, not from episodic recall",
+                  "tool_not_called", turn=2, tool="load_memory"),
             check("semantic", "...and the answer is the stored channel (email)", "reply_mentions", turn=2, any_of=["email"]),
             check("working", "identity verification is session-scoped: this new session verifies again",
                   "tool_called", turn=None, tool="verify_identity"),
@@ -94,13 +100,14 @@ SCENARIO = [
             check("episodic", "no leakage: nothing about Priya's dispute reaches Marco",
                   "reply_omits", turn=1, none_of=["C-5001", "T-1002", "15.99", "Lisbon"]),
             check("episodic", "if load_memory runs for Marco it returns none of Priya's episodes",
-                  "tool_result_omits", turn=None, tool="load_memory", text="StreamMax"),
+                  "tool_result_omits", turn=None, tool="load_memory", text="C-5001"),
             check("external", "the FitPulse charge is found by exact lookup", "tool_called", turn=None, tool="find_transactions"),
             check("prospective", "the $240 dispute is filed (T-2002)", "tool_called", turn=None, tool="file_dispute",
                   args={"transaction_id": "T-2002"}),
             check("prospective", "its follow-up needs ops approval: $240 is over the app-wide $200 threshold",
                   "followup_exists", user="marco", action="case_status_followup", due="2026-11-22", approval="ops_reviewer"),
-            check("episodic", "Marco's own episode exists and holds nothing of Priya's", "episode_omits", user="marco", text="StreamMax"),
+            check("episodic", "Marco's own episode exists and holds nothing of Priya's (her case, transaction, amount, trip)",
+                  "episode_omits", user="marco", none_of=PRIYA_ONLY),
         ],
     },
     {
@@ -111,7 +118,7 @@ SCENARIO = [
         "checks": [],
     },
     {
-        "kind": "fire_followups", "id": "scheduler-2026-11-19", "at": "2026-11-19T09:30:00Z",
+        "kind": "fire_followups", "id": "scheduler-2026-11-19", "at": "2026-11-19T18:00:00Z",
         "checks": [
             check("prospective", "Priya's follow-up fires on its trigger date and is marked done on evidence",
                   "followup_outcome", user="priya", outcome="fired_done"),
@@ -135,13 +142,14 @@ SCENARIO = [
                   any_of=["confirmation", "proof", "reference"]),
             check("prospective", "a customer-requested reminder becomes a scheduler record for 2026-11-29",
                   "followup_exists", user="priya", action="customer_reminder", due="2026-11-29", approval="none"),
-            check("episodic", "a cross-session recap is built from load_memory", "tool_called", turn=2, tool="load_memory"),
+            check("episodic", "a cross-session recap is built from load_memory run in this session", "tool_called",
+                  turn=[0, 1, 2], tool="load_memory"),
             check("episodic", "...and uses more than one past episode (StreamMax and the switch to text)",
                   "reply_mentions_all", turn=2, all_of=[["StreamMax"], ["sms", "SMS", "text"]]),
         ],
     },
     {
-        "kind": "fire_followups", "id": "scheduler-2026-11-22-a", "at": "2026-11-22T09:30:00Z",
+        "kind": "fire_followups", "id": "scheduler-2026-11-22-a", "at": "2026-11-22T18:00:00Z",
         "checks": [
             check("prospective", "Marco's follow-up is due but parked: its approval field names ops_reviewer",
                   "followup_outcome", user="marco", outcome="awaiting_approval"),
@@ -150,7 +158,7 @@ SCENARIO = [
     },
     {"kind": "approve_followups", "id": "ops-lead-approves-marco", "user": "marco", "reviewer": "ops-lead", "checks": []},
     {
-        "kind": "fire_followups", "id": "scheduler-2026-11-22-b", "at": "2026-11-22T10:30:00Z",
+        "kind": "fire_followups", "id": "scheduler-2026-11-22-b", "at": "2026-11-22T18:30:00Z",
         "checks": [
             check("prospective", "after approval Marco's follow-up fires and completes", "followup_outcome", user="marco", outcome="fired_done"),
             check("prospective", "with no channel on file it uses the default secure_message",
@@ -158,7 +166,7 @@ SCENARIO = [
         ],
     },
     {
-        "kind": "fire_followups", "id": "scheduler-2026-11-22-c", "at": "2026-11-22T11:00:00Z",
+        "kind": "fire_followups", "id": "scheduler-2026-11-22-c", "at": "2026-11-22T19:00:00Z",
         "checks": [check("prospective", "done flag: a second run fires nothing", "no_followups_fired")],
     },
     {
@@ -201,7 +209,7 @@ SCENARIO = [
         ],
     },
     {
-        "kind": "fire_followups", "id": "scheduler-2026-11-29", "at": "2026-11-29T09:30:00Z",
+        "kind": "fire_followups", "id": "scheduler-2026-11-29", "at": "2026-11-29T18:00:00Z",
         "checks": [
             check("prospective", "Priya's reminder fires on the date she chose", "followup_outcome", user="priya", outcome="fired_done"),
             check("prospective", "the reminder carries its resume note to her current channel",
@@ -216,8 +224,7 @@ SCENARIO = [
                   "fact_absent", user="priya", key="travel_notice"),
             check("semantic", "...the agent did not delete it itself", "tool_not_called", turn=0, tool="forget_customer_fact"),
             check("semantic", "staleness: the reply says no notice is active",
-                  "reply_mentions", turn=0, any_of=["no active", "not active", "expired", "ended", "no travel notice",
-                                                     "don't have", "do not have", "none on file", "not on file", "no current"]),
+                  "reply_mentions", turn=0, any_of=NO_ACTIVE_NOTICE),
             check("semantic", "staleness: the expired Lisbon notice is not presented as current",
                   "reply_omits", turn=0, none_of=["until November 30", "until 2026-11-30", "is still active"]),
         ],
@@ -250,6 +257,16 @@ SCENARIO = [
         ],
     },
     {
+        "kind": "parametric_probe", "id": "s7b-bare-weights-probe", "at": "2026-12-03T11:10:00Z",
+        "question": "What foreign transaction fee does Kestrel Card charge on euro purchases? Answer with a number.",
+        "checks": [
+            check("parametric", "the bare model (no instruction, no tools) still answers with a figure from the weights",
+                  "reply_matches", turn=0, pattern=r"\d"),
+            check("parametric", "...and the weights do not hold Kestrel's 1.25%: the floor is generic, not this issuer's",
+                  "reply_omits", turn=0, none_of=["1.25"]),
+        ],
+    },
+    {
         "kind": "retention_sweep", "id": "retention-2027-06-15", "at": "2027-06-15T00:00:00Z",
         "checks": [check("episodic", "forgetting on purpose: episodes past their 180-day retention are deleted", "episodes_count", user="priya", count=0)],
     },
@@ -266,9 +283,12 @@ SCENARIO = [
 # --------------------------------------------------------------------------- evaluation
 
 
-def _turns(result: dict, turn: int | None) -> list[dict]:
+def _turns(result: dict, turn: int | list[int] | None) -> list[dict]:
+    """turn: one index, a list of indexes ("by this turn, in this session"), or None for the whole session."""
     turns = result.get("turns", [])
-    return turns if turn is None else turns[turn:turn + 1]
+    if turn is None:
+        return turns
+    return [turns[i] for i in ([turn] if isinstance(turn, int) else turn) if i < len(turns)]
 
 
 def _calls(result: dict, turn: int | None, tool: str) -> list[dict]:
@@ -291,9 +311,17 @@ def _user_followups(snapshot: dict, user: str, action: str) -> list[dict]:
     return [f for f in snapshot["followups"] if f["user_id"] == user and f["action"] == action]
 
 
+# Checks that pass on the *absence* of something. An errored turn shows nothing, so it cannot prove an absence.
+ABSENCE_KINDS = {"tool_not_called", "no_tools", "tool_result_omits", "reply_omits"}
+
+
 def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
     """Return (passed, evidence) for one check against what the live run produced."""
     kind = spec["kind"]
+    if kind in ABSENCE_KINDS:
+        errored = [t["error"] for t in _turns(result, spec["turn"]) if t.get("error")]
+        if errored:
+            return False, f"a selected turn errored, so the absence cannot be shown: {errored[0]}"
     if kind == "tool_called":
         calls = [c for c in _calls(result, spec["turn"], spec["tool"]) if _args_match(c, spec.get("args", {}))]
         return bool(calls), json.dumps([c["args"] for c in calls] or "not called")
@@ -320,6 +348,9 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
     if kind == "reply_mentions_all":
         reply = " ".join(t["reply"] for t in _turns(result, spec["turn"]))
         return all(_mentions(reply, group) for group in spec["all_of"]), reply[:300]
+    if kind == "reply_matches":
+        reply = " ".join(t["reply"] for t in _turns(result, spec["turn"]))
+        return bool(re.search(spec["pattern"], reply)), reply[:300]
     if kind == "reply_omits":
         reply = " ".join(t["reply"] for t in _turns(result, spec["turn"]))
         return not _mentions(reply, spec["none_of"]), reply[:300]
@@ -340,7 +371,7 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
         return bool(episodes) and spec["text"].lower() in episodes[-1]["text"].lower(), (episodes[-1]["text"] if episodes else "no episode")[:300]
     if kind == "episode_omits":
         episodes = _user_episodes(snapshot, spec["user"])
-        leaked = [e["text"] for e in episodes if spec["text"].lower() in e["text"].lower()]
+        leaked = [e["text"] for e in episodes if _mentions(e["text"], spec["none_of"])]
         return bool(episodes) and not leaked, (leaked or [e["text"] for e in episodes] or ["no episode"])[-1][:300]
     if kind == "episode_outcome":
         episodes = _user_episodes(snapshot, spec["user"])
