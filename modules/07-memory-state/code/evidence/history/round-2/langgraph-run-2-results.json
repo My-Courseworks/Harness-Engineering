@@ -1,0 +1,464 @@
+[
+  {
+    "step": "s1-priya-first-contact",
+    "type": "semantic",
+    "label": "travel notice written as a user-scoped fact (Lisbon, valid until 2026-11-30)",
+    "passed": true,
+    "evidence": "{\"value\": \"Lisbon (Portugal)\", \"as_of\": \"2026-11-09T10:00:00Z\", \"valid_until\": \"2026-11-30\", \"expires_at\": \"2026-12-01T00:00:00Z\"}"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "semantic",
+    "label": "contact channel written as a user-scoped fact (email)",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-09T10:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "external",
+    "label": "transactions come from an exact ledger lookup",
+    "passed": true,
+    "evidence": "[{\"merchant\": \"StreamMax\"}]"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "working",
+    "label": "session scope: identity_verified_at persists with this session's state",
+    "passed": true,
+    "evidence": "persisted session keys: ['identity_verified_at', 'messages']"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "working",
+    "label": "temp scope: the per-invocation clock (ADK temp:now, LangGraph TurnContext.now) is never persisted",
+    "passed": true,
+    "evidence": "clock keys found in persisted state: none"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "working",
+    "label": "'the later one' resolved from the previous turn's tool result in the session: disputes T-1002",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-1002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer states she cancelled the StreamMax subscription before the 2026-10-28 charge posted.\"}]"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "prospective",
+    "label": "filing wrote a scheduler record: case follow-up due 2026-11-19, no approval needed",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-19T10:04:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5001\"}}]"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "parametric",
+    "label": "a general concept is answered from the weights, with no tool call",
+    "passed": true,
+    "evidence": "tools: []"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "parametric",
+    "label": "...and it is actually explained (dispute, reversal, refund)",
+    "passed": true,
+    "evidence": "A chargeback is a cardholder's formal request to their card issuer to reverse a card payment, typically because the goods weren't received or the charge was unauthorized, duplicated, or wrong. The issuer then relays the claim to the merchant's bank, which either accepts it and refunds you or dispute"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "external",
+    "label": "a Kestrel-specific number is retrieved from policy, not recalled",
+    "passed": true,
+    "evidence": "[{\"question\": \"foreign transaction fee percentage on purchases in non-USD currencies\"}]"
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "external",
+    "label": "the retrieved fee (1.25%) is what the customer is told",
+    "passed": true,
+    "evidence": "**1.25% of the US-dollar amount** on every purchase made in a currency other than USD. It posts as a separate line on the same day as the purchase, and your travel notice doesn't change or waive it \u2014 so a \u20ac50 purchase that converts to, say, $54.00 would add a $0.68 fee."
+  },
+  {
+    "step": "s1-priya-first-contact",
+    "type": "episodic",
+    "label": "session end wrote a reflection episode about the StreamMax dispute",
+    "passed": true,
+    "evidence": "Conversation on 2026-11-09: Priya set a travel notice for Lisbon through 2026-11-30 and asked for email-only contact. She reviewed StreamMax charges and disputed the 2026-10-28 $15.99 charge (transaction T-1002), creating case C-5001 under review with email follow-up due 2026-11-19. She asked about "
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "episodic",
+    "label": "a new session recalls the last one on demand via load_memory",
+    "passed": true,
+    "evidence": "[{\"query\": \"last conversation summary, what was resolved\"}]"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "episodic",
+    "label": "the recall is used in the answer (mentions StreamMax)",
+    "passed": true,
+    "evidence": "Hi Priya! Here's where things stand from our last chat (9 Nov):\n\n- **Travel notice:** Lisbon, Portugal through 2026-11-30.\n- **Contact preference:** email only.\n- **Dispute:** You disputed the StreamMax charge of $15.99 from 2026-10-28 (cancelled subscription, case **C-5001**). It's currently **unde"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "external",
+    "label": "case status is re-read from the case system, not trusted from memory",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5001\"}]"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "semantic",
+    "label": "the preloaded profile answers 'how will you contact me' with no tool call",
+    "passed": true,
+    "evidence": "tools: []"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "semantic",
+    "label": "...and the answer is the stored channel (email)",
+    "passed": true,
+    "evidence": "By **email** \u2014 that's the contact preference you set on 9 Nov. Your dispute follow-up for C-5001 will go out by email on **2026-11-19**. If you'd prefer SMS or secure message instead, just say so and I can switch it (I'll need to verify your identity first)."
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "working",
+    "label": "identity verification is session-scoped: this new session verifies again",
+    "passed": true,
+    "evidence": "[{\"card_last4\": \"4427\", \"postal_code\": \"94107\"}]"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "semantic",
+    "label": "the change overwrites the old value instead of joining it (replaced: email)",
+    "passed": true,
+    "evidence": "{\"stored\": {\"contact_channel\": {\"value\": \"sms\", \"as_of\": \"2026-11-12T15:08:00Z\", \"expires_at\": null}}, \"replaced\": \"email\"}"
+  },
+  {
+    "step": "s2-priya-returns",
+    "type": "semantic",
+    "label": "exactly one contact channel remains, and it is sms",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-12T15:08:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "semantic",
+    "label": "no leakage: Marco's profile has none of Priya's facts",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "semantic",
+    "label": "no leakage: the reply does not mention Priya's Lisbon trip",
+    "passed": true,
+    "evidence": "Hi Marco \u2014 I have nothing on file for either:\n- **Contact channel:** none\n- **Travel notice:** none\n\nIf you'd like, tell me a channel (email, SMS or secure message) or a trip (destination and return date) and I'll record it."
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "episodic",
+    "label": "no leakage: nothing about Priya's dispute reaches Marco",
+    "passed": true,
+    "evidence": "I can't share anything about other customers \u2014 even whether an account or dispute exists. I can only help you with your own transactions and cases.\n\nIf there's a StreamMax charge on your account you'd like to look at or dispute, I'm happy to pull that up."
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "episodic",
+    "label": "if load_memory runs for Marco it returns none of Priya's episodes",
+    "passed": true,
+    "evidence": "not called"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "external",
+    "label": "the FitPulse charge is found by exact lookup",
+    "passed": true,
+    "evidence": "[{\"merchant\": \"FitPulse\"}]"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "prospective",
+    "label": "the $240 dispute is filed (T-2002)",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled their FitPulse membership in October; the 2026-11-03 $240.00 charge is an annual renewal made after cancellation.\"}]"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "prospective",
+    "label": "its follow-up needs ops approval: $240 is over the app-wide $200 threshold",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-22T16:04:00Z\", \"approval\": \"ops_reviewer\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5002\"}}]"
+  },
+  {
+    "step": "s3-marco-other-customer",
+    "type": "episodic",
+    "label": "Marco's own episode exists and holds nothing of Priya's (her case, transaction, amount, trip)",
+    "passed": true,
+    "evidence": "Conversation on 2026-11-12: Marco asked about contact/travel notices (none on file) and about another customer\u2019s dispute, which was refused. He disputed a $240 FitPulse annual renewal posted 2026-11-03; assistant filed transaction T-2002 as case C-5002, under review, with follow-up due 2026-11-22 vi"
+  },
+  {
+    "step": "scheduler-2026-11-19",
+    "type": "prospective",
+    "label": "Priya's follow-up fires on its trigger date and is marked done on evidence",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-448d95f7\", \"user_id\": \"priya\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "scheduler-2026-11-19",
+    "type": "prospective",
+    "label": "Marco's follow-up is not due yet and does not fire",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "scheduler-2026-11-19",
+    "type": "semantic",
+    "label": "the channel is read at fire time, so Priya's later change to sms is honoured",
+    "passed": true,
+    "evidence": "[{\"message_id\": 1, \"user_id\": \"priya\", \"channel\": \"sms\", \"body\": \"Update on dispute C-5001 (StreamMax, 2026-10-28): the case was rejected because the merchant has no cancellation request on record. You can re-file if you have the merchant's cancellation confirmation (email or reference number) \\u2014 just reply here with it and we'll resubmit.\", \"followup_id\": \"F-448d95f7\", \"sent_at\": \"2026-11-19T18:00:00Z\"}]"
+  },
+  {
+    "step": "scheduler-2026-11-19",
+    "type": "episodic",
+    "label": "the follow-up session's episode carries the case system's outcome code",
+    "passed": true,
+    "evidence": "latest episode outcome codes: ['NO_CANCELLATION_PROOF']"
+  },
+  {
+    "step": "s4-priya-after-rejection",
+    "type": "external",
+    "label": "the rejection reason comes from the case system",
+    "passed": true,
+    "evidence": "[{}]"
+  },
+  {
+    "step": "s4-priya-after-rejection",
+    "type": "external",
+    "label": "...and is relayed (cancellation confirmation)",
+    "passed": true,
+    "evidence": "Your case C-5001 was for the StreamMax Premium charge of $15.99 that posted 2026-10-28. It came back **rejected on 2026-11-18**, reason code **NO_CANCELLATION_PROOF**: the merchant told us there's no cancellation request on record for your subscription, and the case file only noted your statement th"
+  },
+  {
+    "step": "s4-priya-after-rejection",
+    "type": "prospective",
+    "label": "a customer-requested reminder becomes a scheduler record for 2026-11-29",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-29T09:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"note\": \"Reminder: set up a travel notice for the Porto (Portugal) trip.\"}}]"
+  },
+  {
+    "step": "s4-priya-after-rejection",
+    "type": "episodic",
+    "label": "a cross-session recap is built from load_memory",
+    "passed": true,
+    "evidence": "[{\"query\": \"all past conversations recap preferences travel notice reminders\"}]"
+  },
+  {
+    "step": "s4-priya-after-rejection",
+    "type": "episodic",
+    "label": "...and uses more than one past episode (StreamMax and the switch to text)",
+    "passed": true,
+    "evidence": "Here's the recap of our conversations:\n\n**Dispute \u2014 case C-5001 (StreamMax, $15.99, posted 2026-10-28)**\n- Filed 2026-11-09 as a cancelled-subscription dispute on transaction T-1002. The earlier $15.99 StreamMax charge from 2026-09-28 isn't disputable, since it predates your cancellation.\n- Reviewed"
+  },
+  {
+    "step": "scheduler-2026-11-22-a",
+    "type": "prospective",
+    "label": "Marco's follow-up is due but parked: its approval field names ops_reviewer",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-123a8e2a\", \"user_id\": \"marco\", \"outcome\": \"awaiting_approval\"}]"
+  },
+  {
+    "step": "scheduler-2026-11-22-a",
+    "type": "prospective",
+    "label": "nothing is sent to Marco without the sign-off",
+    "passed": true,
+    "evidence": "0 messages"
+  },
+  {
+    "step": "scheduler-2026-11-22-b",
+    "type": "prospective",
+    "label": "after approval Marco's follow-up fires and completes",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-123a8e2a\", \"user_id\": \"marco\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "scheduler-2026-11-22-b",
+    "type": "prospective",
+    "label": "with no channel on file it uses the default secure_message",
+    "passed": true,
+    "evidence": "[{\"message_id\": 2, \"user_id\": \"marco\", \"channel\": \"secure_message\", \"body\": \"Update on your dispute C-5002 (FitPulse, $240.00): it was rejected because the merchant has no cancellation request on record. Next step: re-file with your cancellation confirmation (email or reference number) \\u2014 that's the evidence needed to reopen a case.\", \"followup_id\": \"F-123a8e2a\", \"sent_at\": \"2026-11-22T18:30:00Z\"}]"
+  },
+  {
+    "step": "scheduler-2026-11-22-c",
+    "type": "prospective",
+    "label": "done flag: a second run fires nothing",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "promote-recurring-lesson",
+    "type": "procedural",
+    "label": "a rule is promoted only from episodes of two different customers",
+    "passed": true,
+    "evidence": "{\"resolution_code\": \"NO_CANCELLATION_PROOF\", \"users\": [\"marco\", \"priya\"], \"episodes\": [\"E-followup-F-448d95f7-1\", \"E-s4-priya-after-rejection\", \"E-followup-F-123a8e2a-1\"], \"lessons\": [\"none\", \"none\", \"none\"], \"notes\": [\"Merchant states no cancellation request is on record. The cardholder may re-file with the merchant's cancellation confirmation (email or reference number).\"], \"rule_text\": \"Before calling file_dispute, ask the customer for the merchant\\u2019s cancellation confirmation (email or reference number) and pass that confirmation as evidence_note; if the customer cannot provide it, do not call file_dispute.\", \"version\": \"v2\"}"
+  },
+  {
+    "step": "promote-recurring-lesson",
+    "type": "procedural",
+    "label": "the promoted rule lives in a new instruction version (v2), now active",
+    "passed": true,
+    "evidence": "active: v2"
+  },
+  {
+    "step": "s5-dana-under-v2",
+    "type": "procedural",
+    "label": "under v2 the agent does not file before asking for the cancellation confirmation",
+    "passed": true,
+    "evidence": "\"not called\""
+  },
+  {
+    "step": "s5-dana-under-v2",
+    "type": "procedural",
+    "label": "...it asks for it",
+    "passed": true,
+    "evidence": "I've verified your identity and found the charge: **CloudNest Storage, $9.99 on November 1** (transaction T-3002).\n\nBefore I can file the dispute, I need the cancellation confirmation from CloudNest \u2014 an email or a reference number showing you cancelled in October. Do you have that? Without it I can"
+  },
+  {
+    "step": "s5-dana-under-v2",
+    "type": "procedural",
+    "label": "...and files with it as evidence",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Cancellation reference CN-77812 (cancelled October 2026, charged again 2026-11-01)\"}]"
+  },
+  {
+    "step": "retraction-drill",
+    "type": "procedural",
+    "label": "the retraction path restores v1",
+    "passed": true,
+    "evidence": "active: v1"
+  },
+  {
+    "step": "s5c-eli-control-under-v1",
+    "type": "procedural",
+    "label": "control: the same request under v1 is filed straight away, without the promoted check",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer states the CloudNest Storage subscription was cancelled in October; the $9.99 charge posted 2026-11-01 anyway.\"}]"
+  },
+  {
+    "step": "scheduler-2026-11-29",
+    "type": "prospective",
+    "label": "Priya's reminder fires on the date she chose",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-bc23644b\", \"user_id\": \"priya\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "scheduler-2026-11-29",
+    "type": "prospective",
+    "label": "the reminder carries its resume note to her current channel",
+    "passed": true,
+    "evidence": "{\"message_id\": 3, \"user_id\": \"priya\", \"channel\": \"sms\", \"body\": \"Reminder: you asked to set up a travel notice for your Porto (Portugal) trip. Reply with your travel dates and I'll add it to your card. (Your current Lisbon notice runs until 2026-11-30.)\", \"followup_id\": \"F-bc23644b\", \"sent_at\": \"2026-11-29T18:00:00Z\"}"
+  },
+  {
+    "step": "s6a-priya-staleness",
+    "type": "semantic",
+    "label": "staleness: the Lisbon notice expired on 2026-11-30 and is deleted at turn start, not by any tool",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "s6a-priya-staleness",
+    "type": "semantic",
+    "label": "...the agent did not delete it itself",
+    "passed": true,
+    "evidence": "\"not called\""
+  },
+  {
+    "step": "s6a-priya-staleness",
+    "type": "semantic",
+    "label": "staleness: the reply says no notice is active",
+    "passed": false,
+    "evidence": "Your notice was for **Lisbon through 2026-11-30**, and Kestrel deletes a notice automatically once the return date passes \u2014 so nothing is active right now; that's why Porto usage isn't flagged as expected.\n\nWant me to set a new notice for Porto? Just tell me your return date. I can also pull up the "
+  },
+  {
+    "step": "s6a-priya-staleness",
+    "type": "semantic",
+    "label": "staleness: the expired Lisbon notice is not presented as current",
+    "passed": true,
+    "evidence": "Your notice was for **Lisbon through 2026-11-30**, and Kestrel deletes a notice automatically once the return date passes \u2014 so nothing is active right now; that's why Porto usage isn't flagged as expected.\n\nWant me to set a new notice for Porto? Just tell me your return date. I can also pull up the "
+  },
+  {
+    "step": "s6b-priya-forgetting-and-secrets",
+    "type": "semantic",
+    "label": "a new fact can be written",
+    "passed": true,
+    "evidence": "[{\"key\": \"travel_notice\", \"value\": \"Porto\", \"valid_until\": \"2026-12-10\"}]"
+  },
+  {
+    "step": "s6b-priya-forgetting-and-secrets",
+    "type": "semantic",
+    "label": "deletion on request: forget_customer_fact runs",
+    "passed": true,
+    "evidence": "[{\"key\": \"travel_notice\"}]"
+  },
+  {
+    "step": "s6b-priya-forgetting-and-secrets",
+    "type": "semantic",
+    "label": "...and the fact is gone from the store",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "s6b-priya-forgetting-and-secrets",
+    "type": "guard",
+    "label": "a pasted card number is masked before it enters the session",
+    "passed": true,
+    "evidence": "In case you need it, my full card number is [REDACTED CARD NUMBER]."
+  },
+  {
+    "step": "s6b-priya-forgetting-and-secrets",
+    "type": "guard",
+    "label": "the card number is in no store: sessions, memory, bank, scheduler",
+    "passed": true,
+    "evidence": "found in: nowhere"
+  },
+  {
+    "step": "s7-parametric-ablation",
+    "type": "parametric",
+    "label": "with retrieval removed the agent still engages with the fee question",
+    "passed": true,
+    "evidence": "I don't have access to Kestrel's fee schedule in this conversation, so I can't quote the foreign transaction fee \u2014 I won't guess at a number. Your card's terms (or the fee disclosure in your account documents) will list the exact percentage for euro purchases.\n\nIf you'd like, I can check your transa"
+  },
+  {
+    "step": "s7-parametric-ablation",
+    "type": "parametric",
+    "label": "...but the weights cannot supply Kestrel's 1.25%",
+    "passed": true,
+    "evidence": "I don't have access to Kestrel's fee schedule in this conversation, so I can't quote the foreign transaction fee \u2014 I won't guess at a number. Your card's terms (or the fee disclosure in your account documents) will list the exact percentage for euro purchases.\n\nIf you'd like, I can check your transa"
+  },
+  {
+    "step": "s7b-bare-weights-probe",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) still answers from the weights",
+    "passed": false,
+    "evidence": "3"
+  },
+  {
+    "step": "s7b-bare-weights-probe",
+    "type": "parametric",
+    "label": "...and the weights do not hold Kestrel's 1.25%: the floor is generic, not this issuer's",
+    "passed": true,
+    "evidence": "3"
+  },
+  {
+    "step": "retention-2027-06-15",
+    "type": "episodic",
+    "label": "forgetting on purpose: episodes past their 180-day retention are deleted",
+    "passed": true,
+    "evidence": "0 episodes; purged 12"
+  },
+  {
+    "step": "s8-priya-after-retention",
+    "type": "episodic",
+    "label": "recall after retention finds nothing, because nothing is kept",
+    "passed": true,
+    "evidence": "{\"memories\": []}"
+  }
+]

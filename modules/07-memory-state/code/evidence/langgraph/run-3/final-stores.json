@@ -1,0 +1,261 @@
+{
+  "facts": {
+    "priya": {
+      "contact_channel": {
+        "value": "sms",
+        "as_of": "2026-11-12T15:08:00Z",
+        "expires_at": null
+      }
+    },
+    "marco": {},
+    "dana": {},
+    "eli": {}
+  },
+  "episodes": [
+    {
+      "episode_id": "E-s8-priya-after-retention",
+      "user_id": "priya",
+      "session_id": "s8-priya-after-retention",
+      "at": "2027-06-15T10:02:00Z",
+      "summary": "Customer asked what was discussed last time. Memory lookup returned no records. Assistant said no earlier conversation was available, noted profile has SMS contact and no travel notice, and asked if the customer needed help with a transaction, dispute, or travel notice. No case or transaction IDs, promises, or preferences were stated.",
+      "lesson": "none",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-12-12T10:02:00Z",
+      "text": "Conversation on 2027-06-15: Customer asked what was discussed last time. Memory lookup returned no records. Assistant said no earlier conversation was available, noted profile has SMS contact and no travel notice, and asked if the customer needed help with a transaction, dispute, or travel notice. No case or transaction IDs, promises, or preferences were stated. Case outcomes: no case touched. Lesson: none"
+    }
+  ],
+  "persisted_state_keys": [
+    "followup_id",
+    "identity_verified_at",
+    "messages"
+  ],
+  "persisted_clock_keys": [],
+  "threads": [
+    "dana:s5-dana-under-v2",
+    "eli:s5c-eli-control-under-v1",
+    "marco:followup-F-9953b5f0-1",
+    "marco:s3-marco-other-customer",
+    "priya:followup-F-21aa6549-1",
+    "priya:followup-F-3c89c037-1",
+    "priya:s1-priya-first-contact",
+    "priya:s2-priya-returns",
+    "priya:s4-priya-after-rejection",
+    "priya:s6a-priya-staleness",
+    "priya:s6b-priya-forgetting-and-secrets",
+    "priya:s7-parametric-ablation",
+    "priya:s8-priya-after-retention"
+  ],
+  "followups": [
+    {
+      "followup_id": "F-3c89c037",
+      "user_id": "priya",
+      "action": "case_status_followup",
+      "trigger_at": "2026-11-19T10:04:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-09T10:04:00Z",
+      "fired_at": "2026-11-19T18:00:00Z",
+      "done_at": "2026-11-19T18:00:00Z",
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5001"
+      }
+    },
+    {
+      "followup_id": "F-9953b5f0",
+      "user_id": "marco",
+      "action": "case_status_followup",
+      "trigger_at": "2026-11-22T16:04:00Z",
+      "approval": "ops_reviewer",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": "ops-lead",
+      "created_at": "2026-11-12T16:04:00Z",
+      "fired_at": "2026-11-22T18:30:00Z",
+      "done_at": "2026-11-22T18:30:00Z",
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5002"
+      }
+    },
+    {
+      "followup_id": "F-21aa6549",
+      "user_id": "priya",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-29T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-20T11:02:00Z",
+      "fired_at": "2026-11-29T18:00:00Z",
+      "done_at": "2026-11-29T18:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Set up a travel notice for your Porto trip"
+      }
+    },
+    {
+      "followup_id": "F-d269a300",
+      "user_id": "dana",
+      "action": "case_status_followup",
+      "trigger_at": "2026-12-04T10:02:00Z",
+      "approval": "none",
+      "status": "pending",
+      "attempts": 0,
+      "approved_by": null,
+      "created_at": "2026-11-24T10:02:00Z",
+      "fired_at": null,
+      "done_at": null,
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5003"
+      }
+    },
+    {
+      "followup_id": "F-a74395a8",
+      "user_id": "eli",
+      "action": "case_status_followup",
+      "trigger_at": "2026-12-04T13:00:00Z",
+      "approval": "none",
+      "status": "pending",
+      "attempts": 0,
+      "approved_by": null,
+      "created_at": "2026-11-24T13:00:00Z",
+      "fired_at": null,
+      "done_at": null,
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5004"
+      }
+    }
+  ],
+  "outbound_messages": [
+    {
+      "message_id": 1,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Update on dispute C-5001 (subscription charge posted 2026-10-28): it was rejected \u2014 the merchant states no cancellation request is on record (code NO_CANCELLATION_PROOF). Next step: send us the merchant's cancellation confirmation (email or reference number) and we can re-file; the charge can be disputed up to 75 days after posting, so there's still time.",
+      "followup_id": "F-3c89c037",
+      "sent_at": "2026-11-19T18:00:00Z"
+    },
+    {
+      "message_id": 2,
+      "user_id": "marco",
+      "channel": "secure_message",
+      "body": "Update on dispute C-5002 (renewal charge on 2026-11-03): it was rejected \u2014 the merchant says it has no cancellation request on record. Next step: if you have the merchant's cancellation confirmation (email or reference number), you can re-file the dispute with that evidence; just reply here and we'll reopen it.",
+      "followup_id": "F-9953b5f0",
+      "sent_at": "2026-11-22T18:30:00Z"
+    },
+    {
+      "message_id": 3,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Reminder from Kestrel: you asked to be reminded to set up a travel notice for your Porto trip. To add it, just reply here with the destination (Porto) and your return date \u2014 a notice covers card use abroad until that date, then expires automatically. (Your current notice for Lisbon runs until 2026-11-30.)",
+      "followup_id": "F-21aa6549",
+      "sent_at": "2026-11-29T18:00:00Z"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "C-5001",
+      "user_id": "priya",
+      "txn_id": "T-1002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states the subscription was cancelled before the 2026-10-28 charge posted.",
+      "status": "rejected",
+      "opened_at": "2026-11-09T10:04:00Z",
+      "resolution_code": "NO_CANCELLATION_PROOF",
+      "resolution_note": "Merchant states no cancellation request is on record. The cardholder may re-file with the merchant's cancellation confirmation (email or reference number).",
+      "resolved_at": "2026-11-18T09:00:00Z"
+    },
+    {
+      "case_id": "C-5002",
+      "user_id": "marco",
+      "txn_id": "T-2002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states membership was cancelled in October 2026; charged for annual renewal on 2026-11-03.",
+      "status": "rejected",
+      "opened_at": "2026-11-12T16:04:00Z",
+      "resolution_code": "NO_CANCELLATION_PROOF",
+      "resolution_note": "Merchant states no cancellation request is on record. The cardholder may re-file with the merchant's cancellation confirmation (email or reference number).",
+      "resolved_at": "2026-11-18T09:00:00Z"
+    },
+    {
+      "case_id": "C-5003",
+      "user_id": "dana",
+      "txn_id": "T-3002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "CloudNest cancellation reference CN-77812",
+      "status": "under_review",
+      "opened_at": "2026-11-24T10:02:00Z",
+      "resolution_code": null,
+      "resolution_note": null,
+      "resolved_at": null
+    },
+    {
+      "case_id": "C-5004",
+      "user_id": "eli",
+      "txn_id": "T-4002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states he cancelled CloudNest Storage in October; charged $9.99 on November 1.",
+      "status": "under_review",
+      "opened_at": "2026-11-24T13:00:00Z",
+      "resolution_code": null,
+      "resolution_note": null,
+      "resolved_at": null
+    }
+  ],
+  "procedure": {
+    "active": "v1",
+    "versions": {
+      "v1": {
+        "rules": []
+      },
+      "v2": {
+        "rules": [
+          {
+            "resolution_code": "NO_CANCELLATION_PROOF",
+            "text": "Before calling file_dispute for a cancellation dispute, ask the cardholder for the merchant\u2019s cancellation confirmation (email or reference number) and pass that exact confirmation as evidence_note; if it is not provided, do not file the dispute and advise the cardholder to obtain it and re-file.",
+            "evidence_episodes": [
+              "E-followup-F-3c89c037-1",
+              "E-s4-priya-after-rejection",
+              "E-followup-F-9953b5f0-1"
+            ],
+            "evidence_users": [
+              "marco",
+              "priya"
+            ],
+            "approved_by": "ops-lead (scripted reviewer)",
+            "approved_at": "2026-11-23T09:00:00Z"
+          }
+        ],
+        "based_on": "v1"
+      }
+    },
+    "history": [
+      {
+        "event": "baseline",
+        "version": "v1"
+      },
+      {
+        "event": "promoted",
+        "version": "v2",
+        "based_on": "v1",
+        "by": "ops-lead (scripted reviewer)",
+        "at": "2026-11-23T09:00:00Z"
+      },
+      {
+        "event": "retracted",
+        "version": "v2",
+        "active_now": "v1",
+        "by": "ops-lead (scripted reviewer)",
+        "reason": "retraction drill: prove a promoted rule can be removed",
+        "at": "2026-11-24T12:00:00Z"
+      }
+    ]
+  }
+}

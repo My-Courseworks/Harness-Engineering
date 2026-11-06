@@ -1,0 +1,245 @@
+{
+  "facts": {
+    "priya": {
+      "contact_channel": {
+        "value": "sms",
+        "as_of": "2026-11-12T15:08:00Z",
+        "expires_at": null
+      }
+    },
+    "marco": {},
+    "dana": {},
+    "eli": {}
+  },
+  "episodes": [
+    {
+      "episode_id": "E-s8-priya-after-retention",
+      "user_id": "priya",
+      "session_id": "s8-priya-after-retention",
+      "at": "2027-06-15T10:02:00Z",
+      "summary": "Customer asked what was discussed last time. The memory lookup returned no prior conversation, so the assistant said it had no record. It noted an SMS contact preference and no travel notice on file. No case or transaction IDs, promises, or next steps were provided.",
+      "lesson": "When a memory lookup is empty, the assistant should state that no prior conversation was found and avoid adding unrelated profile details unless relevant.",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-12-12T10:02:00Z",
+      "text": "Conversation on 2027-06-15: Customer asked what was discussed last time. The memory lookup returned no prior conversation, so the assistant said it had no record. It noted an SMS contact preference and no travel notice on file. No case or transaction IDs, promises, or next steps were provided. Case outcomes: no case touched. Lesson: When a memory lookup is empty, the assistant should state that no prior conversation was found and avoid adding unrelated profile details unless relevant."
+    }
+  ],
+  "persisted_state_keys": [
+    "followup_id",
+    "identity_verified_at"
+  ],
+  "persisted_clock_keys": [],
+  "followups": [
+    {
+      "followup_id": "F-35e9c5ed",
+      "user_id": "priya",
+      "action": "case_status_followup",
+      "trigger_at": "2026-11-19T10:04:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-09T10:04:00Z",
+      "fired_at": "2026-11-19T18:00:00Z",
+      "done_at": "2026-11-19T18:00:00Z",
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5001"
+      }
+    },
+    {
+      "followup_id": "F-daeb17b6",
+      "user_id": "marco",
+      "action": "case_status_followup",
+      "trigger_at": "2026-11-22T16:04:00Z",
+      "approval": "ops_reviewer",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": "ops-lead",
+      "created_at": "2026-11-12T16:04:00Z",
+      "fired_at": "2026-11-22T18:30:00Z",
+      "done_at": "2026-11-22T18:30:00Z",
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5002"
+      }
+    },
+    {
+      "followup_id": "F-36b40d5e",
+      "user_id": "priya",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-29T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-20T11:02:00Z",
+      "fired_at": "2026-11-29T18:00:00Z",
+      "done_at": "2026-11-29T18:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Set up a travel notice for your Porto trip"
+      }
+    },
+    {
+      "followup_id": "F-cb959e3a",
+      "user_id": "dana",
+      "action": "case_status_followup",
+      "trigger_at": "2026-12-04T10:02:00Z",
+      "approval": "none",
+      "status": "pending",
+      "attempts": 0,
+      "approved_by": null,
+      "created_at": "2026-11-24T10:02:00Z",
+      "fired_at": null,
+      "done_at": null,
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5003"
+      }
+    },
+    {
+      "followup_id": "F-3cb04dd4",
+      "user_id": "eli",
+      "action": "case_status_followup",
+      "trigger_at": "2026-12-04T13:00:00Z",
+      "approval": "none",
+      "status": "pending",
+      "attempts": 0,
+      "approved_by": null,
+      "created_at": "2026-11-24T13:00:00Z",
+      "fired_at": null,
+      "done_at": null,
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5004"
+      }
+    }
+  ],
+  "outbound_messages": [
+    {
+      "message_id": 1,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Update on dispute C-5001 (StreamMax Premium charge, 2026-10-28): it was rejected \u2014 the merchant says no cancellation request is on record (code NO_CANCELLATION_PROOF). Next step: you can re-file with the merchant's cancellation confirmation (email or reference number); the charge can be disputed up to 75 days after it posted, so until about 2027-01-11. Reply here when you have the confirmation and we'll re-file.",
+      "followup_id": "F-35e9c5ed",
+      "sent_at": "2026-11-19T18:00:00Z"
+    },
+    {
+      "message_id": 2,
+      "user_id": "marco",
+      "channel": "secure_message",
+      "body": "Update on your dispute C-5002 (FitPulse $240 renewal): it was rejected \u2014 the merchant says no cancellation request is on record. You can re-file if you have the merchant's cancellation confirmation (email or reference number); just reply here with it and we'll reopen a dispute. Nothing else is needed from you right now.",
+      "followup_id": "F-daeb17b6",
+      "sent_at": "2026-11-22T18:30:00Z"
+    },
+    {
+      "message_id": 3,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Reminder: you asked to set up a travel notice for your Porto trip. Reply with your travel dates and I'll add it so your card isn't flagged while you're away.",
+      "followup_id": "F-36b40d5e",
+      "sent_at": "2026-11-29T18:00:00Z"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "C-5001",
+      "user_id": "priya",
+      "txn_id": "T-1002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states she cancelled the StreamMax Premium subscription before the 2026-10-28 charge posted.",
+      "status": "rejected",
+      "opened_at": "2026-11-09T10:04:00Z",
+      "resolution_code": "NO_CANCELLATION_PROOF",
+      "resolution_note": "Merchant states no cancellation request is on record. The cardholder may re-file with the merchant's cancellation confirmation (email or reference number).",
+      "resolved_at": "2026-11-18T09:00:00Z"
+    },
+    {
+      "case_id": "C-5002",
+      "user_id": "marco",
+      "txn_id": "T-2002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states he cancelled his FitPulse membership in October, before the November 3, 2026 annual renewal charge of $240.",
+      "status": "rejected",
+      "opened_at": "2026-11-12T16:04:00Z",
+      "resolution_code": "NO_CANCELLATION_PROOF",
+      "resolution_note": "Merchant states no cancellation request is on record. The cardholder may re-file with the merchant's cancellation confirmation (email or reference number).",
+      "resolved_at": "2026-11-18T09:00:00Z"
+    },
+    {
+      "case_id": "C-5003",
+      "user_id": "dana",
+      "txn_id": "T-3002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "CN-77812",
+      "status": "under_review",
+      "opened_at": "2026-11-24T10:02:00Z",
+      "resolution_code": null,
+      "resolution_note": null,
+      "resolved_at": null
+    },
+    {
+      "case_id": "C-5004",
+      "user_id": "eli",
+      "txn_id": "T-4002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states the CloudNest Storage subscription was cancelled in October; the $9.99 charge posted 2026-11-01 is after cancellation.",
+      "status": "under_review",
+      "opened_at": "2026-11-24T13:00:00Z",
+      "resolution_code": null,
+      "resolution_note": null,
+      "resolved_at": null
+    }
+  ],
+  "procedure": {
+    "active": "v1",
+    "versions": {
+      "v1": {
+        "rules": []
+      },
+      "v2": {
+        "rules": [
+          {
+            "resolution_code": "NO_CANCELLATION_PROOF",
+            "text": "Before calling file_dispute, ask the cardholder for the merchant\u2019s cancellation confirmation (email or reference number); only call file_dispute when that confirmation is provided, and pass the confirmation verbatim as evidence_note.",
+            "evidence_episodes": [
+              "E-followup-F-35e9c5ed-1",
+              "E-s4-priya-after-rejection",
+              "E-followup-F-daeb17b6-1"
+            ],
+            "evidence_users": [
+              "marco",
+              "priya"
+            ],
+            "approved_by": "ops-lead (scripted reviewer)",
+            "approved_at": "2026-11-23T09:00:00Z"
+          }
+        ],
+        "based_on": "v1"
+      }
+    },
+    "history": [
+      {
+        "event": "baseline",
+        "version": "v1"
+      },
+      {
+        "event": "promoted",
+        "version": "v2",
+        "based_on": "v1",
+        "by": "ops-lead (scripted reviewer)",
+        "at": "2026-11-23T09:00:00Z"
+      },
+      {
+        "event": "retracted",
+        "version": "v2",
+        "active_now": "v1",
+        "by": "ops-lead (scripted reviewer)",
+        "reason": "retraction drill: prove a promoted rule can be removed",
+        "at": "2026-11-24T12:00:00Z"
+      }
+    ]
+  }
+}

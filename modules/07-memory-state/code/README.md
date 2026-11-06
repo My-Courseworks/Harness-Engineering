@@ -38,7 +38,7 @@ Kestrel's card-care desk serves four logged-in cardholders over one simulated mo
 | Nov 24 | Dana, then Eli | Dana's identical dispute under v2 (agent asks for the cancellation reference first); a retraction drill restores v1; Eli's identical dispute under v1 as the control | procedural |
 | Nov 29 | scheduler | Priya's reminder fires | prospective |
 | Dec 3 | Priya | travel notice has expired; sets and then deletes a new one; pastes a full card number | semantic (staleness, deletion), guard |
-| Dec 3 | Priya | FX-fee question with retrieval removed (ablation) | parametric |
+| Dec 3 | Priya, then the bare model | FX-fee question with retrieval removed (ablation); the same question to the model with no instruction and no tools (probe) | parametric |
 | Jun 15 2027 | retention job, Priya | episodes past 180 days are deleted; "what did we talk about last time?" | episodic (forgetting) |
 
 The domain was picked because every memory type has a non-contrived job in it, and because its failure modes are the module's ones with real consequences. A stale travel notice causes wrong fraud decisions. Leaking another cardholder's case is a privacy breach. A follow-up that never fires is a broken promise to a customer, and a stored card number is a PCI incident.
@@ -65,6 +65,7 @@ The procedure, the bank, the scheduler and the write-path rules are shared code.
 - **ADK's built-in local memory service did not fit the write path.** ADK 2.13 ships `SqliteMemoryService`, but it indexes raw session events with keyword search and has no `delete_memory`. The module asks for reflections in, paraphrase-tolerant recall out, and deletion. So the ADK agent implements `BaseMemoryService` itself (about 60 lines). LangGraph's `SqliteStore` already had vector search, overwrite-by-key and delete.
 - **ADK's built-in `load_memory` returns a stringified `MemoryEntry` repr to the model**, not JSON. The LangGraph tool returns JSON. The scenario's "empty recall" check accepts both forms.
 - **State written by a tool** is `tool_context.state[...] = ...` in ADK. LangGraph needs a `Command(update=...)` carrying the `ToolMessage`. Store writes, however, are direct in both.
+- **Session state inside a parallel tool batch behaves differently, and the live runs hit it.** DeepSeek sometimes emits `verify_identity` and `remember_customer_fact(contact_channel)` in *one* response. In ADK the second call sees the first call's state write, because `tool_context.state` writes through to the live session. In LangGraph every call in a `ToolNode` batch reads the state as it was before the batch, and `Command` updates merge only after it. In the committed runs, LangGraph received two such batches and refused the gated write both times (*"changing contact_channel requires verify_identity in this conversation"*); the model recovered by calling it again. ADK received one and refused nothing. Round 2 showed the same split: 3 refusals on LangGraph, 0 on ADK. The guard held both ways: it refused rather than trusted, which is what a step-up check is for. The lesson for LangGraph is that read-your-own-write across parallel tool calls is not given; put a gate like this in one tool, or force sequential calls.
 
 ## Assumptions, each with a one-line defence
 
@@ -89,6 +90,8 @@ The procedure, the bank, the scheduler and the write-path rules are shared code.
 | A17 | a pasted card number is masked at the harness boundary before the message enters the session | "never store secrets" has to cover the event log too, and the only place that covers every store at once is before the first write |
 | A18 | the scripted customer turns front-load what an agent would ask for (verification details) | fixed scripts must not stall on a clarifying question; the checks then test memory, not dialogue luck |
 | A19 | one model for everything (`deepseek-v4-flash`), default sampling, no retries | the same pattern as module 01; failures are recorded as they happened instead of being retried away |
+| A20 | the card number pasted in the scenario is the published Mastercard test number `5555 5555 5555 4444` | a realistic-looking random number could collide with a real card; test numbers exist so that no real one appears in code or transcripts |
+| A21 | the reviewer who approves a promotion is scripted in the run, and approves the model's draft unchanged | the run has to be unattended. The evidence shows what that costs: see "the promoted rule over-reaches" in the failure log |
 
 ## Running it
 
@@ -121,4 +124,35 @@ Run the harness itself, not `adk web`. The harness owns the clock, the card-numb
 
 ## Evidence: what was run and what failed
 
-_Filled in from the recorded live runs; see [evidence/summary.md](evidence/summary.md) and [evidence/failures.md](evidence/failures.md)._
+**How it was validated.** No mocks and no unit tests. `run_scenario.py` drove each real agent through the 21-step scenario against DeepSeek: 26 customer turns in 10 sessions, 3 scheduler-fired sessions, 13 session-end reflections, one rule draft and one bare-model probe per run, scored by 66 checks. There were three independent runs per framework, each starting from empty stores. Each step is scored by checks that read only what the run produced (tool calls and their results, replies, the contents of every store), and each check is tagged with the memory type it proves. Checks are pure functions of each run's recorded `steps.json`, so a revised check re-scores the same recorded run (`--rescore`) rather than re-running it until it passes.
+
+**Result (final round, committed): ADK 64/66, 66/66, 66/66; LangGraph 66/66, 66/66, 66/66.** The two ADK failures are the leakage probe in run 1. DeepSeek returned a transport error on that turn, so the absence of leaked data cannot be shown for it. [Summary by memory type](evidence/summary.md) · [failure log, every round](evidence/failures.md).
+
+| memory type | written when | used later, observably (quotes from run 2) |
+|---|---|---|
+| working | s1: two StreamMax charges listed; `identity_verified_at` set | s1 "dispute the later one" → `file_dispute(T-1002)` in all 6 runs; s2 re-verifies, because verification is session-scoped; `temp:now` / `TurnContext.now` found in no persisted state |
+| semantic | s1 `user:travel_notice`, `user:contact_channel` = email; s2 overwritten to sms (`"replaced": "email"`) | s2, no recall call: *"By **email** — that's the channel you chose on 9 Nov"*; Nov 19 follow-up sent by `sms`; Marco's profile empty in every run; s6a: the expired Lisbon notice is deleted before the turn, not by a tool |
+| episodic | one reflection per finished session (13 per run), case outcome codes read from the case system | s2 `load_memory` → *"Here's what we did on 9 Nov: … the StreamMax $15.99 charge (T-1002)"*; s3 to Marco: *"I can't share anything about another customer's account"*; s8, after the 180-day sweep: *"I don't have a record of our last conversation"* |
+| procedural | Nov 23: `NO_CANCELLATION_PROOF` in episodes of 2 different customers → reviewed → v2 | s5 Dana under v2, before filing: *"Before I can file the dispute, I need the cancellation confirmation from CloudNest"*; then `evidence_note: "CN-77812"`. After the retraction drill, Eli under v1 is filed at once (6/6) |
+| external / retrieval | the ledger, cases and policy documents (seeded) | exact `find_transactions` / `get_case_status` for every account fact; the 1.25% fee only ever quoted from a `search_policy` result |
+| parametric | the weights | s1 "what is a chargeback" answered with no tool in 6/6; with no instruction and no tools, the bare model gives Kestrel's FX fee as `0` or `3`, never 1.25; with the instruction but no retrieval, both agents decline to quote a figure |
+| prospective | `file_dispute` writes the case follow-up; `schedule_reminder` writes the Nov 29 reminder | each record fires once, on its date, into a fresh session: *"Update on dispute C-5001 … rejected — the merchant has no cancellation request on record"* by sms; Marco's $240 follow-up waits for `ops_reviewer`; a re-run fires nothing |
+
+Committed per run, under `evidence/<framework>/run-<n>/`:
+- `transcript.md`: every turn, tool call and reply, with the step's checks.
+- `steps.json`: the raw record the checks are computed from.
+- `final-stores.json`: every store's contents at the end.
+- `procedure-v2.md`: the promoted instruction.
+
+The runs: ADK [1](evidence/adk/run-1/transcript.md) [2](evidence/adk/run-2/transcript.md) [3](evidence/adk/run-3/transcript.md), LangGraph [1](evidence/langgraph/run-1/transcript.md) [2](evidence/langgraph/run-2/transcript.md) [3](evidence/langgraph/run-3/transcript.md). None of these files holds a key, a store file, or a card number.
+
+**What failed, briefly** (details and quotes in the [failure log](evidence/failures.md)):
+- Two harness bugs, both found by live runs and fixed:
+  - the scheduler ran before follow-ups were due;
+  - one transport error could lose a whole run.
+- Nine check defects. In each, the check was narrower than its own label, and the agent had done the right thing. Each one's original evidence and score are kept in `evidence/history/`.
+- One evaluator hole: absence checks passed on an errored turn. Fixed; it is why ADK run 1 is 64/66 and not 66/66.
+- Agent failures no check scores, kept as findings:
+  - every model-drafted promoted rule over-reaches ("do not file without proof"), and two drop the scoping to cancelled subscriptions entirely; the scripted reviewer approved them all;
+  - in 13 of 18 filings the agent offered to "add it to the case" later, which no tool can do;
+  - occasional unnecessary retrievals.
