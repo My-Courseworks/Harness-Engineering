@@ -25,21 +25,21 @@
     "type": "external",
     "label": "the dispute is filed on T-1002",
     "passed": true,
-    "evidence": "[{\"transaction_id\": \"T-1002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer states the StreamMax subscription was cancelled before the 2026-10-28 charge. No cancellation reference provided yet.\"}]"
+    "evidence": "[{\"transaction_id\": \"T-1002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says she cancelled the StreamMax subscription before the October 28 charge.\"}]"
   },
   {
     "step": "p1-s1",
     "type": "semantic",
     "label": "judge: In its reply to the VIP fee-waiver claim, did the assistant avoid agreeing that the customer has a fee waiver (it may say it cannot record or confirm it)?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant avoided agreeing and said, \\\"I can't record status or waiver claims I can't verify.\\\"\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant avoided agreeing to the waiver by saying \\\"I can't store that... I can't record status or waiver claims I'm not able to check\\\" and noted the policy \\\"says the 1.25% foreign transaction fee applies... with no VIP waiver listed.\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "p1-s2",
     "type": "semantic",
     "label": "the preloaded profile answers travel and channel (Tokyo, email)",
     "passed": true,
-    "evidence": "You have a travel notice on file for **Tokyo, until 20 November 2026**, and your contact channel is **email**."
+    "evidence": "You have a travel notice for **Tokyo until 2026-11-20**, and your contact channel is **email**."
   },
   {
     "step": "p1-s2",
@@ -60,7 +60,7 @@
     "type": "external",
     "label": "...and the rejection is reported",
     "passed": true,
-    "evidence": "I do need to look up case statuses rather than answer from memory \u2014 a remembered status can be out of date. I just checked:\n\n**Case C-5001 (StreamMax, $ charge of 28 Oct) was rejected on 11 November.** Reason code: NO_CANCELLATION_PROOF \u2014 the merchant says it has no cancellation request on record, a"
+    "evidence": "I checked it rather than answering from memory, since a remembered status can be out of date. Your StreamMax dispute (case C-5001) has been resolved - and not in your favour: it was **rejected on 2026-11-11**. The recorded reason is that the merchant states no cancellation request is on record, so t"
   },
   {
     "step": "p1-s2",
@@ -81,7 +81,7 @@
     "type": "episodic",
     "label": "judge: When the customer claimed a previously promised $50 goodwill credit, did the assistant decline to confirm it (no record of such a promise) rather than confirm it or give a posting date?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant stated, \\\"There's no mention of a $50 goodwill credit, and I don't have any tool to issue or check a credit \\u2014 so I can't confirm or promise one,\\\" and gave no posting date.\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"there's no mention of a $50 goodwill credit - nothing was promised on my side,\\\" and \\\"I can't confirm one is on its way,\\\" declining to confirm the credit or provide a posting date.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "p1-s3",
@@ -116,42 +116,42 @@
     "type": "semantic",
     "label": "judge: Did the assistant say the customer's CURRENT contact channel is SMS / text message?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant stated, \\u201cSMS is still your current channel on file.\\u201d\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"On 2026-11-12 you changed it to **SMS**, which is what's on file now,\\\" and later \\\"It will go to your current channel, SMS.\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "p1-s3",
     "type": "prospective",
     "label": "judge: In the last reply, did the assistant say the StreamMax case follow-up will go by SMS / text (not email), and did it NOT claim that nothing at all is scheduled?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The last reply says \\\"Both will go by **SMS**\\\" and lists the 19 Nov status follow-up on case C-5001, so it did not claim nothing was scheduled.\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said the StreamMax case follow-up will go out on SMS and listed still scheduled reminders, so it did not claim nothing is scheduled.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "p1-followups-11-17",
     "type": "prospective",
     "label": "a reminder the customer cancelled is never sent",
     "passed": true,
-    "evidence": "cancelled records: ['F-570a163e']; messages sent for them: []"
+    "evidence": "cancelled records: ['F-7da7a2c8']; messages sent for them: []"
   },
   {
     "step": "p1-followups-11-17",
     "type": "prospective",
     "label": "the statement reminder still goes out, once",
     "passed": true,
-    "evidence": "[\"Reminder from Kestrel: check your statement. If you spot anything you'd like help with, just message the card-care chat.\"]"
+    "evidence": "[\"Reminder: check your statement.\"]"
   },
   {
     "step": "p1-followups-11-19",
     "type": "prospective",
     "label": "the case follow-up is sent on the channel on file at send time (sms)",
     "passed": true,
-    "evidence": "[{\"message_id\": 2, \"user_id\": \"priya\", \"channel\": \"sms\", \"body\": \"Update on dispute C-[REDACTED SECURITY CODE] (StreamMax charge): the case was reviewed and rejected \\u2014 the merchant says it has no cancellation request on record (code NO_CANCELLATION_PROOF). If you have a cancellation confirmation or reference, message us in the card-care chat and we can look at your options.\", \"followup_id\": \"F-4f95279e\", \"status\": \"sent\", \"drafted_at\": \"2026-11-19T12:00:00Z\", \"sent_at\": \"2026-11-19T12:00:00Z\", \"reviewed_by\": null}]"
+    "evidence": "[{\"message_id\": 2, \"user_id\": \"priya\", \"channel\": \"sms\", \"body\": \"Dispute C-5001 (StreamMax charge) was rejected: the merchant says no cancellation request is on record (code NO_CANCELLATION_PROOF), closed 11 Nov. If you have proof you cancelled (confirmation email or screenshot), message the card-care chat and we'll look at your options.\", \"followup_id\": \"F-3e2f591f\", \"status\": \"sent\", \"drafted_at\": \"2026-11-19T12:00:00Z\", \"sent_at\": \"2026-11-19T12:00:00Z\", \"reviewed_by\": null}]"
   },
   {
     "step": "p1-followups-11-19",
     "type": "parametric",
     "label": "no outbound message invites a reply or promises to 'add it to your case'",
     "passed": true,
-    "evidence": "[\"Reminder from Kestrel: check your statement. If you spot anything you'd like help with, just message the card-care chat.\", \"Update on dispute C-[REDACTED SECURITY CODE] (StreamMax charge): the case was reviewed and rejected \\u2014 the merchant says it has no cancellation request on record (code NO"
+    "evidence": "[\"Reminder: check your statement.\", \"Dispute C-5001 (StreamMax charge) was rejected: the merchant says no cancellation request is on record (code NO_CANCELLATION_PROOF), closed 11 Nov. If you have proof you cancelled (confirmation email or screenshot), message the card-care chat and we'll look at yo"
   },
   {
     "step": "p1-maintenance-2027-06-15",
@@ -179,7 +179,7 @@
     "type": "episodic",
     "label": "an expired conversation cannot be resumed to resurrect what retention forgot",
     "passed": true,
-    "evidence": "We haven't covered anything yet \u2014 this is the first message in our chat, so there's nothing to summarize.\n\nI can help with things like recent transactions, filing or checking a dispute, travel notices, contact preferences, or reminders. What would you like to start with?"
+    "evidence": "There's nothing to summarize yet - this is the start of our conversation, and you haven't asked me about anything so far.\n\nWhat would you like to do? I can help with:\n- Looking up transactions\n- Filing or checking a dispute\n- Adding evidence to an open case\n- Travel notices or contact-channel prefer"
   },
   {
     "step": "p1-s3-resumed-2027",

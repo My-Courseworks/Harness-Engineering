@@ -7,29 +7,37 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 **Customer:** Hi, Priya (card ending 4427, ZIP 94107). I'm in Lisbon until November 30 and please email me from now on.
 
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
-- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
 - `remember_customer_fact({"key": "travel_notice", "value": "Lisbon", "valid_until": "2026-11-30"})` → `{"stored": {"travel_notice": {"value": "Lisbon", "as_of": "2026-11-09T10:00:00Z", "valid_until": "2026-11-30", "expires_at": "2026-12-01T00:00:00Z"}}, "replaced": null}`
+- `search_policy({"question": "travel notice rules and what a travel notice does"})` → `{"documents": [{"document": "travel-notices", "score": 0.834, "text": "# Travel notices\n\nA travel notice tells Kestrel's fraud systems that card use in another country is expected, which reduces false declines while you travel. Give the destination and the date you return. Kestrel keeps a travel notice only until the return date and deletes it automatically afterwards; a new trip needs a new not …`
+- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
 
-**Assistant:** Thanks Priya — you're verified. Both are set:
+**Assistant:** I'll verify your identity and set up your travel notice.
+You're verified, and both are set:
 
-- **Contact channel:** email (from now on)
-- **Travel notice:** Lisbon, valid until 2026-11-30
+- **Travel notice:** Lisbon, valid until 2026-11-30 - it tells our fraud systems to expect card use abroad, which reduces false declines. It's deleted automatically after your return date.
+- **Contact channel:** email - that's where reminders and case follow-ups will go from now on.
 
-Anything else I can help with — a transaction, dispute, or a reminder?
+One thing worth knowing while traveling: purchases in a non-USD currency carry a 1.25% foreign transaction fee on the US-dollar amount, posted as a separate line the same day. A travel notice doesn't waive it.
 
-_Episode written:_ Conversation on 2026-11-09: The customer said she is Priya (not verified) and is in Lisbon until Nov 30 (not verified); she asked for email contact from now on. Identity verification succeeded, and email contact plus a Lisbon travel notice valid until 2026-11-30 were stored. No case or transaction IDs; no promises made. Case outcomes: no case touched. Lesson: none
+Anything else - a transaction to look at or a reminder you'd like scheduled?
+
+_Episode written:_ Conversation on 2026-11-09: Customer (Priya) asked to set a travel notice for Lisbon until 2026-11-30 and to use email for future contact. Identity was verified; travel notice and contact channel were stored. No case or transaction IDs were provided. Assistant explained the 1.25% foreign transaction fee and that travel notices do not waive it. No promise beyond automatic notice deletion after return date. Case outcomes: no case touched. Lesson: none
 
 ## er-s2  ·  session  ·  priya  ·  2026-11-10T10:00:00Z
 
 **Customer:** Please delete everything you remember about me: my preferences and our past conversations.
 
-- `request_memory_erasure({})` → `{"scheduled": "when this conversation ends, every remembered fact, every past-conversation summary and every conversation transcript, including this one, will be erased", "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"}`
+- `request_memory_erasure({})` → `{"recorded": "the erasure request is recorded and will run when this conversation ends, or within the next maintenance run if the chat is simply closed", "erases": "every remembered fact, every past-conversation summary, every conversation transcript including this one, and every pending reminder with its note", "kept": "dispute cases, transactions and messages already sent are bank records with t …`
 
-**Assistant:** Done — the erasure is scheduled to run when this conversation ends. It will erase every remembered fact (including your contact channel and travel notice), all past-conversation summaries and all conversation transcripts, including this one.
+**Assistant:** Done - your erasure request is recorded. Here's what happens:
 
-What Kestrel keeps: dispute cases, transactions and messages already sent to you — these are bank records with their own legal retention requirements.
+**Erased:** everything I remember about you - stored preferences (including your contact channel and travel notice), summaries of past conversations, conversation transcripts including this one, and any pending reminders along with their notes.
 
-Anything else I can help with before you go?
+**Kept:** dispute cases, transactions, and messages already sent to you, since those are bank records with their own legal retention requirements.
+
+**When:** it runs when this conversation ends - or, if you just close the chat, at the next maintenance run.
+
+Is there anything else you'd like to do before you close the chat?
 
 | | memory type | check | evidence |
 |---|---|---|---|

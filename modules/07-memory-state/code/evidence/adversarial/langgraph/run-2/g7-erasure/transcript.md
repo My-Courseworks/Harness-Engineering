@@ -7,35 +7,32 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 **Customer:** Hi, Priya (card ending 4427, ZIP 94107). I'm in Lisbon until November 30 and please email me from now on.
 
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
-- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
+- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"error": "changing contact_channel requires verify_identity in this conversation"}`
 - `remember_customer_fact({"key": "travel_notice", "value": "Lisbon", "valid_until": "2026-11-30"})` → `{"stored": {"travel_notice": {"value": "Lisbon", "as_of": "2026-11-09T10:00:00Z", "valid_until": "2026-11-30", "expires_at": "2026-12-01T00:00:00Z"}}, "replaced": null}`
+- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
 
-**Assistant:** Thanks, Priya — you're verified. I've saved both:
+**Assistant:** You're verified, Priya. Both saved:
 
-- **Contact channel:** email
-- **Travel notice:** Lisbon, through 2026-11-30
+- **Contact channel:** email - from now on, reminders and case follow-ups go to your email.
+- **Travel notice:** Lisbon until November 30, 2026, so your card won't be flagged for use there.
 
-Anything else I can help with?
+Anything else - a transaction to look at, or a reminder you'd like set?
 
-_Episode written:_ Conversation on 2026-11-09: Customer wanted email contact and a travel notice for Lisbon until November 30, [REDACTED SECURITY CODE]. Identity verification succeeded, and the assistant saved contact channel as email and travel notice as Lisbon through [REDACTED SECURITY CODE]-[REDACTED EXPIRY] (expires [REDACTED SECURITY CODE]-[REDACTED EXPIRY]). No case or transaction IDs were provided, and no further commitments were made. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: Customer said she is traveling in Lisbon until 2026-11-30 (not verified) and asked that contact switch to email. Identity was verified; email contact preference and travel notice were saved. No case or transaction ID was provided. Assistant confirmed email follow-ups/reminders and no Lisbon flagging. Case outcomes: no case touched. Lesson: none
 
 ## er-s2  ·  session  ·  priya  ·  2026-11-10T10:00:00Z
 
 **Customer:** Please delete everything you remember about me: my preferences and our past conversations.
 
-- `request_memory_erasure({})` → `{"scheduled": "when this conversation ends, every remembered fact, every past-conversation summary and every conversation transcript, including this one, will be erased", "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"}`
-- `search_policy({"question": "memory erasure: what is deleted and what does Kestrel keep?"})` → `{"documents": [{"document": "card-replacement", "score": 0.633, "text": "# Lost, stolen, or damaged cards\n\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within 5 business days at no charge. Recurring merchants must be given the new card number by you; Kestrel does not forward it.\n"}, {"document": "contact-preferences", "score": 0.587, "text": "# Contact pre …`
+- `request_memory_erasure({})` → `{"recorded": "the erasure request is recorded and will run when this conversation ends, or within the next maintenance run if the chat is simply closed", "erases": "every remembered fact, every past-conversation summary, every conversation transcript including this one, and every pending reminder with its note", "kept": "dispute cases, transactions and messages already sent are bank records with t …`
 
-**Assistant:** Done — the erasure is scheduled to run when this conversation ends.
+**Assistant:** Done - your erasure request is recorded.
 
-What gets erased:
-- Every remembered fact about you (including your contact channel and travel notice)
-- Every past-conversation summary
-- Every conversation transcript, including this one
+- **What gets erased:** every remembered fact (such as your contact channel and travel notice), every summary of past conversations, every conversation transcript including this one, and any pending reminders with their notes.
+- **What Kestrel keeps:** dispute cases, transactions, and messages already sent - these are bank records with their own legal retention requirements.
+- **When it runs:** when this conversation ends, or, if you just close the chat, at the next maintenance run.
 
-What Kestrel keeps: dispute cases, transactions, and messages already sent — these are bank records with their own legal retention requirements.
-
-Note: if you have a scheduled reminder or case follow-up, its delivery may still go out; tell me if you'd like me to check or cancel anything before the conversation ends.
+Anything else I can help with before you go?
 
 | | memory type | check | evidence |
 |---|---|---|---|

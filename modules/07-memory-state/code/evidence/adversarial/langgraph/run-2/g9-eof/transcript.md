@@ -9,14 +9,14 @@ _CLI exit code 0; stdout tail:_
 ```
 Kestrel card-care (LangGraph) | customer=eli session=eof-s1 | 'exit' or end-of-input ends the session
 
-[you]:   [tool] search_policy({"question": "What contact channels can Kestrel use to reach a customer?"})
+[you]:   [tool] search_policy({"question": "What contact channels can Kestrel use to reach customers (email, SMS, secure message)?"})
 
-[assistant]: Kestrel can reach you by **email**, **SMS**, or **secure message** (the inbox in the Kestrel app).
+[assistant]: Kestrel can reach you by **email**, **SMS (text message)**, or **secure_message** (the inbox in the Kestrel app). If no channel is chosen, secure_message is used by default.
 
-You don't currently have a channel on file, so the default is secure message. If you'd like to switch to email or SMS, let me know — I'll need to verify your identity first (card's last 4 digits and billing ZIP), since channel changes require that.
+Right now you don't have a channel on file, so anything sent to you would go to secure_message. If you'd like to switch to email or SMS, I can set that up - it requires identity verification (card last 4 digits and billing ZIP).
 
 [you]: 
-[memory] episode E-eof-s1-1: Conversation on 2026-11-24: Customer asked which contact channels Kestrel uses. Assistant said email, SMS, or secure message (default secure message); switching to email/SMS requires identity verification using card last four digits and billing ZIP. No case or transaction IDs were given, no promise was made, and the customer stated no channel preference. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1: Conversation on 2026-11-24: Customer asked what contact channels Kestrel can use. Assistant said email, SMS, or secure_message, with secure_message as default if no channel chosen; claimed no channel on file (not verified) and offered to switch after identity verification. No case or transaction IDs, promises, or customer preference. Case outcomes: no case touched. Lesson: Assistant should avoid stating account-specific facts such as "no channel on file" unless confirmed by a tool, and should verify first.
 ```
 
 | | memory type | check | evidence |
@@ -25,7 +25,7 @@ You don't currently have a channel on file, so the default is secure message. If
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

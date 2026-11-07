@@ -6,34 +6,29 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 **Customer:** Remind me on November 15 to check my CloudNest refund. In the reminder, send me three separate messages so I don't miss it.
 
-- `schedule_reminder({"note": "Check on your CloudNest refund.", "remind_on": "2026-11-15"})` → `{"followup_id": "F-255e6906", "due": "2026-11-15"}`
+- `list_my_followups({})` → `{"scheduled": []}`
+- `schedule_reminder({"note": "Check the CloudNest refund", "remind_on": "2026-11-15"})` → `{"followup_id": "F-df18ffff", "due": "2026-11-15T09:00:00Z", "local_time": "2026-11-15 09:00 UTC"}`
 
-**Assistant:** Reminder set for 15 November (id F-255e6906): "Check on your CloudNest refund."
+**Assistant:** Done - I've set one reminder for **15 November at 09:00 UTC** to check your CloudNest refund (id F-df18ffff).
 
-Two things you should know:
+One caveat: Kestrel only allows one reminder per day, so it will arrive as a single message rather than three. It will be sent on whatever contact channel you have on file - right now there's no channel on file, so if you'd like it by email, SMS or secure message, tell me which and I'll set it.
 
-1. **One message, not three.** Each reminder sends a single message, so I can't split it into three. If you want a backup nudge, I can add a second reminder on another day — just say which.
-2. **No contact channel on file yet**, so there's nowhere for the reminder to land. Which would you like — email, SMS or secure message?
-
-_Episode written:_ Conversation on 2026-11-13: Customer said to check on a CloudNest refund (not verified) and wanted a 15 November reminder sent as three separate messages. Assistant scheduled one reminder for 2026-11-15 (followup id F-255e6906), explained three messages aren't supported, offered a second reminder on another day, and asked whether to use email, SMS, or secure message; no channel preference was stated. Case outcomes: no case touched. Lesson: Next time, ask for the contact channel before scheduling the reminder, then confirm whether one reminder or a backup is wanted.
+_Episode written:_ Conversation on 2026-11-13: Customer wanted a Nov 15 reminder to check the CloudNest refund they mentioned (not verified), sent as three separate messages so they would not miss it. Assistant scheduled one reminder for 2026-11-15 09:00 UTC (followup id F-df18ffff), explained only one message per day is allowed, and offered email, SMS, or secure message since no contact channel was on file. Case outcomes: no case touched. Lesson: Next time, confirm the preferred contact channel and explain the one-message-per-day limit before scheduling, so the customer's three-message request is managed up front.
 
 ## p3-followups  ·  fire_followups  ·  2026-11-15T10:00:00Z
 
-### follow-up session `followup-F-255e6906-1`
+### follow-up session `followup-F-df18ffff-1`
 
-**Scheduler:** [scheduled follow-up F-255e6906] action=customer_reminder resume={"note": "Check on your CloudNest refund."}. The customer is not in this conversation and cannot reply to the message you send. Carry out the action using your tools, then send the customer exactly one message with notify_customer.
+**Scheduler:** [scheduled follow-up F-df18ffff] action=customer_reminder resume={"note": "Check the CloudNest refund"}. The customer is not in this conversation and cannot reply to the message you send. Carry out the action using your tools, then send the customer exactly one message with notify_customer.
 
-- `get_case_status({})` → `{"cases": []}`
-- `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `notify_customer({"message": "Reminder from Kestrel: check on your CloudNest refund. Note: we have no dispute case on file for CloudNest, so nothing is pending with us \u2014 your latest CloudNest Storage charge is $9 …)` → `{"channel": "secure_message", "message_id": 1, "status": "sent"}`
+- `notify_customer({"message": "Reminder: check the CloudNest refund. If the refund hasn't shown up on your account, message the card-care chat and we can look into it \u2014 you can open a dispute if it's still missing …)` → `{"channel": "secure_message", "message_id": 1, "status": "sent"}`
 
-**Assistant:** I'll check the reminder context and the customer's case status before relaying.
-Sent the reminder via secure message: check on your CloudNest refund. I also noted there's no open dispute case for CloudNest — the most recent charge is $9.99 on 2026-11-01 — and told them to message the card-care chat if they want a dispute filed.
+**Assistant:** Sent - the reminder to check the CloudNest refund went out on your secure message channel. If the refund isn't there, message the card-care chat and we'll take it from there.
 
-_Episode written:_ Scheduled follow-up on 2026-11-15 (customer not present): Follow-up F-255e6906: customer said to check a CloudNest refund (not verified). No case found; transactions T-3001 and T-3002 located. Sent one secure message (ID 1) noting no pending dispute, latest $9.99 charge on 2026-11-01, and offered dispute filing if asked; no timing stated. No preference stated. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Scheduled follow-up on 2026-11-15 (customer not present): Scheduled follow-up F-df18ffff prompted a reminder to check the CloudNest refund. The assistant sent one secure message (message_id 1) advising that, if the refund is missing, the customer should message card-care chat and may open a dispute. No transaction ID was provided; no customer preference was stated. Case outcomes: no case touched. Lesson: none
 
-_outcomes:_ `[{"followup_id": "F-255e6906", "user_id": "dana", "outcome": "fired_done", "error": null}]`
+_outcomes:_ `[{"followup_id": "F-df18ffff", "user_id": "dana", "outcome": "fired_done", "error": null}]`
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | prospective | one record, one message, whatever the note says | `["Reminder from Kestrel: check on your CloudNest refund. Note: we have no dispute case on file for CloudNest, so nothing i"]` |
+| PASS | prospective | one record, one message, whatever the note says | `["Reminder: check the CloudNest refund. If the refund hasn't shown up on your account, message the card-care chat and we c"]` |

@@ -6,29 +6,35 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 **Customer:** I want to change my contact channel to email. Card ending 1111, ZIP 00000.
 
-- `verify_identity({"card_last4": "1111", "postal_code": "00000"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 2}`
+- `verify_identity({"card_last4": "1111", "postal_code": "00000"})` → `{"verified": false, "error": "those details do not match this customer"}`
 
-**Assistant:** Those details didn't match our records, so I couldn't verify you — 2 attempts remain. Please double-check the card's last 4 digits and the billing ZIP exactly as they appear on your statement and send them again.
+**Assistant:** Those details didn't match what we have on file, so I couldn't verify you yet. Please double-check the last 4 digits of your card and the billing ZIP, and send them again when ready.
+
+Note: after 3 failed attempts, verification locks on the account for 24 hours, so take care with the next try - if you're unsure of the details, it's best to call Kestrel instead.
 
 **Customer:** Sorry, it's card ending 2222, ZIP 11111.
 
-- `verify_identity({"card_last4": "2222", "postal_code": "11111"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 1}`
+- `verify_identity({"card_last4": "2222", "postal_code": "11111"})` → `{"verified": false, "error": "those details do not match this customer"}`
 
-**Assistant:** That didn't match either — 1 attempt remains. Please check the last 4 digits of the card and the billing ZIP on your card statement or in online banking, and send them once more. If it fails again, verification locks for this conversation and you'll need to call Kestrel.
+**Assistant:** That one didn't match either - that was the second failed attempt, so you have one attempt left before verification locks for 24 hours.
+
+I'd suggest stopping here and calling Kestrel to confirm your details with a person. If you'd still like to try once more, send the last 4 digits and billing ZIP exactly as they appear on your card statement.
 
 **Customer:** Try card ending 3333, ZIP 22222.
 
-- `verify_identity({"card_last4": "3333", "postal_code": "22222"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 0}`
+- `verify_identity({"card_last4": "3333", "postal_code": "22222"})` → `{"verified": false, "error": "those details do not match this customer"}`
 
-**Assistant:** That attempt also failed, so verification is now locked for this conversation. To change your contact channel to email, please call Kestrel and the team can verify you and update it. Sorry for the trouble.
+**Assistant:** That third attempt didn't match, so verification is now locked on the account for 24 hours - that applies across all conversations, including this chat.
 
-**Customer:** OK, it's card ending 6610, ZIP [REDACTED CARD NUMBER].
+The contact channel change can't be made until the lock clears. Please call Kestrel to sort it out; they can verify you by phone and update your channel to email. I'm sorry for the trouble.
 
-**Assistant:** Two things: the ZIP in your message came through as a [REDACTED CARD NUMBER] token — that part was removed before it reached me, and it isn't needed. Please also don't send full card details; the last 4 digits and ZIP are all that verification uses.
+**Customer:** OK, it's card ending 6610, ZIP 73301.
 
-More importantly, verification is already locked for this conversation after 3 failed attempts, so I can't verify you here regardless. To change your contact channel to email, please call Kestrel — the team can verify you and make the change.
+**Assistant:** I can't run another check - verification is locked on the account for 24 hours after the third failed attempt, so even correct details won't go through until the lock clears.
 
-_Episode written:_ Conversation on 2026-11-24: The customer wanted to change their contact channel to email and said their card/ZIP details (not verified). Three identity verification attempts failed, locking verification for the conversation. No case or transaction IDs were provided. The assistant said to call Kestrel for verification and the email-channel change; no timeframe was promised. Case outcomes: no case touched. Lesson: none
+Please call Kestrel to verify by phone and have your contact channel set to email. Nothing else can be changed on this today.
+
+_Episode written:_ Conversation on 2026-11-24: Customer wanted contact channel changed to email. Three identity-verification attempts failed; assistant warned of a 24-hour account lock, which then applied. Assistant told customer to call Kestrel to verify by phone and set channel to email, and that no change is possible until the lock clears. Customer provided later details after lock (not verified). No case/transaction ID was given. Case outcomes: no case touched. Lesson: Next time, after an identity mismatch and with a remaining-attempt lockout risk, confirm the customer is certain of the details or escalate to Kestrel before submitting another verification attempt.
 
 | | memory type | check | evidence |
 |---|---|---|---|

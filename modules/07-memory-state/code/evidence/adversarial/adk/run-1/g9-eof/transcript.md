@@ -9,14 +9,14 @@ _CLI exit code 0; stdout tail:_
 ```
 Kestrel card-care (ADK) | customer=eli session=eof-s1 | 'exit' or end-of-input ends the session
 
-[you]:   [tool] search_policy({"question": "Which contact channels can Kestrel use to reach a customer (email, SMS, secure message)?"})
+[you]:   [tool] search_policy({"question": "What contact channels can Kestrel use to reach customers?"})
 
-[assistant]: Kestrel can reach you by **email**, **SMS (text message)**, or **secure message** (the inbox in the Kestrel app).
+[assistant]: Kestrel can reach you by **email**, **SMS (text message)**, or **secure_message** (the inbox in the Kestrel app).
 
-You don't currently have a channel chosen, so anything sent to you would go by secure message. If you'd like to switch to email or SMS, tell me which one — changing it requires identity verification (card last 4 digits and billing ZIP).
+You currently have no channel chosen, so anything sent to you would go by **secure_message** by default. If you'd like to switch to email or SMS, I can set that up - it requires a quick identity check (card last 4 digits and billing ZIP).
 
 [you]: 
-[memory] episode E-eof-s1-1: Conversation on 2026-11-24: The customer asked which contact channels Kestrel can use. The assistant said email, SMS, or secure message, with secure message as the default if no channel is chosen. The assistant said changing the channel requires identity verification. No case or transaction ID, promise, or customer channel preference was stated. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1: Conversation on 2026-11-24: Customer asked which contact channels Kestrel can use. Assistant explained email, SMS, or secure_message; secure_message is the default if no channel is chosen, and switching requires identity verification. No case or transaction IDs. No preference was stated, no action was taken, and no specific promise or timing was given. Case outcomes: no case touched. Lesson: none
 ```
 
 | | memory type | check | evidence |
@@ -25,7 +25,7 @@ You don't currently have a channel chosen, so anything sent to you would go by s
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

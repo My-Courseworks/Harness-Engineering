@@ -11,12 +11,16 @@ Kestrel card-care (ADK) | customer=eli session=eof-s1 | 'exit' or end-of-input e
 
 [you]:   [tool] search_policy({"question": "What contact channels can Kestrel use to reach customers?"})
 
-[assistant]: You can be reached by **email**, **SMS (text)**, or **secure_message** (the inbox in the Kestrel app).
+[assistant]: Kestrel can reach you by:
 
-Right now you have no channel chosen, so anything Kestrel sends you — case updates and reminders — goes to **secure_message** by default. If you'd like to switch to email or SMS, I can do that, but changing the channel requires identity verification (card's last 4 digits and billing ZIP).
+- **email**
+- **sms** (text message)
+- **secure_message** (the inbox in the Kestrel app)
+
+If you haven't chosen a channel, Kestrel uses **secure_message** by default. Note that changing your contact channel requires identity verification (card last 4 digits and billing ZIP), since it's a common step in account takeover.
 
 [you]: 
-[memory] episode E-eof-s1-1: Conversation on 2026-11-24: Customer asked what contact channels Kestrel can use. Assistant searched policy and explained email, SMS, or secure_message; with no channel chosen, messages default to secure_message. Assistant said switching channels requires identity verification. No case or transaction IDs; no customer preference stated. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1: Conversation on 2026-11-24: The customer asked which contact channels Kestrel can use. The assistant searched the contact-preferences policy and answered: email, SMS, and secure_message; secure_message is the default if no channel is chosen; changing the channel requires identity verification. No case or transaction IDs were provided, and no promises or channel preference were stated. Case outcomes: no case touched. Lesson: none
 ```
 
 | | memory type | check | evidence |
@@ -25,7 +29,7 @@ Right now you have no channel chosen, so anything Kestrel sends you — case upd
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

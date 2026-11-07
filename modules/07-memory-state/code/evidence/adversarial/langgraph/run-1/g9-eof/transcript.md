@@ -11,12 +11,12 @@ Kestrel card-care (LangGraph) | customer=eli session=eof-s1 | 'exit' or end-of-i
 
 [you]:   [tool] search_policy({"question": "What contact channels can Kestrel use to reach a customer?"})
 
-[assistant]: Kestrel can reach you by **email**, **SMS (text message)**, or **secure_message** (the Kestrel app inbox).
+[assistant]: Kestrel can reach you by **email**, **SMS**, or **secure message** (the inbox in the Kestrel app). If no channel has been chosen, secure messages are used - which is currently the case on your profile, so anything scheduled would arrive in your app inbox.
 
-You currently have no channel on file, so anything we send — case follow-ups, reminders — would go to **secure_message** by default. If you'd like to switch to email or SMS, I can do that; it requires quick identity verification (card's last 4 digits and billing ZIP).
+You can switch channels any time; that requires a quick identity check (card's last 4 digits and billing ZIP). Just let me know which channel you'd like.
 
 [you]: 
-[memory] episode E-eof-s1-1: Conversation on 2026-11-24: Customer asked which contact channels Kestrel can use. Assistant said email, SMS, or secure_message; with no channel on file, secure_message is default. Assistant offered to switch after identity verification; no case or transaction ID, promise, or preference stated. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1: Conversation on 2026-11-24: The customer asked what contact channels Kestrel can use. The assistant searched policy and said email, SMS, or secure message, defaulting to secure_message, stated the customer’s profile currently uses secure_message (not verified), and offered a channel change after identity check. No case/transaction IDs; no promises or customer preference stated. Case outcomes: no case touched. Lesson: The assistant should verify the customer’s current contact preference in the profile before stating it, rather than inferring it from general policy.
 ```
 
 | | memory type | check | evidence |
@@ -25,7 +25,7 @@ You currently have no channel on file, so anything we send — case follow-ups, 
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|
