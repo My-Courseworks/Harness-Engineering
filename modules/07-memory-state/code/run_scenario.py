@@ -30,14 +30,20 @@ import traceback
 from pathlib import Path
 
 from cardcare import procedures, scheduler, world
+import litellm
+
 from cardcare.adversarial import ADVERSARIAL_GROUPS
 from cardcare.clock import add_minutes
-from cardcare.scenario import MEMORY_TYPES, SCENARIO, card_data_locations, check, evaluate, pan_locations, text_locations
+from cardcare.heldout import HELDOUT_GROUPS
+from cardcare.model_config import JUDGE_MODEL, JUDGE_SAMPLES, deepseek_api_key
+from cardcare.scenario import (
+    MEMORY_TYPES, OPS_ONLY_APPROVER, OPS_ONLY_PROBE_RULES, SCENARIO, card_data_locations, check, evaluate, pan_locations, text_locations,
+)
 
 CODE_DIR = Path(__file__).resolve().parent
 USERS = [customer[0] for customer in world.CUSTOMERS]
 FRAMEWORK_MODULES = {"adk": "adk_agent.agent", "langgraph": "langgraph_agent.agent"}
-SUITES = {"scripted": {"scenario": SCENARIO}, "adversarial": ADVERSARIAL_GROUPS}
+SUITES = {"scripted": {"scenario": SCENARIO}, "adversarial": ADVERSARIAL_GROUPS, "heldout": HELDOUT_GROUPS}
 
 SIMULATED_CUSTOMER_PROMPT = """You are role-playing a customer chatting with Kestrel Card's support assistant.
 Persona and goal: {persona}
@@ -71,19 +77,31 @@ def _conversation_text(turns: list[dict]) -> str:
     lines = []
     for turn in turns:
         lines.append(f"customer: {turn['customer']}")
-        lines += [f"  (tool {c['name']} {json.dumps(c['args'])} -> {json.dumps(c['result'], default=str)[:300]})" for c in turn["tool_calls"]]
+        lines += [f"  (tool {c['name']} {json.dumps(c['args'])} -> {json.dumps(c['result'], default=str)[:1200]})" for c in turn["tool_calls"]]
         lines.append(f"assistant: {turn['reply'] or '(no reply)'}" + (f"  [turn error: {turn['error']}]" if turn.get("error") else ""))
     return "\n".join(lines) or "(you start the conversation)"
 
 
-async def _judge(fw, question: str, turns: list[dict]) -> dict:
-    raw = await resolved(fw.complete_text(JUDGE_PROMPT.format(question=question, transcript=_conversation_text(turns))))
+async def _judge_once(prompt: str) -> dict:
+    response = await litellm.acompletion(model=f"deepseek/{JUDGE_MODEL}", api_key=deepseek_api_key(),
+                                         messages=[{"role": "user", "content": prompt}])
+    raw = response.choices[0].message.content or ""
     start, end = raw.find("{"), raw.rfind("}")
     try:
         verdict = json.loads(raw[start:end + 1])
     except (ValueError, json.JSONDecodeError):
         verdict = {"verdict": "fail", "reason": f"unparseable judge output: {raw[:200]}"}
     return {"verdict": str(verdict.get("verdict", "fail")).lower(), "reason": str(verdict.get("reason", ""))}
+
+
+async def _judge(question: str, turns: list[dict]) -> dict:
+    """A different model than the agent, sampled JUDGE_SAMPLES times; the majority is the verdict, every sample is kept."""
+    prompt = JUDGE_PROMPT.format(question=question, transcript=_conversation_text(turns))
+    samples = [await _judge_once(prompt) for _ in range(JUDGE_SAMPLES)]
+    passes = sum(sample["verdict"] == "pass" for sample in samples)
+    majority = "pass" if passes * 2 > len(samples) else "fail"
+    return {"verdict": majority, "reason": next(x["reason"] for x in samples if x["verdict"] == majority),
+            "samples": [x["verdict"] for x in samples], "model": JUDGE_MODEL}
 
 
 async def _turn(fw, h, step: dict, session_id: str, text: str, now: str) -> dict:
@@ -95,11 +113,15 @@ async def _turn(fw, h, step: dict, session_id: str, text: str, now: str) -> dict
 
 
 async def _finish_session(fw, h, step: dict, session_id: str, turns: list[dict], result: dict) -> dict:
-    try:
-        result["episode"] = await resolved(fw.end_session(h, step["user"], session_id, add_minutes(step["at"], len(turns) * 2)))
-    except Exception as exc:
-        result["error"] = f"session-end reflection failed: {type(exc).__name__}: {exc}"
-    result["judgements"] = {j["id"]: await _judge(fw, j["question"], turns) for j in step.get("judges", [])}
+    """End the session the normal way, or not at all when the step models a closed tab ("end": False)."""
+    if step.get("end", True):
+        try:
+            result["episode"] = await resolved(fw.end_session(h, step["user"], session_id, add_minutes(step["at"], len(turns) * 2)))
+        except Exception as exc:
+            result["error"] = f"session-end reflection failed: {type(exc).__name__}: {exc}"
+    else:
+        result["closed_without_end_session"] = True
+    result["judgements"] = {j["id"]: await _judge(j["question"], turns) for j in step.get("judges", [])}
     return result
 
 
@@ -131,6 +153,139 @@ def run_cli_eof_session(framework: str, h, step: dict) -> dict:
     return {"cli_exit_code": completed.returncode, "cli_stdout_tail": completed.stdout[-1500:], "cli_stderr_tail": completed.stderr[-800:]}
 
 
+async def run_parallel_probe(framework: str, fw, h, step: dict) -> dict:
+    """Force one model response with three parallel tool calls through the framework's real tool path.
+
+    The model is not asked to do it (it may or may not); the response is injected, the framework executes it,
+    and the stores are read. LangGraph: the AIMessage is written into the thread and the graph resumes at its
+    ToolNode. ADK: a scripted first model response goes through the real Runner and function-call flow.
+    """
+    user, now = step["user"], step["at"]
+    if step["probe"] == "notify_x3":
+        record = scheduler.schedule_followup(h.scheduler_db, user, "case_status_followup", now, {"case_id": "C-0000"}, "none", now)
+        calls = [("notify_customer", {"message": f"Update number {i}."}) for i in (1, 2, 3)]
+        session_state = {"followup_id": record["followup_id"], "last_active_at": now}
+    else:
+        record, session_state = None, {"last_active_at": now}
+        calls = [("verify_identity", {"card_last4": last4, "postal_code": "00000"}) for last4 in ("1111", "2222", "3333")]
+    session_id = f"probe-{step['id']}"
+    error = None
+    try:
+        if framework == "langgraph":
+            _inject_langgraph(fw, h, user, session_id, calls, session_state, now)
+        else:
+            await _inject_adk(fw, h, user, session_id, calls, session_state, now)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    probe = {"error": error}
+    if record:
+        probe["messages_for_followup"] = sum(m["followup_id"] == record["followup_id"] for m in world.outbound_messages(h.bank_db))
+    else:
+        probe["failed_attempts"] = world.failed_verifications(h.bank_db, user, now)
+    return probe
+
+
+def _inject_langgraph(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str) -> None:
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    graph = fw.build_graph(h, unattended=bool(session_state.get("followup_id")))
+    config = fw.thread_config(user, session_id)
+    message = AIMessage("", tool_calls=[{"name": name, "args": args, "id": f"probe-{i}"} for i, (name, args) in enumerate(calls)])
+    graph.update_state(config, {**session_state, "messages": [HumanMessage("(parallel probe)"), message]}, as_node="agent")
+    graph.invoke(None, config, context=fw.TurnContext(user_id=user, now=now), interrupt_after=["tools"])  # the tools are the probe
+
+
+async def _inject_adk(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str) -> None:
+    from google.adk.models.base_llm import BaseLlm
+    from google.adk.models.llm_response import LlmResponse
+    from google.adk.runners import Runner
+    from google.genai import types
+
+    agent = fw.build_agent(h, unattended=bool(session_state.get("followup_id")))
+
+    class FirstResponseInjected(BaseLlm):
+        """The first model response is the injected parallel calls; the next one just ends the turn (the tools are the probe)."""
+        answered: bool = False
+
+        async def generate_content_async(self, llm_request, stream=False):
+            if not self.answered:
+                self.answered = True
+                parts = [types.Part(function_call=types.FunctionCall(name=name, args=args)) for name, args in calls]
+                yield LlmResponse(content=types.Content(role="model", parts=parts))
+                return
+            yield LlmResponse(content=types.Content(role="model", parts=[types.Part(text="(probe done)")]))
+
+    agent.model = FirstResponseInjected(model="injected")
+    await h.session_service.create_session(app_name=fw.APP_NAME, user_id=user, session_id=session_id, state=session_state)
+    runner = Runner(app_name=fw.APP_NAME, agent=agent, session_service=h.session_service, memory_service=h.memory_service)
+    message = types.Content(role="user", parts=[types.Part(text="(parallel probe)")])
+    async for _ in runner.run_async(user_id=user, session_id=session_id, new_message=message, state_delta={"temp:now": now}):
+        pass
+
+
+async def run_malformed_probe(framework: str, fw, h, step: dict) -> dict:
+    """A live session in which the model's first real tool call is made unparseable on its way back (its JSON
+    arguments truncated), the way DeepSeek's own malformed calls arrived in round 3; the id, the reasoning and every
+    later model call are the real model's. The framework's model class is wrapped for the session only, so the agent
+    code under test is the shipped code."""
+    state: dict = {"corrupted": None, "corrupted_any": False}
+
+    if framework == "langgraph":
+        real_model = fw._model
+
+        class FirstToolCallMalformed:
+            def __init__(self, bound):
+                self.bound = bound
+
+            def invoke(self, messages):
+                response = self.bound.invoke(messages)
+                if state["corrupted"] is None and response.tool_calls:
+                    first, *rest = response.tool_calls
+                    state["corrupted"], state["corrupted_any"] = first["name"], True
+                    response.tool_calls = rest
+                    response.invalid_tool_calls = [{"type": "invalid_tool_call", "id": first["id"], "name": first["name"],
+                                                    "args": json.dumps(first["args"])[:-1], "error": "arguments are not valid JSON"}]
+                return response
+
+        class ModelWithFirstToolCallMalformed:
+            def bind_tools(self, tools):
+                return FirstToolCallMalformed(real_model().bind_tools(tools))
+
+            def __getattr__(self, name):  # complete_text and anything else: the real model
+                return getattr(real_model(), name)
+
+        fw._model = ModelWithFirstToolCallMalformed
+        try:
+            return {**await run_session(fw, h, step), "probe": state}
+        finally:
+            fw._model = real_model
+
+    from google.adk.models.base_llm import BaseLlm
+    from google.adk.models.llm_response import LlmResponse
+    from google.genai import types
+    real_lite = fw.LiteLlm
+
+    class FirstToolCallMalformed(BaseLlm):
+        real: BaseLlm
+
+        async def generate_content_async(self, llm_request, stream=False):
+            async for response in self.real.generate_content_async(llm_request, stream):
+                parts = (response.content.parts if response.content else None) or []
+                calls = [part.function_call.name for part in parts if part.function_call]
+                if state["corrupted"] is None and calls:
+                    # what ADK's LiteLlm adapter yields for a call it cannot parse: the reasoning, no call, an error code
+                    state["corrupted"], state["corrupted_any"] = calls[0], True
+                    response = LlmResponse(content=types.Content(role="model", parts=[part for part in parts if part.thought]),
+                                           error_code="MALFORMED_FUNCTION_CALL", error_message=f"could not parse {calls[0]} arguments")
+                yield response
+
+    fw.LiteLlm = lambda **kwargs: FirstToolCallMalformed(model=kwargs["model"], real=real_lite(**kwargs))
+    try:
+        return {**await run_session(fw, h, step), "probe": state}
+    finally:
+        fw.LiteLlm = real_lite
+
+
 async def run_followups(fw, h, step: dict) -> dict:
     sessions = []
 
@@ -142,18 +297,19 @@ async def run_followups(fw, h, step: dict) -> dict:
 
 
 async def run_promotion(fw, h, step: dict) -> dict:
-    """The model drafts, the (scripted) reviewer edits; what approving the raw draft would have hit is recorded."""
+    """The model drafts, the (scripted) reviewers edit and approve. Before that, every rule text in the routing probe
+    (the model's own draft and paraphrased refusal rules) is submitted with ops-only approval, and must be refused."""
     snapshot = await resolved(fw.snapshot(h, USERS))
     candidates = procedures.promotion_candidates(snapshot["episodes"], procedures.load_registry(h.var_dir))
     if not candidates:
         return {"promoted": None, "candidates": []}
     candidate = candidates[0]
     draft = (await resolved(fw.complete_text(procedures.rule_drafting_prompt(candidate)))).strip()
-    draft_problems = procedures.rule_review_problems(draft, step["approvals"])
-    version = procedures.promote(h.var_dir, candidate, draft, step["approved_text"], step["approvals"], step["at"])
+    routing_probe = {text: procedures.rule_review_problems(text, draft, [OPS_ONLY_APPROVER]) for text in [draft, *OPS_ONLY_PROBE_RULES]}
+    version = procedures.promote(h.var_dir, candidate, draft, step["approved_text"], step["approvers"], step["at"])
     return {"promoted": {**candidate, "rule_text": draft, "approved_text": step["approved_text"], "version": version,
-                         "draft_problems_with_these_approvals": draft_problems},
-            "candidates": candidates, "procedure_text": procedures.procedure_text(h.var_dir, version)}
+                         "approvers": step["approvers"]},
+            "routing_probe": routing_probe, "candidates": candidates, "procedure_text": procedures.procedure_text(h.var_dir, version)}
 
 
 async def run_step(framework: str, fw, h, step: dict) -> dict:
@@ -167,11 +323,22 @@ async def run_step(framework: str, fw, h, step: dict) -> dict:
     elif kind == "fire_followups":
         result = await run_followups(fw, h, step)
     elif kind == "resolve_case":
-        result = {"resolved": [world.resolve_case(h.bank_db, step["case_id"], step["status"], step["code"], step["note"], step["at"])]}
+        result = {"resolved": [world.resolve_case(h.bank_db, step["case_id"], step["status"], step["code"], step["note"], step["at"],
+                                                  step.get("decision_id", f"D-{step['id']}"))]}
     elif kind == "approve_followups":
+        # The scripted reviewer reads each draft: one that fails the mechanical content check is rejected with
+        # the problem as its note (the scheduler then redrafts it), never released.
         parked = [f for f in scheduler.list_followups(h.scheduler_db) if f["user_id"] == step["user"] and f["status"] == "awaiting_approval"]
-        result = {"approved": [scheduler.approve_followup(h.scheduler_db, h.bank_db, f["followup_id"], step["reviewer"], step["at"])
-                               for f in parked]}
+        result = {"approved": [], "rejected": []}
+        for f in parked:
+            body = next(m["body"] for m in reversed(world.outbound_messages(h.bank_db))
+                        if m["followup_id"] == f["followup_id"] and m["status"] == "held")
+            problems = scheduler.message_review_problems(body)
+            if problems:
+                result["rejected"].append(scheduler.reject_followup(h.scheduler_db, h.bank_db, f["followup_id"], step["reviewer"],
+                                                                   "; ".join(problems), step["at"]))
+            else:
+                result["approved"].append(scheduler.approve_followup(h.scheduler_db, h.bank_db, f["followup_id"], step["reviewer"], step["at"]))
     elif kind == "promote":
         result = await run_promotion(fw, h, step)
     elif kind == "retract":
@@ -179,6 +346,10 @@ async def run_step(framework: str, fw, h, step: dict) -> dict:
         episodes = (await resolved(fw.snapshot(h, USERS)))["episodes"]
         result = {"registry": procedures.retract(h.var_dir, step["to"], step["reviewer"], step["reason"], step["at"]),
                   "affected": procedures.conversations_under_version(episodes, retracted)}
+    elif kind == "malformed_probe":
+        result = await run_malformed_probe(framework, fw, h, step)
+    elif kind == "parallel_probe":
+        result = {"probe": await run_parallel_probe(framework, fw, h, step)}
     elif kind == "parametric_probe":
         # What the weights alone say: no procedure, no tools, no memory.
         reply = await resolved(fw.complete_text(step["question"]))
@@ -235,13 +406,13 @@ def step_markdown(step: dict, result: dict, checks: list[dict]) -> list[str]:
             lines += [f"_Episode written:_ {session['episode']['text']}", ""]
     if result.get("episode"):
         lines += [f"_Episode written:_ {result['episode']['text']}", ""]
-    for key in ("outcomes", "resolved", "approved", "maintenance", "affected"):
+    for key in ("outcomes", "resolved", "approved", "rejected", "maintenance", "affected"):
         if key in result:
             lines += [f"_{key}:_ `{_clip(result[key], 600)}`", ""]
     if result.get("promoted"):
         promoted = result["promoted"]
         lines += [f"_Model draft:_ {promoted['rule_text']}", "",
-                  f"_Approving the draft verbatim with these approvals would have been refused:_ {promoted['draft_problems_with_these_approvals'] or 'no'}", "",
+                  "_Routing probe (ops-only approval):_ " + "; ".join(f"{'REFUSED' if p else 'SHIPPED'}: {t[:70]}" for t, p in result.get("routing_probe", {}).items()), "",
                   f"_Reviewer-approved rule, promoted to {promoted['version']}:_ {promoted['approved_text']}", "",
                   f"_Evidence (registry only, never in the prompt):_ episodes {promoted['episodes']} from customers {promoted['users']}, "
                   f"decisions {promoted['decisions']}", ""]
@@ -259,7 +430,11 @@ def step_markdown(step: dict, result: dict, checks: list[dict]) -> list[str]:
 
 
 def _step_checks(step: dict) -> list[dict]:
-    return step["checks"] + [check(j["type"], f"judge: {j['question']}", "judged", id=j["id"]) for j in step.get("judges", [])]
+    paired = set(step.get("claims_paired_with_stores", []))
+    judged = [check(j["type"], f"judge: {j['question']}", "judged", id=j["id"]) for j in step.get("judges", []) if j["id"] not in paired]
+    claims = [check(j["type"], f"a claim that card data was removed or not stored is true (judge '{j['id']}' + store scan)",
+                    "storage_claim_consistent", id=j["id"], turn=None) for j in step.get("judges", []) if j["id"] in paired]
+    return step["checks"] + judged + claims
 
 
 async def run_group(framework: str, suite: str, group: str, run: int, var_dir: Path, out_dir: Path) -> list[dict]:

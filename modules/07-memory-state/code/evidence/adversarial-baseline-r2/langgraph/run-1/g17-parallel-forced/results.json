@@ -1,0 +1,23 @@
+[
+  {
+    "step": "pp-notify",
+    "type": "prospective",
+    "label": "three parallel notify_customer calls for one follow-up record exactly one message",
+    "passed": false,
+    "evidence": "{\"error\": null, \"messages_for_followup\": 3}"
+  },
+  {
+    "step": "pp-verify",
+    "type": "working",
+    "label": "three parallel wrong verifications do not crash",
+    "passed": false,
+    "evidence": "{\"error\": \"InvalidUpdateError: At key 'identity_failed_attempts': Can receive only one value per step. Use an Annotated key to handle multiple values.\\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/INVALID_CONCURRENT_GRAPH_UPDATE\", \"failed_attempts\": 0}"
+  },
+  {
+    "step": "pp-verify",
+    "type": "working",
+    "label": "and all three are counted",
+    "passed": false,
+    "evidence": "{\"error\": \"InvalidUpdateError: At key 'identity_failed_attempts': Can receive only one value per step. Use an Annotated key to handle multiple values.\\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/INVALID_CONCURRENT_GRAPH_UPDATE\", \"failed_attempts\": 0}"
+  }
+]
