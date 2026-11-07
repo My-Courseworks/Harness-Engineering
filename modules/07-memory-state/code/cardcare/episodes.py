@@ -7,6 +7,8 @@ validation stage before it is stored:
   - anything that identifies another customer (their name, user id, card's last four, ZIP, a case or a
     transaction that is not on this customer's account) is replaced, so one customer's episode can never
     carry another's data;
+  - this customer's own last four and ZIP are replaced too: they are the step-up secret, and an episode recalled
+    in a later conversation must never be a way to verify without the customer typing them;
   - the structured outcome next to it comes from the case system of record, not from the model.
 
 Reflection is incremental. A session records how many of its customer turns are already reflected,
@@ -16,6 +18,7 @@ how a resumed old session could re-create an episode retention had deleted, cann
 
 import json
 import re
+import uuid
 
 from cardcare import world
 from cardcare.masking import mask_card_numbers
@@ -54,9 +57,11 @@ def reflection_prompt(turns: list[dict]) -> str:
 
 
 def scrub_other_customers(text: str, user_id: str, own_case_ids: set[str]) -> str:
-    """Authorization before storage: nothing that identifies another customer enters this customer's memory."""
+    """Authorization before storage: nothing that identifies another customer enters this customer's memory, and
+    this customer's own verification details do not either."""
     for other_id, display_name, last4, postal in world.CUSTOMERS:
         if other_id == user_id:
+            text = re.sub(rf"(?<!\d)({last4}|{postal})(?!\d)", "[verification detail]", text)
             continue
         text = re.sub(rf"\b({re.escape(other_id)}|{re.escape(display_name)})('s)?\b", "another customer", text, flags=re.IGNORECASE)
         text = re.sub(rf"(?<!\d)({last4}|{postal})(?!\d)", "[another customer's detail]", text)
@@ -99,7 +104,9 @@ def build_episode(user_id: str, session_id: str, sequence: int, now: str, reflec
     ) or "no case touched"
     opening = f"Conversation on {now[:10]}" if customer_present else f"Scheduled follow-up on {now[:10]} (customer not present)"
     return {
-        "episode_id": f"E-{session_id}-{sequence}",
+        # unique even when a session id is reused after retention deleted the session (round 3 overwrote the day-0
+        # episode with the day-58 one, both "E-roll-1"); stores insert, never replace
+        "episode_id": f"E-{session_id}-{sequence}-{uuid.uuid4().hex[:6]}",
         "user_id": user_id,
         "session_id": session_id,
         "at": now,

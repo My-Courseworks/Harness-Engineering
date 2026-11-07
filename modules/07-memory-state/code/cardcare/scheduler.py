@@ -14,6 +14,16 @@ The agent's interface is narrow: tools write a record, read the customer's own r
 customer reminder. `fire_due_followups` wakes a fresh agent session when a record falls due; the record
 outlives the conversation that created it. A record stuck in `running` (the process died mid-fire) is
 recovered on the next run: done if its message was already sent, pending otherwise.
+
+Round 4:
+  - a record carries the memory generation of the session that wrote it (cardcare/privacy.py), so work scheduled
+    before an erasure can be told apart from work scheduled after it;
+  - "one reminder per day" is the customer's LOCAL day (`local_day`), a unique index over pending, running and
+    held reminders, not the UTC date;
+  - a reminder's note is the customer's words: it is purged in the same statement that makes the record done,
+    failed or cancelled, so a note lives only while its reminder can still fire;
+  - erasure cancels a reminder whatever its state, `running` included, and a status change out of `running`
+    is compare-and-set, so a fire that an erasure overtook cannot put its record back to pending.
 """
 
 import inspect
@@ -47,17 +57,22 @@ CREATE TABLE IF NOT EXISTS followups (
   fired_at TEXT,
   done_at TEXT,
   cancelled_at TEXT,
-  last_error TEXT
+  last_error TEXT,
+  generation INTEGER NOT NULL DEFAULT 0,
+  local_day TEXT
 );
--- One pending reminder per customer per day: a "send me three reminders" request, however it is phrased and
--- however many parallel tool calls it becomes, cannot create three records.
-CREATE UNIQUE INDEX IF NOT EXISTS one_reminder_per_day
-  ON followups(user_id, substr(trigger_at, 1, 10)) WHERE action = 'customer_reminder' AND status = 'pending';
 """
+# One live reminder per customer per local day: a "send me three reminders" request, however it is phrased and
+# however many parallel tool calls it becomes, cannot create three records; 08:00 and 20:00 in Los Angeles are one day.
+INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS one_reminder_per_local_day
+  ON followups(user_id, local_day) WHERE action = 'customer_reminder' AND status IN ('pending', 'running', 'awaiting_approval');
+"""
+REMINDER_DONE = ('done', 'failed', 'cancelled')
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=60)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -72,18 +87,25 @@ def create_scheduler(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with closing(_connect(db_path)) as conn, conn:
         conn.executescript(SCHEMA)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(followups)")}
+        for column, ddl in (("generation", "INTEGER NOT NULL DEFAULT 0"), ("local_day", "TEXT")):
+            if column not in columns:  # a store written by an earlier version
+                conn.execute(f"ALTER TABLE followups ADD COLUMN {column} {ddl}")
+        conn.execute("DROP INDEX IF EXISTS one_reminder_per_day")
+        conn.executescript(INDEX)
 
 
-def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str, resume: dict, approval: str, now: str) -> dict | None:
-    """Write a record. None if the customer already has a pending reminder that day."""
+def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str, resume: dict, approval: str, now: str,
+                      generation: int = 0, local_day: str | None = None) -> dict | None:
+    """Write a record. None if the customer already has a live reminder that local day."""
     followup_id = f"F-{uuid.uuid4().hex[:8]}"
     try:
         with closing(_connect(db_path)) as conn, conn:
             conn.execute(
-                "INSERT INTO followups (followup_id, user_id, action, trigger_at, resume_json, approval, status, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+                "INSERT INTO followups (followup_id, user_id, action, trigger_at, resume_json, approval, status, created_at,"
+                " generation, local_day) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
                 (followup_id, user_id, action, format_instant(parse_instant(trigger_at)), json.dumps(resume), approval,
-                 format_instant(parse_instant(now))),
+                 format_instant(parse_instant(now)), generation, local_day),
             )
             row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
     except sqlite3.IntegrityError:
@@ -92,16 +114,16 @@ def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str,
 
 
 def erase_customer_reminders(db_path: Path, user_id: str, now: str) -> list[str]:
-    """Erasure: the customer's pending reminders are cancelled, and the note of every reminder record they ever had,
-    whatever its status (pending, cancelled, done, failed), is purged, because the note is their words. Returns
-    the ids that were still pending. Case follow-ups carry only a case id and stay with the case."""
+    """Erasure: every reminder of the customer's that could still fire (pending, held, or running right now) is
+    cancelled, and the note of every reminder record they ever had is purged, because the note is their words.
+    Returns the ids that were cancelled. Case follow-ups carry only a case id and stay with the case."""
     with closing(_connect(db_path)) as conn, conn:
         ids = [row[0] for row in conn.execute(
-            "SELECT followup_id FROM followups WHERE user_id = ? AND action = 'customer_reminder' AND status IN ('pending', 'awaiting_approval')",
-            (user_id,))]
+            "SELECT followup_id FROM followups WHERE user_id = ? AND action = 'customer_reminder'"
+            " AND status IN ('pending', 'awaiting_approval', 'running')", (user_id,))]
         conn.execute(
             "UPDATE followups SET status = 'cancelled', cancelled_at = ?, last_error = 'erased at the customer''s request'"
-            " WHERE user_id = ? AND action = 'customer_reminder' AND status IN ('pending', 'awaiting_approval')",
+            " WHERE user_id = ? AND action = 'customer_reminder' AND status IN ('pending', 'awaiting_approval', 'running')",
             (format_instant(parse_instant(now)), user_id))
         conn.execute("UPDATE followups SET resume_json = '{}' WHERE user_id = ? AND action = 'customer_reminder'", (user_id,))
     return ids
@@ -127,7 +149,8 @@ def cancel_followup(db_path: Path, followup_id: str, user_id: str, now: str) -> 
     """Cancel a record that has not fired yet. Returns the record, or None if it was not cancellable."""
     with closing(_connect(db_path)) as conn, conn:
         cursor = conn.execute(
-            "UPDATE followups SET status = 'cancelled', cancelled_at = ?"
+            "UPDATE followups SET status = 'cancelled', cancelled_at = ?,"
+            " resume_json = CASE WHEN action = 'customer_reminder' THEN '{}' ELSE resume_json END"
             " WHERE followup_id = ? AND user_id = ? AND status IN ('pending', 'awaiting_approval')",
             (format_instant(parse_instant(now)), followup_id, user_id),
         )
@@ -175,11 +198,13 @@ def _due_records(db_path: Path, now: str) -> list[dict]:
 
 
 def _set_status(db_path: Path, followup_id: str, from_status: str, to_status: str, **fields) -> bool:
-    """Compare-and-set transition, so two workers can never both fire one record."""
+    """Compare-and-set transition, so two workers can never both fire one record, and a record an erasure cancelled
+    mid-fire stays cancelled. A reminder that becomes done, failed or cancelled loses its note in the same statement."""
     assignments = ", ".join([f"{name} = ?" for name in fields] + ["status = ?"])
+    purge = ", resume_json = CASE WHEN action = 'customer_reminder' THEN '{}' ELSE resume_json END" if to_status in REMINDER_DONE else ""
     with closing(_connect(db_path)) as conn, conn:
         cursor = conn.execute(
-            f"UPDATE followups SET {assignments} WHERE followup_id = ? AND status = ?",
+            f"UPDATE followups SET {assignments}{purge} WHERE followup_id = ? AND status = ?",
             [*fields.values(), to_status, followup_id, from_status],
         )
     return cursor.rowcount == 1
@@ -229,18 +254,16 @@ async def fire_due_followups(
         except Exception as exc:  # the record must survive any agent failure
             error = f"{type(exc).__name__}: {exc}"
         if _messages_for(bank_db, followup_id, "sent"):
-            _set_status(scheduler_db, followup_id, "running", "done", done_at=now, last_error=None)
-            outcome = "fired_done"
+            moved, outcome = _set_status(scheduler_db, followup_id, "running", "done", done_at=now, last_error=None), "fired_done"
         elif _messages_for(bank_db, followup_id, "held"):
-            _set_status(scheduler_db, followup_id, "running", "awaiting_approval", last_error=None)
-            outcome = "awaiting_approval"
+            moved, outcome = _set_status(scheduler_db, followup_id, "running", "awaiting_approval", last_error=None), "awaiting_approval"
         else:
             exhausted = record["attempts"] + 1 >= MAX_ATTEMPTS
-            _set_status(
-                scheduler_db, followup_id, "running", "failed" if exhausted else "pending",
-                last_error=error or "agent finished without drafting a customer message",
-            )
+            moved = _set_status(scheduler_db, followup_id, "running", "failed" if exhausted else "pending",
+                                last_error=error or "agent finished without drafting a customer message")
             outcome = "failed" if exhausted else "retry"
+        if not moved:  # cancelled while it ran (an erasure): it stays cancelled
+            outcome = f"cancelled_while_running ({get_followup(scheduler_db, followup_id)['status']})"
         outcomes.append({"followup_id": followup_id, "user_id": record["user_id"], "outcome": outcome, "error": error})
     return outcomes
 
@@ -255,10 +278,20 @@ def followup_trigger_message(record: dict) -> str:
     )
 
 
-def customer_view(record: dict, channel_now: str) -> dict:
+def channel_description(channel: str, chosen: bool) -> str:
+    """Where a follow-up will reach the customer, in words the agent can repeat: never "nowhere"."""
+    if channel == "secure_message":
+        return ("secure message in the Kestrel app" + ("" if chosen else " (the default, since no contact channel is set)"))
+    return {"email": "email", "sms": "text message (SMS)"}.get(channel, channel)
+
+
+def customer_view(record: dict, channel_now: str, channel_chosen: bool = True) -> dict:
     """What a customer may see of their own record."""
     view = {"followup_id": record["followup_id"], "action": record["action"], "due": record["trigger_at"],
-            "status": record["status"], "sent_on": f"the contact channel on file when it is sent (currently {channel_now})"}
+            "status": record["status"],
+            "sent_on": f"{channel_description(channel_now, channel_chosen)}: the contact channel on file when it is sent"}
+    if record.get("local_day"):
+        view["local_day"] = record["local_day"]
     view.update({k: v for k, v in record["resume"].items() if k in ("case_id", "note")})
     if record["approval"] != "none":
         view["approval"] = "a Kestrel reviewer approves the message before it is sent"

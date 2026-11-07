@@ -5,6 +5,14 @@ It is the ground truth the agent reaches through tools, by exact lookup scoped
 to the logged-in customer (the module's "pricing is an exact lookup by SKU"
 point, moved to transactions). A tool never takes a user id from the model;
 the harness supplies it, so the model cannot name somebody else's account.
+
+Anything that must hold when tool calls run in parallel (LangGraph's ToolNode runs them on a thread pool, and two
+processes may share these files) is one SQL transaction, never a read in one call and a write in the next:
+  - a verification attempt counts the failures, refuses or evaluates, and records itself under BEGIN IMMEDIATE;
+  - a dispute checks for an open case on the transaction, numbers the new case and inserts it in one transaction,
+    behind a unique index (one open case per transaction);
+  - evidence is appended by one UPDATE, so parallel notes cannot overwrite each other;
+  - one message per follow-up is a unique index.
 """
 
 import sqlite3
@@ -66,6 +74,8 @@ CREATE TABLE IF NOT EXISTS verification_attempts (
   succeeded INTEGER NOT NULL
 );
 """
+# One open case per transaction: parallel filings cannot open two.
+CASE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS one_open_case_per_transaction ON cases(user_id, txn_id) WHERE status = 'under_review'"
 
 CUSTOMERS = [
     ("priya", "Priya", "4427", "94107"),
@@ -92,8 +102,8 @@ TRANSACTIONS = [
 DISPUTE_REASONS = ("cancelled_subscription", "not_recognized", "duplicate", "goods_not_received", "incorrect_amount")
 
 
-def _connect(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+def _connect(db_path: Path, autocommit: bool = False) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path, timeout=60, isolation_level=None if autocommit else "")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -124,6 +134,10 @@ def seed_bank(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with closing(_connect(db_path)) as conn, conn:
         conn.executescript(SCHEMA)
+        try:
+            conn.execute(CASE_INDEX)
+        except sqlite3.IntegrityError:  # a store written by an earlier version already holds duplicate open cases
+            pass
         conn.executemany("INSERT OR IGNORE INTO customers VALUES (?, ?, ?, ?)", CUSTOMERS)
         conn.executemany("INSERT OR IGNORE INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?)", TRANSACTIONS)
 
@@ -152,17 +166,25 @@ def get_transaction(db_path: Path, user_id: str, txn_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def open_case(db_path: Path, user_id: str, txn_id: str, reason: str, evidence_note: str | None, now: str) -> dict:
-    with closing(_connect(db_path)) as conn, conn:
-        count = conn.execute("SELECT COUNT(*) FROM cases").fetchone()[0]
-        case_id = f"C-{5001 + count}"
-        conn.execute(
-            "INSERT INTO cases (case_id, user_id, txn_id, reason, evidence_note, status, opened_at)"
-            " VALUES (?, ?, ?, ?, ?, 'under_review', ?)",
-            (case_id, user_id, txn_id, reason, evidence_note, now),
-        )
-        row = conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()
-    return _case_view(row)
+def open_case(db_path: Path, user_id: str, txn_id: str, reason: str, evidence_note: str | None, now: str) -> tuple[dict, bool]:
+    """Open a case, or return the one already open on this transaction. (case, created) in one transaction."""
+    with closing(_connect(db_path, autocommit=True)) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            existing = conn.execute("SELECT * FROM cases WHERE user_id = ? AND txn_id = ? AND status = 'under_review'",
+                                    (user_id, txn_id)).fetchone()
+            if existing:
+                return _case_view(existing), False
+            count = conn.execute("SELECT COUNT(*) FROM cases").fetchone()[0]
+            case_id = f"C-{5001 + count}"
+            conn.execute(
+                "INSERT INTO cases (case_id, user_id, txn_id, reason, evidence_note, status, opened_at)"
+                " VALUES (?, ?, ?, ?, ?, 'under_review', ?)",
+                (case_id, user_id, txn_id, reason, evidence_note, now),
+            )
+            return _case_view(conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()), True
+        finally:
+            conn.execute("COMMIT")
 
 
 def open_case_for_transaction(db_path: Path, user_id: str, txn_id: str) -> dict | None:
@@ -218,14 +240,35 @@ def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str
     return dict(row)
 
 
+def _failures(conn: sqlite3.Connection, user_id: str, now: str) -> int:
+    since = format_instant(parse_instant(now) - timedelta(hours=VERIFICATION_LOCK_HOURS))  # instants are stored normalised
+    last_ok = conn.execute("SELECT MAX(rowid) FROM verification_attempts WHERE user_id = ? AND succeeded = 1", (user_id,)).fetchone()[0]
+    return conn.execute("SELECT COUNT(*) FROM verification_attempts WHERE user_id = ? AND succeeded = 0 AND at > ? AND rowid > ?",
+                        (user_id, since, last_ok or 0)).fetchone()[0]
+
+
 def failed_verifications(db_path: Path, user_id: str, now: str) -> int:
     """Failed step-up attempts in the lock window, since the account's last success."""
-    since = format_instant(parse_instant(now) - timedelta(hours=VERIFICATION_LOCK_HOURS))  # instants are stored normalised
     with closing(_connect(db_path)) as conn:
-        last_ok = conn.execute("SELECT MAX(at) FROM verification_attempts WHERE user_id = ? AND succeeded = 1", (user_id,)).fetchone()[0]
-        start = max(since, last_ok) if last_ok else since
-        return conn.execute("SELECT COUNT(*) FROM verification_attempts WHERE user_id = ? AND succeeded = 0 AND at > ?",
-                            (user_id, start)).fetchone()[0]
+        return _failures(conn, user_id, now)
+
+
+def attempt_verification(db_path: Path, user_id: str, card_last4: str, postal_code: str, now: str, max_failures: int) -> dict:
+    """One step-up attempt, atomically: count the failures since the last success, refuse without evaluating once
+    `max_failures` stand, otherwise evaluate and record the attempt, all inside one BEGIN IMMEDIATE transaction. Six
+    parallel guesses are six transactions in a row, so no guess is ever evaluated past the limit."""
+    with closing(_connect(db_path, autocommit=True)) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            failures = _failures(conn, user_id, now)
+            if failures >= max_failures:
+                return {"outcome": "locked", "failures": failures}
+            row = conn.execute("SELECT card_last4, postal_code FROM customers WHERE user_id = ?", (user_id,)).fetchone()
+            matched = bool(row) and row["card_last4"] == str(card_last4).strip() and row["postal_code"] == str(postal_code).strip()
+            conn.execute("INSERT INTO verification_attempts VALUES (?, ?, ?)", (user_id, format_instant(parse_instant(now)), int(matched)))
+            return {"outcome": "matched" if matched else "mismatch", "failures": 0 if matched else failures + 1}
+        finally:
+            conn.execute("COMMIT")
 
 
 def record_verification(db_path: Path, user_id: str, succeeded: bool, now: str) -> None:
@@ -246,17 +289,30 @@ def reject_message(db_path: Path, message_id: int, reviewer: str, now: str) -> N
 
 
 def add_case_evidence(db_path: Path, user_id: str, case_id: str, evidence_note: str, now: str) -> dict:
-    """Attach more evidence to one of the customer's open cases."""
+    """Attach more evidence to one of the customer's open cases: one UPDATE that appends, so parallel calls never
+    overwrite each other's notes."""
+    line = f"[{now[:10]}] {evidence_note}"
     with closing(_connect(db_path)) as conn, conn:
+        cursor = conn.execute(
+            "UPDATE cases SET evidence_note = CASE WHEN evidence_note IS NULL OR evidence_note = '' THEN ? "
+            "ELSE evidence_note || char(10) || ? END WHERE case_id = ? AND user_id = ? AND status = 'under_review'",
+            (line, line, case_id, user_id))
         row = conn.execute("SELECT * FROM cases WHERE case_id = ? AND user_id = ?", (case_id, user_id)).fetchone()
-        if not row:
-            return {"error": f"{case_id} is not a case on this customer's account"}
-        if row["status"] != "under_review":
-            return {"error": f"{case_id} is already decided ({row['status']}); file a new dispute with the evidence instead"}
-        note = "\n".join(n for n in (row["evidence_note"], f"[{now[:10]}] {evidence_note}") if n)
-        conn.execute("UPDATE cases SET evidence_note = ? WHERE case_id = ?", (note, case_id))
-        updated = conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()
-    return _case_view(updated)
+    if cursor.rowcount == 1:
+        return _case_view(row)
+    if not row:
+        return {"error": f"{case_id} is not a case on this customer's account"}
+    return {"error": f"{case_id} is already decided ({row['status']}); file a new dispute with the evidence instead"}
+
+
+def reject_held_messages(db_path: Path, followup_ids: list[str], reviewer: str) -> None:
+    """Held drafts of follow-ups that were cancelled (an erasure) are never released."""
+    if not followup_ids:
+        return
+    marks = ",".join("?" for _ in followup_ids)
+    with closing(_connect(db_path)) as conn, conn:
+        conn.execute(f"UPDATE outbound_messages SET status = 'rejected', reviewed_by = ? WHERE status = 'held' AND followup_id IN ({marks})",
+                     (reviewer, *followup_ids))
 
 
 def outbound_messages(db_path: Path) -> list[dict]:

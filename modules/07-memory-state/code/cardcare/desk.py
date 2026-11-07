@@ -12,7 +12,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cardcare.clock import add_days, format_instant, parse_instant
-from cardcare.masking import mask_card_numbers
+from cardcare.masking import mask_customer_text
+from cardcare.memory_policy import REMINDER_HORIZON_DAYS
 
 DISPUTE_WINDOW_DAYS = 75  # mirrors policy_kb/dispute-window.md; the system of record enforces it
 
@@ -27,6 +28,9 @@ def file_dispute_with_followup(
     now: str,
     review_days: int,
     large_dispute_threshold_cents: int,
+    channel: str = "secure_message",
+    channel_chosen: bool = False,
+    generation: int = 0,
 ) -> dict:
     """Open a case and, in the same step, write its prospective follow-up record.
 
@@ -44,15 +48,17 @@ def file_dispute_with_followup(
     age_days = (parse_instant(now) - parse_instant(txn["posted_on"])).days
     if age_days > DISPUTE_WINDOW_DAYS:
         return {"error": f"{transaction_id} posted {age_days} days ago, outside the {DISPUTE_WINDOW_DAYS}-day dispute window"}
-    existing = world.open_case_for_transaction(bank_db, user_id, transaction_id)
-    if existing:
-        return {"error": f"case {existing['case_id']} is already open for {transaction_id}"}
-    case = world.open_case(bank_db, user_id, transaction_id, reason, mask_card_numbers(evidence_note) if evidence_note else None, now)
+    # Checking for an open case and opening one is a single transaction (world.open_case): three parallel filings
+    # of one transaction open one case, and only the call that opened it schedules the follow-up.
+    case, created = world.open_case(bank_db, user_id, transaction_id, reason,
+                                    mask_customer_text(evidence_note) if evidence_note else None, now)
+    if not created:
+        return {"error": f"case {case['case_id']} is already open for {transaction_id}"}
     # Customer-facing outcomes on large disputes are reviewed by a person before they go out.
     approval = "ops_reviewer" if txn["amount_cents"] >= large_dispute_threshold_cents else "none"
     followup = scheduler.schedule_followup(
         scheduler_db, user_id, "case_status_followup", add_days(now, review_days),
-        {"case_id": case["case_id"]}, approval, now,
+        {"case_id": case["case_id"]}, approval, now, generation=generation,
     )
     return {
         "case_id": case["case_id"],
@@ -61,21 +67,33 @@ def file_dispute_with_followup(
             "followup_id": followup["followup_id"],
             "due": followup["trigger_at"][:10],
             "approval": "a Kestrel reviewer approves the message before it is sent" if approval != "none" else "none",
-            "sent_on": "the contact channel on file when it is sent",
+            "sent_on": f"{scheduler.channel_description(channel, channel_chosen)}; if the customer changes their contact "
+                       "channel before then, the follow-up uses the new one",
         },
     }
 
 
-def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remind_on: str, remind_at: str, timezone: str, now: str) -> dict:
-    """A reminder at a local date and time; the record stores the UTC instant."""
+def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remind_on: str, remind_at: str, timezone: str, now: str,
+                               generation: int = 0, channel: str = "secure_message", channel_chosen: bool = False) -> dict:
+    """A reminder at a local date and time. The record stores the UTC instant and the customer's local day; one live
+    reminder per local day is a unique index. The readback is computed back from the stored instant, so what the
+    customer is told is what will happen (a time skipped by a daylight-saving change reads as the time it becomes)."""
     try:
-        local = datetime.fromisoformat(f"{remind_on[:10]}T{remind_at}").replace(tzinfo=ZoneInfo(timezone))
-    except (ValueError, ZoneInfoNotFoundError):
+        zone = ZoneInfo(timezone)
+        local = datetime.fromisoformat(f"{remind_on[:10]}T{remind_at}").replace(tzinfo=zone)
+    except (ValueError, ZoneInfoNotFoundError, KeyError):
         return {"error": "remind_on must be YYYY-MM-DD, remind_at HH:MM, timezone an IANA name such as America/Los_Angeles"}
     trigger_at = format_instant(local)
     if parse_instant(trigger_at) <= parse_instant(now):
         return {"error": "the reminder time must be in the future"}
-    record = scheduler.schedule_followup(scheduler_db, user_id, "customer_reminder", trigger_at, {"note": mask_card_numbers(note)}, "none", now)
+    if parse_instant(trigger_at) > parse_instant(add_days(now, REMINDER_HORIZON_DAYS)):
+        return {"error": f"a reminder can be set at most {REMINDER_HORIZON_DAYS} days ahead; it holds the customer's own words until it fires"}
+    actual = parse_instant(trigger_at).astimezone(zone)
+    record = scheduler.schedule_followup(scheduler_db, user_id, "customer_reminder", trigger_at, {"note": mask_customer_text(note)}, "none",
+                                         now, generation=generation, local_day=actual.date().isoformat())
     if record is None:
-        return {"error": f"a reminder is already scheduled for {trigger_at[:10]}; one reminder per day, so put everything in that one"}
-    return {"followup_id": record["followup_id"], "due": trigger_at, "local_time": f"{remind_on[:10]} {remind_at} {timezone}"}
+        return {"error": f"a reminder is already scheduled for {actual.date().isoformat()} ({timezone}); one reminder per day, so put "
+                         "everything for that day in that one"}
+    return {"followup_id": record["followup_id"], "due_utc": trigger_at,
+            "local_time": f"{actual.strftime('%A %Y-%m-%d %H:%M')} {actual.tzname()} ({timezone})",
+            "sent_on": f"{scheduler.channel_description(channel, channel_chosen)}, the contact channel on file when it is sent"}

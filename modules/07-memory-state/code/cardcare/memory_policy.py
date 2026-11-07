@@ -14,10 +14,25 @@ from cardcare.masking import mask_customer_text
 # two facts that mean the same thing ("contact_pref", "preferred_channel") come
 # to coexist and contradict each other.
 CONTACT_CHANNELS = ("email", "sms", "secure_message")
+DEFAULT_CHANNEL = "secure_message"
 FACT_KEYS = ("contact_channel", "travel_notice")
-# Changing where the bank contacts a customer is a classic account-takeover step,
-# so this key, unlike a travel notice, needs a fresh step-up verification.
+# Changing where the bank contacts a customer is a classic account-takeover step, and so is removing the channel
+# (messages would then go to the app, which whoever holds the phone reads): writing or deleting this key, unlike a
+# travel notice, needs a fresh step-up verification. So does erasing everything (request_memory_erasure).
 FACT_KEYS_NEEDING_VERIFICATION = ("contact_channel",)
+
+# A fact is preloaded into every later system prompt, so its value is data with a grammar, never free text: a
+# travel notice is a place name (letters, spaces and light punctuation, at most 60 characters and 8 words) and
+# holds nothing that reads as an instruction. Its horizon is bounded, like every other class of memory.
+TRAVEL_NOTICE_MAX_DAYS = 365
+_PLACE = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .,'\u2019&()\-])*")
+_INSTRUCTION_WORDS = re.compile(r"\b(assistant|system|ignore|instructions?|prompt|verif\w*|note|skip|policy|rule|always|never|must|"
+                                r"admin|override|vip|exempt|waiver|bypass|pretend|act as)\b", re.IGNORECASE)
+
+# Working memory is bounded in size as well as in turns: one customer message is kept up to this many characters.
+MAX_CUSTOMER_MESSAGE_CHARS = 4000
+# A reminder holds the customer's own words until it fires, so how far ahead it may be set is a retention limit.
+REMINDER_HORIZON_DAYS = 90
 
 # Step-up verification proves possession *now*. It expires, and guessing is capped on the account (not the
 # conversation): 3 failures lock verification for 24 hours, and opening a new chat does not reset it.
@@ -50,10 +65,15 @@ def build_fact(key: str, value: str, valid_until: str | None, now: str) -> dict:
         if value not in CONTACT_CHANNELS:
             raise ValueError(f"contact_channel must be one of {', '.join(CONTACT_CHANNELS)}.")
         return {"value": value, "as_of": now, "expires_at": None}
+    if len(value) > 60 or len(value.split()) > 8 or not _PLACE.fullmatch(value) or _INSTRUCTION_WORDS.search(value):
+        raise ValueError("A travel notice's destination is a place name only (for example 'Lisbon' or 'Porto, Portugal'), at most "
+                         "60 characters, with no instructions or other text. Store just the place.")
     if not valid_until:
         raise ValueError("A travel notice needs the date the customer returns (valid_until, YYYY-MM-DD).")
     if parse_instant(valid_until) < parse_instant(now[:10]):
         raise ValueError("valid_until is in the past.")
+    if parse_instant(valid_until) > parse_instant(add_days(now, TRAVEL_NOTICE_MAX_DAYS)):
+        raise ValueError(f"A travel notice can cover at most {TRAVEL_NOTICE_MAX_DAYS} days from today.")
     # A travel notice is useful only while the trip lasts; it expires the day after the return date.
     return {"value": value, "as_of": now, "valid_until": valid_until, "expires_at": add_days(valid_until, 1)}
 
@@ -79,17 +99,28 @@ def verification_gate_error(verified_at: str | None, now: str, action: str) -> s
 
 
 def render_profile(facts: dict[str, dict], now: str) -> str:
-    """The preloaded slice of semantic memory: small, always relevant, re-sent every turn."""
+    """The preloaded slice of semantic memory: small, always relevant, re-sent every turn. Values are quoted data.
+    The channel line says where follow-ups go when none is set, so the agent never has to guess (it guessed
+    "nowhere" in round 3)."""
     lines = []
     for key in FACT_KEYS:
         fact = facts.get(key)
         if not fact or fact_is_expired(fact, now):
-            lines.append(f"- {key}: none on file")
+            lines.append("- contact_channel: none set, so follow-ups and reminders go by secure message in the Kestrel app (the default)"
+                         if key == "contact_channel" else f"- {key}: none on file")
         elif key == "travel_notice":
-            lines.append(f"- travel_notice: {fact['value']} until {fact['valid_until']} (recorded {fact['as_of'][:10]})")
+            lines.append(f"- travel_notice: \"{fact['value']}\" until {fact['valid_until']} (recorded {fact['as_of'][:10]})")
         else:
             lines.append(f"- {key}: {fact['value']} (recorded {fact['as_of'][:10]})")
     return "\n".join(lines)
+
+
+def typed_in_session(customer_texts: list[str], *values: str) -> bool:
+    """Did the customer type each of these values in this conversation (as a whole number, not inside a longer one)?
+    verify_identity accepts only such values: digits remembered from an earlier conversation, guessed or filled in
+    never verify anyone."""
+    said = "\n".join(customer_texts)
+    return all(str(v).strip() and re.search(rf"(?<!\d){re.escape(str(v).strip())}(?!\d)", said) for v in values)
 
 
 def episode_expires_at(now: str) -> str:
