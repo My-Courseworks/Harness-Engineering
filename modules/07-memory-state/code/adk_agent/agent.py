@@ -2,8 +2,8 @@
 
   working / in-context  Session events (DatabaseSessionService on SQLite), re-sent every turn up to a
                         window of WORKING_WINDOW_TURNS customer turns, plus State:
-                          identity_verified_at, identity_failed_attempts, followup_id, last_active_at,
-                          reflected_turns, episodes_written, erasure_requested_at   this conversation only
+                          identity_verified_at, followup_id, first_active_at, last_active_at,
+                          reflected_turns, episodes_written   this conversation only
                           user:contact_channel, user:travel_notice   this customer, every session
                           app:dispute_review_days, app:large_dispute_threshold_cents   every customer
                           temp:now   the harness clock for this invocation; never persisted
@@ -15,7 +15,10 @@
   external / retrieval  tools: exact SQL lookups for transactions and cases; search_policy (embeddings)
   parametric            the DeepSeek weights; nothing here manages them, which is the point
   prospective           cardcare/scheduler.py: file_dispute and schedule_reminder write records, the
-                        customer can list and cancel their own, the harness fires them (`tick`)
+                        customer can list and cancel their own, the harness fires them (`tick`) into
+                        sessions that get only read tools and notify_customer
+Account-level state (the verification lockout, the erasure ledger) lives outside every session, in bank.db
+and privacy.db, so no conversation boundary resets it.
 
 Run `python -m adk_agent.agent chat --user priya` from modules/07-memory-state/code.
 """
@@ -42,25 +45,27 @@ from google.adk.memory.base_memory_service import SearchMemoryResponse
 from google.adk.memory.memory_entry import MemoryEntry
 from google.adk.models import LiteLlm
 from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 from google.adk.tools import ToolContext, load_memory
 from google.genai import types
 
-from cardcare import desk, procedures, scheduler, world
+from cardcare import desk, privacy, procedures, scheduler, world
 from cardcare.clock import wall_clock_now
 from cardcare.episodes import build_episode, case_outcomes, group_by_customer_turn, own_case_ids, parse_reflection, reflection_prompt
+from cardcare.masking import mask_card_numbers, mask_customer_text
 from cardcare.memory_policy import (
     FACT_KEYS,
     FACT_KEYS_NEEDING_VERIFICATION,
     MAX_VERIFICATION_ATTEMPTS,
     TRANSCRIPT_RETENTION_DAYS,
+    VERIFICATION_LOCK_HOURS,
     WORKING_KEEP_TURNS,
     WORKING_WINDOW_TURNS,
     build_fact,
     episode_is_expired,
     fact_is_expired,
-    redact_card_secrets,
     render_profile,
     session_is_idle,
     transcript_is_expired,
@@ -162,12 +167,17 @@ class Harness(NamedTuple):
     def episodes_db(self) -> Path:
         return self.var_dir / "adk_episodes.db"
 
+    @property
+    def privacy_db(self) -> Path:
+        return self.var_dir / "privacy.db"
+
 
 async def open_harness(var_dir: Path) -> Harness:
     """Create (or reopen) every local store under var_dir and seed the bank and the app-wide settings."""
     var_dir.mkdir(parents=True, exist_ok=True)
     world.seed_bank(var_dir / "bank.db")
     scheduler.create_scheduler(var_dir / "scheduler.db")
+    privacy.create_ledger(var_dir / "privacy.db")
     harness = Harness(
         var_dir,
         DatabaseSessionService(db_url=f"sqlite+aiosqlite:///{var_dir / 'adk_sessions.db'}"),
@@ -208,21 +218,30 @@ def compact_sqlite(path: Path) -> None:
 # --------------------------------------------------------------------------- tools
 
 
-def build_tools(h: Harness) -> list[Callable]:
-    """Tool functions over this harness's stores. The customer is always tool_context.user_id, never a model argument."""
+LIVE_ONLY_TOOLS = ("verify_identity", "file_dispute", "add_case_evidence", "remember_customer_fact", "forget_customer_fact",
+                   "schedule_reminder", "cancel_reminder", "request_memory_erasure")
+UNATTENDED_ONLY_TOOLS = ("notify_customer",)
+
+
+def build_tools(h: Harness, unattended: bool) -> list[Callable]:
+    """Tool functions over this harness's stores. The customer is always tool_context.user_id, never a model argument.
+
+    Least privilege by session kind: a scheduler-fired session (`unattended`) reads text others wrote (case
+    notes, reminder notes), so it gets only reads and notify_customer; a live session never gets notify_customer.
+    """
 
     def verify_identity(card_last4: str, postal_code: str, tool_context: ToolContext) -> dict:
         """Verify the logged-in customer with their card's last 4 digits and billing ZIP, as the customer typed them.
-        Valid for 15 minutes. Locks after 3 failed attempts in a conversation."""
-        failed = tool_context.state.get("identity_failed_attempts", 0)
-        if failed >= MAX_VERIFICATION_ATTEMPTS:
-            return {"verified": False, "error": "verification is locked for this conversation after 3 failed attempts; "
-                                                "the customer must call Kestrel"}
-        if not world.identity_matches(h.bank_db, tool_context.user_id, card_last4, postal_code):
-            tool_context.state["identity_failed_attempts"] = failed + 1
-            return {"verified": False, "error": "those details do not match this customer",
-                    "attempts_left": MAX_VERIFICATION_ATTEMPTS - failed - 1}
-        tool_context.state["identity_verified_at"] = tool_context.state["temp:now"]
+        Valid for 15 minutes. Three failures lock verification on the account for 24 hours."""
+        now = tool_context.state["temp:now"]
+        if world.failed_verifications(h.bank_db, tool_context.user_id, now) >= MAX_VERIFICATION_ATTEMPTS:
+            return {"verified": False, "error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after "
+                                                f"{MAX_VERIFICATION_ATTEMPTS} failed attempts; the customer must call Kestrel"}
+        matched = world.identity_matches(h.bank_db, tool_context.user_id, card_last4, postal_code)
+        world.record_verification(h.bank_db, tool_context.user_id, matched, now)
+        if not matched:
+            return {"verified": False, "error": "those details do not match this customer"}
+        tool_context.state["identity_verified_at"] = now
         return {"verified": True, "valid_for_minutes": 15}
 
     def find_transactions(tool_context: ToolContext, merchant: str | None = None) -> dict:
@@ -244,7 +263,7 @@ def build_tools(h: Harness) -> list[Callable]:
 
     def add_case_evidence(case_id: str, evidence_note: str, tool_context: ToolContext) -> dict:
         """Attach more evidence (e.g. a cancellation reference the customer found later) to one of their open cases."""
-        return world.add_case_evidence(h.bank_db, tool_context.user_id, case_id, redact_card_secrets(evidence_note), tool_context.state["temp:now"])
+        return world.add_case_evidence(h.bank_db, tool_context.user_id, case_id, mask_card_numbers(evidence_note), tool_context.state["temp:now"])
 
     def get_case_status(tool_context: ToolContext, case_id: str | None = None) -> dict:
         """Current status of one dispute case, or of all this customer's cases when case_id is omitted."""
@@ -279,9 +298,12 @@ def build_tools(h: Harness) -> list[Callable]:
                 "note": f"deleted from memory now; conversation transcripts are deleted after {TRANSCRIPT_RETENTION_DAYS} days, "
                         "or at once if the customer asks to erase everything"}
 
-    def schedule_reminder(note: str, remind_on: str, tool_context: ToolContext) -> dict:
-        """Schedule a reminder message to the customer on a future date (YYYY-MM-DD). Only when the customer asks for one."""
-        return desk.schedule_customer_reminder(h.scheduler_db, tool_context.user_id, note, remind_on, tool_context.state["temp:now"])
+    def schedule_reminder(note: str, remind_on: str, tool_context: ToolContext, remind_at: str = "09:00", timezone: str = "UTC") -> dict:
+        """Schedule a reminder to the customer (remind_on YYYY-MM-DD; remind_at HH:MM and timezone, an IANA name, only
+        if the customer named a time of day; otherwise leave the defaults, 09:00 UTC). Only when the customer asks for
+        one, and at once. At most one reminder per day."""
+        return desk.schedule_customer_reminder(h.scheduler_db, tool_context.user_id, note, remind_on, remind_at, timezone,
+                                               tool_context.state["temp:now"])
 
     def list_my_followups(tool_context: ToolContext) -> dict:
         """What is scheduled for this customer (reminders and case follow-ups), when, and on which channel it will arrive."""
@@ -298,10 +320,13 @@ def build_tools(h: Harness) -> list[Callable]:
         return {"cancelled": followup_id} if cancelled else {"error": f"{followup_id} has already been sent or cancelled"}
 
     def request_memory_erasure(tool_context: ToolContext) -> dict:
-        """The customer asks to delete everything remembered about them. Runs when this conversation ends."""
-        tool_context.state["erasure_requested_at"] = tool_context.state["temp:now"]
-        return {"scheduled": "when this conversation ends, every remembered fact, every past-conversation summary and every "
-                             "conversation transcript, including this one, will be erased",
+        """The customer asks to delete everything remembered about them. Recorded now; carried out when this conversation
+        ends or, if it is never closed, by the next maintenance run."""
+        privacy.request_erasure(h.privacy_db, tool_context.user_id, tool_context.state["temp:now"])
+        return {"recorded": "the erasure request is recorded and will run when this conversation ends, or within the next "
+                            "maintenance run if the chat is simply closed",
+                "erases": "every remembered fact, every past-conversation summary, every conversation transcript including this "
+                          "one, and every pending reminder with its note",
                 "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"}
 
     def notify_customer(message: str, tool_context: ToolContext) -> dict:
@@ -309,19 +334,21 @@ def build_tools(h: Harness) -> list[Callable]:
         followup_id = tool_context.state.get("followup_id")
         if not followup_id:
             return {"error": "notify_customer is only for scheduled follow-ups; in a live conversation, just reply"}
-        if any(m["followup_id"] == followup_id and m["status"] != "rejected" for m in world.outbound_messages(h.bank_db)):
-            return {"error": "this follow-up has already produced its one message"}
         record = scheduler.get_followup(h.scheduler_db, followup_id)
         channel = (tool_context.state.get("user:contact_channel") or {}).get("value", "secure_message")
         held = record["approval"] != "none"
-        sent = world.record_outbound_message(h.bank_db, tool_context.user_id, channel, redact_card_secrets(message), followup_id,
+        sent = world.record_outbound_message(h.bank_db, tool_context.user_id, channel, mask_card_numbers(message), followup_id,
                                              held, tool_context.state["temp:now"])
+        if sent is None:  # the database's one-message-per-follow-up constraint
+            return {"error": "this follow-up has already produced its one message"}
         return {"channel": channel, "message_id": sent["message_id"],
                 "status": "held for a Kestrel reviewer to approve before it is sent" if held else "sent"}
 
-    return [verify_identity, find_transactions, file_dispute, add_case_evidence, get_case_status, search_policy,
-            remember_customer_fact, forget_customer_fact, schedule_reminder, list_my_followups, cancel_reminder,
-            request_memory_erasure, notify_customer]
+    tools = [verify_identity, find_transactions, file_dispute, add_case_evidence, get_case_status, search_policy,
+             remember_customer_fact, forget_customer_fact, schedule_reminder, list_my_followups, cancel_reminder,
+             request_memory_erasure, notify_customer]
+    excluded = LIVE_ONLY_TOOLS if unattended else UNATTENDED_ONLY_TOOLS
+    return [tool for tool in tools if tool.__name__ not in excluded]
 
 
 # --------------------------------------------------------------------------- agent
@@ -360,10 +387,41 @@ def window_working_memory(callback_context: CallbackContext, llm_request: LlmReq
         llm_request.contents = llm_request.contents[starts[reflected]:]
 
 
-def build_agent(h: Harness, disabled_tools: tuple[str, ...] = ()) -> Agent:
-    tools = [tool for tool in build_tools(h) if tool.__name__ not in disabled_tools]
+def mask_model_output(llm_response: LlmResponse) -> None:
+    """Before anything is persisted: card numbers are masked in every reply part, and the model's reasoning (thought
+    parts, which ADK stores in the session's events) gets the full customer-input rules, security codes and expiries
+    included, since nobody reads it and over-masking it costs nothing."""
+    for part in (llm_response.content.parts if llm_response.content else None) or []:
+        if part.text:
+            part.text = mask_customer_text(part.text) if part.thought else mask_card_numbers(part.text)
+
+
+def report_malformed_tool_call(tool: str = "") -> dict:
+    """Harness use only, never call it yourself: the result of a tool call whose arguments were not valid JSON."""
+    return {"error": f"your {tool or 'last'} call's arguments were not valid JSON, so it did not run; "
+                     "make the call again with valid JSON arguments"}
+
+
+def after_model(callback_context: CallbackContext, llm_response: LlmResponse) -> LlmResponse | None:
+    """after_model_callback: mask, then turn a malformed tool call into a tool round trip. ADK ends the turn on
+    MALFORMED_FUNCTION_CALL, so the customer would get no reply and the action (a dispute) would silently not happen;
+    once per turn, the response is replaced by a call to report_malformed_tool_call, whose error result lets the
+    model make the call again, the same contract as any other tool error (the LangGraph agent does the same in
+    route_malformed_calls)."""
+    mask_model_output(llm_response)
+    if llm_response.error_code != "MALFORMED_FUNCTION_CALL" or callback_context.state.get("temp:malformed_call_retried"):
+        return None
+    callback_context.state["temp:malformed_call_retried"] = True
+    thoughts = [part for part in ((llm_response.content.parts if llm_response.content else None) or []) if part.thought]
+    call = types.FunctionCall(id=f"malformed-{uuid.uuid4().hex[:8]}", name="report_malformed_tool_call", args={})
+    return LlmResponse(content=types.Content(role="model", parts=[*thoughts, types.Part(function_call=call)]))
+
+
+def build_agent(h: Harness, disabled_tools: tuple[str, ...] = (), unattended: bool = False) -> Agent:
+    tools = [tool for tool in build_tools(h, unattended) if tool.__name__ not in disabled_tools]
     if "load_memory" not in disabled_tools:
         tools.append(load_memory)
+    tools.append(report_malformed_tool_call)
     return Agent(
         model=LiteLlm(model=f"deepseek/{DEEPSEEK_MODEL}", api_key=deepseek_api_key()),
         name=AGENT_NAME,
@@ -372,6 +430,7 @@ def build_agent(h: Harness, disabled_tools: tuple[str, ...] = ()) -> Agent:
         tools=tools,
         before_agent_callback=forget_expired_facts,
         before_model_callback=window_working_memory,
+        after_model_callback=after_model,
     )
 
 
@@ -409,21 +468,58 @@ def _transcript_turns(events: list[Event]) -> list[dict]:
     return turns
 
 
+async def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str) -> int:
+    """A function call with no response (the process died mid-tool) would make every later model call fail; answer it."""
+    session = await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    if not session:
+        return 0
+    answered = {p.function_response.id for e in session.events for p in ((e.content.parts if e.content else None) or []) if p.function_response}
+    dangling = [p.function_call for e in session.events for p in ((e.content.parts if e.content else None) or [])
+                if p.function_call and p.function_call.id not in answered]
+    if dangling:
+        parts = [types.Part(function_response=types.FunctionResponse(id=call.id, name=call.name,
+                                                                     response={"error": "this call was interrupted and did not run"}))
+                 for call in dangling]
+        await h.session_service.append_event(session, Event(invocation_id=f"repair-{uuid.uuid4().hex[:8]}", author=AGENT_NAME,
+                                                            content=types.Content(role="user", parts=parts)))
+    return len(dangling)
+
+
 async def run_turn(h: Harness, user_id: str, session_id: str, text: str, now: str, disabled_tools: tuple[str, ...] = ()) -> dict:
-    """One customer message through the agent. Returns what was sent, every tool call with its result, and the reply."""
+    """One customer message through the agent. Returns what was sent, every tool call with its result, and the reply.
+
+    A failure inside the turn is returned as an error record, after the session is repaired, so one bad turn never
+    leaves the conversation unusable.
+    """
+    await execute_pending_erasures(h, now)
+    await repair_interrupted_tool_calls(h, user_id, session_id)
     session = await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
     turns = group_by_customer_turn(_transcript_turns(session.events)) if session else []
     if session and len(turns) + 1 - session.state.get("reflected_turns", 0) > WORKING_WINDOW_TURNS:
         await reflect_turns(h, user_id, session_id, now, upto=len(turns) + 1 - WORKING_KEEP_TURNS)
     previous = tuple(group[0]["text"] for group in turns[-3:] if group and group[0]["role"] == "customer")
-    sent = redact_card_secrets(text, previous)  # card data never enters the session, let alone memory
-    runner = Runner(app_name=APP_NAME, agent=build_agent(h, disabled_tools), session_service=h.session_service,
+    sent = mask_customer_text(text, previous)  # card data never enters the session, let alone memory
+    unattended = bool(session and session.state.get("followup_id"))
+    agent = build_agent(h, disabled_tools, unattended)
+    runner = Runner(app_name=APP_NAME, agent=agent, session_service=h.session_service,
                     memory_service=h.memory_service, auto_create_session=True)
     message = types.Content(role="user", parts=[types.Part(text=sent)])
-    events = [event async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=message, state_delta={"temp:now": now, "last_active_at": now}
-    )]
-    return _turn_record(events, sent)
+    delta = {"temp:now": now, "last_active_at": now}
+    if not (session and session.state.get("first_active_at")):
+        delta["first_active_at"] = now
+    events = []
+    try:
+        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=message, state_delta=delta):
+            events.append(event)
+    except Exception as exc:
+        await repair_interrupted_tool_calls(h, user_id, session_id)
+        record = _turn_record(events, sent)
+        return {**record, "error": f"{type(exc).__name__}: {exc}", "tools_offered": _tool_names(agent)}
+    return {**_turn_record(events, sent), "tools_offered": _tool_names(agent)}
+
+
+def _tool_names(agent: Agent) -> list[str]:
+    return sorted(getattr(tool, "__name__", None) or tool.name for tool in agent.tools)
 
 
 async def complete_text(prompt: str) -> str:
@@ -456,18 +552,35 @@ async def reflect_turns(h: Harness, user_id: str, session_id: str, now: str, upt
 
 
 async def end_session(h: Harness, user_id: str, session_id: str, now: str) -> dict | None:
-    """Session concluded: reflect what is not yet reflected, or carry out an erasure the customer asked for."""
+    """Session concluded: carry out a pending erasure, or reflect what is not yet reflected.
+
+    A scheduler-fired session for a customer erased after its record was written leaves no memory at all.
+    """
+    if user_id in privacy.pending_erasures(h.privacy_db):
+        await erase_customer_memory(h, user_id, now)
+        return None
     session = await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
     if not session:
         return None
-    if session.state.get("erasure_requested_at"):
-        await erase_customer_memory(h, user_id)
+    erased = privacy.erased_at(h.privacy_db, user_id)
+    if session.state.get("followup_id") and erased and erased >= session.state.get("followup_created_at", ""):
+        await h.session_service.delete_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+        compact_sqlite(h.sessions_db)
         return None
     return await reflect_turns(h, user_id, session_id, now)
 
 
-async def erase_customer_memory(h: Harness, user_id: str) -> dict:
-    """Right to erasure: every fact, episode and transcript of this customer. Bank records are not memory and stay."""
+async def execute_pending_erasures(h: Harness, now: str) -> list[str]:
+    users = privacy.pending_erasures(h.privacy_db)
+    for user_id in users:
+        await erase_customer_memory(h, user_id, now)
+    return users
+
+
+async def erase_customer_memory(h: Harness, user_id: str, now: str) -> dict:
+    """Right to erasure: every fact, episode, transcript and pending reminder of this customer, then a tombstone.
+    Bank records (cases, ledger, messages already sent) are not memory and stay."""
+    reminders = scheduler.erase_customer_reminders(h.scheduler_db, user_id, now)
     eraser = await h.session_service.create_session(app_name=APP_NAME, user_id=user_id, session_id=f"erasure-{uuid.uuid4().hex[:8]}")
     await h.session_service.append_event(eraser, Event(invocation_id=f"erasure-{uuid.uuid4().hex[:8]}", author="harness",
                                                        actions=EventActions(state_delta={f"user:{key}": None for key in FACT_KEYS})))
@@ -479,11 +592,15 @@ async def erase_customer_memory(h: Harness, user_id: str) -> dict:
         await h.session_service.delete_session(app_name=APP_NAME, user_id=user_id, session_id=session.id)
     compact_sqlite(h.sessions_db)
     compact_sqlite(h.episodes_db)
-    return {"user_id": user_id, "episodes": len(episodes), "transcripts": len(sessions) - 1}
+    compact_sqlite(h.scheduler_db)
+    privacy.mark_erased(h.privacy_db, user_id, now)
+    return {"user_id": user_id, "episodes": len(episodes), "transcripts": len(sessions) - 1, "reminders_cancelled": reminders}
 
 
 async def run_maintenance(h: Harness, now: str) -> dict:
-    """The harness's memory job: close idle chats, purge expired episodes, delete expired transcripts."""
+    """The harness's memory job: pending erasures first, then close idle chats, purge expired episodes and delete
+    transcripts 30 days after their first turn."""
+    erased = await execute_pending_erasures(h, now)
     closed, deleted = [], []
     for listed in (await h.session_service.list_sessions(app_name=APP_NAME)).sessions:
         last_active = listed.state.get("last_active_at")
@@ -491,7 +608,7 @@ async def run_maintenance(h: Harness, now: str) -> dict:
             continue
         if session_is_idle(last_active, now) and await reflect_turns(h, listed.user_id, listed.id, last_active):
             closed.append(listed.id)
-        if transcript_is_expired(last_active, now):
+        if transcript_is_expired(listed.state.get("first_active_at") or last_active, now):
             await h.session_service.delete_session(app_name=APP_NAME, user_id=listed.user_id, session_id=listed.id)
             deleted.append(listed.id)
     expired = [e for e in h.memory_service.list_episodes(APP_NAME) if episode_is_expired(e, now)]
@@ -500,7 +617,8 @@ async def run_maintenance(h: Harness, now: str) -> dict:
     if deleted or expired:
         compact_sqlite(h.sessions_db)
         compact_sqlite(h.episodes_db)
-    return {"closed_idle_sessions": closed, "purged_episodes": [e["episode_id"] for e in expired], "deleted_transcripts": deleted}
+    return {"erased_customers": erased, "closed_idle_sessions": closed, "purged_episodes": [e["episode_id"] for e in expired],
+            "deleted_transcripts": deleted}
 
 
 async def run_followup_session(h: Harness, record: dict, now: str) -> dict:
@@ -508,7 +626,8 @@ async def run_followup_session(h: Harness, record: dict, now: str) -> dict:
     session_id = f"followup-{record['followup_id']}-{record['attempts'] + 1}"
     await h.session_service.create_session(
         app_name=APP_NAME, user_id=record["user_id"], session_id=session_id,
-        state={"followup_id": record["followup_id"], "last_active_at": now},
+        state={"followup_id": record["followup_id"], "followup_created_at": record["created_at"], "last_active_at": now,
+               "first_active_at": now},
     )
     turn = await run_turn(h, record["user_id"], session_id, scheduler.followup_trigger_message(record), now)
     episode = await end_session(h, record["user_id"], session_id, now)
@@ -558,7 +677,7 @@ async def chat(var_dir: Path, user_id: str, session_id: str | None, now: str | N
             turn = await run_turn(h, user_id, session_id, text, now or wall_clock_now())
             for call in turn["tool_calls"]:
                 print(f"  [tool] {call['name']}({json.dumps(call['args'])})")
-            print(f"\n[assistant]: {turn['reply']}")
+            print(f"\n[assistant]: {turn['reply'] or '(no reply: ' + turn.get('error', 'empty turn') + '; you can keep chatting)'}")
     episode = await end_session(h, user_id, session_id, now or wall_clock_now())
     if episode:
         print(f"\n[memory] episode {episode['episode_id']}: {episode['text']}")

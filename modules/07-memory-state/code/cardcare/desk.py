@@ -8,8 +8,11 @@ ADK and LangGraph tools differ only in where they read those values from.
 from pathlib import Path
 
 from cardcare import scheduler, world
-from cardcare.clock import add_days, parse_instant
-from cardcare.memory_policy import redact_card_secrets
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from cardcare.clock import add_days, format_instant, parse_instant
+from cardcare.masking import mask_card_numbers
 
 DISPUTE_WINDOW_DAYS = 75  # mirrors policy_kb/dispute-window.md; the system of record enforces it
 
@@ -44,7 +47,7 @@ def file_dispute_with_followup(
     existing = world.open_case_for_transaction(bank_db, user_id, transaction_id)
     if existing:
         return {"error": f"case {existing['case_id']} is already open for {transaction_id}"}
-    case = world.open_case(bank_db, user_id, transaction_id, reason, redact_card_secrets(evidence_note) if evidence_note else None, now)
+    case = world.open_case(bank_db, user_id, transaction_id, reason, mask_card_numbers(evidence_note) if evidence_note else None, now)
     # Customer-facing outcomes on large disputes are reviewed by a person before they go out.
     approval = "ops_reviewer" if txn["amount_cents"] >= large_dispute_threshold_cents else "none"
     followup = scheduler.schedule_followup(
@@ -63,12 +66,16 @@ def file_dispute_with_followup(
     }
 
 
-def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remind_on: str, now: str) -> dict:
+def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remind_on: str, remind_at: str, timezone: str, now: str) -> dict:
+    """A reminder at a local date and time; the record stores the UTC instant."""
     try:
-        trigger_at = f"{parse_instant(remind_on).date().isoformat()}T09:00:00Z"
-    except ValueError:
-        return {"error": "remind_on must be a date, YYYY-MM-DD"}
+        local = datetime.fromisoformat(f"{remind_on[:10]}T{remind_at}").replace(tzinfo=ZoneInfo(timezone))
+    except (ValueError, ZoneInfoNotFoundError):
+        return {"error": "remind_on must be YYYY-MM-DD, remind_at HH:MM, timezone an IANA name such as America/Los_Angeles"}
+    trigger_at = format_instant(local)
     if parse_instant(trigger_at) <= parse_instant(now):
-        return {"error": "remind_on must be in the future"}
-    record = scheduler.schedule_followup(scheduler_db, user_id, "customer_reminder", trigger_at, {"note": redact_card_secrets(note)}, "none", now)
-    return {"followup_id": record["followup_id"], "due": trigger_at[:10]}
+        return {"error": "the reminder time must be in the future"}
+    record = scheduler.schedule_followup(scheduler_db, user_id, "customer_reminder", trigger_at, {"note": mask_card_numbers(note)}, "none", now)
+    if record is None:
+        return {"error": f"a reminder is already scheduled for {trigger_at[:10]}; one reminder per day, so put everything in that one"}
+    return {"followup_id": record["followup_id"], "due": trigger_at, "local_time": f"{remind_on[:10]} {remind_at} {timezone}"}

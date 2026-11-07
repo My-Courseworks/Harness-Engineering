@@ -2,13 +2,16 @@
 
 The rules the agent follows live in an instruction file with a version, never in a searchable store
 where they could drift. v1 is committed next to this file. Promotion is a policy decision:
-  - evidence: the same case outcome in episodes from at least two different customers, each from a
-    conversation the customer was in (scheduler-only sessions do not count), and from at least two
-    separate back-office decisions (one batch is one piece of evidence, not two);
-  - review: a model drafts the rule, a person edits it, and the person's text is what ships. The draft
-    is kept next to it in the registry;
-  - routing: a rule whose approved text would stop a customer from filing a dispute needs sign-off by the
-    disputes policy owner, not by ops;
+  - evidence: the same case outcome in conversations with at least two different customers (scheduler-only
+    sessions do not count), decided in at least two separate back-office decisions (cases decided in one
+    batch share a decision_id, so a batch is one decision however many cases it closes);
+  - routing by source, not by wording: every rule promoted from dispute outcomes changes how disputes are
+    taken, so it needs both an ops lead and the disputes policy owner. No phrasing of the rule can route
+    around that, because the rule's text is not what decides it;
+  - review: the model drafts, a person edits, the person's text ships. A promotion without the draft it was
+    reviewed from is refused, and the diff between draft and approved text is recorded;
+  - approvers are named people whose roles come from a registry (procedure_versions/reviewers.json), never
+    a role the approver asserts on the command line;
   - scope: procedural text reaches every customer's prompt, so it may name no customer, case or
     transaction. Provenance (which episodes, which customers) lives in the registry, an audit log the
     model never sees;
@@ -18,6 +21,7 @@ Promoted versions are written under var/ so a fresh run always starts from v1; i
 would be a reviewed pull request against procedure_versions/.
 """
 
+import difflib
 import json
 import re
 import textwrap
@@ -30,6 +34,9 @@ BASELINE_VERSION = "v1"
 PROMOTION_MIN_DISTINCT_USERS = 2
 PROMOTION_MIN_DISTINCT_DECISIONS = 2
 POLICY_OWNER_ROLE = "disputes_policy_owner"
+OPS_ROLE = "ops_lead"
+REQUIRED_ROLES_FOR_DISPUTE_RULES = (OPS_ROLE, POLICY_OWNER_ROLE)
+_REVIEWERS = json.loads((Path(__file__).resolve().parent / "procedure_versions" / "reviewers.json").read_text())
 _NO_RULES_LINE = "(none yet: rules learned from past conversations are added here only after human review)"
 _REFUSAL = re.compile(
     r"\b(do not|don't|never)\s+(\w+\s+){0,2}(file|submit|re-?file|call file_dispute)\b"
@@ -110,13 +117,12 @@ def promotion_candidates(episodes: list[dict], registry: dict) -> list[dict]:
             group = by_code.setdefault(code, {"resolution_code": code, "users": set(), "decisions": set(), "episodes": [],
                                               "lessons": [], "notes": set()})
             group["users"].add(episode["user_id"])
-            group["decisions"].add((outcome["case_id"], outcome.get("resolved_at")))
+            group["decisions"].add(outcome.get("decision_id") or f"(undated decision on {outcome['case_id']})")
             group["episodes"].append(episode["episode_id"])
             group["lessons"].append(episode["lesson"])
             group["notes"].add(outcome.get("resolution_note") or "")
     return [
-        {**group, "users": sorted(group["users"]), "decisions": sorted(f"{c} @ {at}" for c, at in group["decisions"]),
-         "notes": sorted(group["notes"])}
+        {**group, "users": sorted(group["users"]), "decisions": sorted(group["decisions"]), "notes": sorted(group["notes"])}
         for group in by_code.values()
         if len(group["users"]) >= PROMOTION_MIN_DISTINCT_USERS and len(group["decisions"]) >= PROMOTION_MIN_DISTINCT_DECISIONS
     ]
@@ -135,28 +141,32 @@ def rule_drafting_prompt(candidate: dict) -> str:
     )
 
 
-def rule_review_problems(rule_text: str, approvals: list[dict]) -> list[str]:
-    """Why this rule text cannot ship with these approvals (empty if it can)."""
+def approver_roles(approvers: list[str]) -> list[dict]:
+    """Named approvers and the roles the registry gives them; unknown names get none."""
+    return [{"name": name, "roles": list(_REVIEWERS.get(name, []))} for name in approvers]
+
+
+def rule_review_problems(rule_text: str, draft_text: str, approvers: list[str]) -> list[str]:
+    """Why this rule cannot ship with these approvers (empty if it can). The text's wording never lowers the bar."""
     problems = []
+    if not draft_text.strip():
+        problems.append("a promotion needs the model draft it was reviewed from")
     if identifiers_in(rule_text):
         problems.append(f"rule text may not identify customers or records: {identifiers_in(rule_text)}")
-    refusal = refusal_language(rule_text)
-    if refusal and not any(a["role"] == POLICY_OWNER_ROLE for a in approvals):
-        problems.append(f"rule would refuse a customer ({refusal}); it needs sign-off by the {POLICY_OWNER_ROLE}")
+    roles = {role for approver in approver_roles(approvers) for role in approver["roles"]}
+    missing = [role for role in REQUIRED_ROLES_FOR_DISPUTE_RULES if role not in roles]
+    if missing:
+        problems.append(f"a rule learned from dispute outcomes needs approval from {', '.join(REQUIRED_ROLES_FOR_DISPUTE_RULES)}; "
+                        f"missing: {', '.join(missing)}")
     return problems
 
 
-def promote(var_dir: Path, candidate: dict, draft_text: str, approved_text: str, approvals: list[dict], now: str) -> str:
-    """Write a new version = active text + the reviewer's approved rule, and make it active.
-
-    `approvals` is [{"name": ..., "role": ...}]. Raises ValueError if the approved text names a customer or
-    record, or if it contains refusal language without an approval from the disputes policy owner.
-    """
+def promote(var_dir: Path, candidate: dict, draft_text: str, approved_text: str, approvers: list[str], now: str) -> str:
+    """Write a new version = active text + the reviewer's approved rule, and make it active. Raises ValueError on any review problem."""
     approved_text = approved_text.strip()
-    problems = rule_review_problems(approved_text, approvals)
+    problems = rule_review_problems(approved_text, draft_text, approvers)
     if problems:
         raise ValueError("; ".join(problems))
-    refusal = refusal_language(approved_text)
     registry = load_registry(var_dir)
     base_version = registry["active"]
     new_version = f"v{len(registry['versions']) + 1}"
@@ -166,10 +176,11 @@ def promote(var_dir: Path, candidate: dict, draft_text: str, approved_text: str,
         "resolution_code": candidate["resolution_code"],
         "approved_text": approved_text,
         "draft_text": draft_text.strip(),
-        "draft_refusal_language": refusal_language(draft_text),
-        "approvals": approvals,
+        "edited": approved_text != draft_text.strip(),
+        "diff": list(difflib.unified_diff(draft_text.strip().split(". "), approved_text.split(". "), "draft", "approved", lineterm="")),
+        "refusal_language_in_draft": refusal_language(draft_text),
+        "approvals": approver_roles(approvers),
         "approved_at": now,
-        "refusal_language_approved": refusal,
         "evidence_episodes": candidate["episodes"],
         "evidence_users": candidate["users"],
         "evidence_decisions": candidate["decisions"],
@@ -181,8 +192,7 @@ def promote(var_dir: Path, candidate: dict, draft_text: str, approved_text: str,
     (var_dir / "procedures" / f"{new_version}.md").write_text(new_text)
     registry["versions"][new_version] = {"rules": registry["versions"][base_version]["rules"] + [rule], "based_on": base_version}
     registry["active"] = new_version
-    registry["history"].append({"event": "promoted", "version": new_version, "based_on": base_version,
-                                "by": [a["name"] for a in approvals], "at": now})
+    registry["history"].append({"event": "promoted", "version": new_version, "based_on": base_version, "by": approvers, "at": now})
     _save_registry(var_dir, registry)
     return new_version
 

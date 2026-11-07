@@ -8,6 +8,7 @@ to live there or for how long.
 import re
 
 from cardcare.clock import add_days, parse_instant
+from cardcare.masking import mask_customer_text
 
 # Semantic memory is a closed schema. A free-form key chosen by the model is how
 # two facts that mean the same thing ("contact_pref", "preferred_channel") come
@@ -18,13 +19,16 @@ FACT_KEYS = ("contact_channel", "travel_notice")
 # so this key, unlike a travel notice, needs a fresh step-up verification.
 FACT_KEYS_NEEDING_VERIFICATION = ("contact_channel",)
 
-# Step-up verification proves possession *now*. It expires, and guessing is capped.
+# Step-up verification proves possession *now*. It expires, and guessing is capped on the account (not the
+# conversation): 3 failures lock verification for 24 hours, and opening a new chat does not reset it.
 VERIFICATION_TTL_MINUTES = 15
 MAX_VERIFICATION_ATTEMPTS = 3
+VERIFICATION_LOCK_HOURS = 24
 
-# Retention, per data class. Transcripts are the raw record of everything said, so they
-# live shortest; the distilled episode outlives them; bank records (cases, ledger) are
-# not memory and keep their own legal retention in the system of record.
+# Retention, per data class. Transcripts are the raw record of everything said, so they live shortest:
+# a session is deleted 30 days after its *first* turn, however recently it was used, so no line of any
+# transcript outlives 30 days (plus one maintenance interval). The distilled episode lives 180 days. Bank
+# records (cases, ledger) are not memory and keep their own legal retention in the system of record.
 TRANSCRIPT_RETENTION_DAYS = 30
 EPISODE_RETENTION_DAYS = 180
 IDLE_SESSION_MINUTES = 30  # a chat with no turn for this long has ended, even if nobody typed 'exit'
@@ -35,99 +39,12 @@ IDLE_SESSION_MINUTES = 30  # a chat with no turn for this long has ended, even i
 WORKING_WINDOW_TURNS = 8
 WORKING_KEEP_TURNS = 4
 
-CARD_NUMBER_MASK = "[REDACTED CARD NUMBER]"
-SECURITY_CODE_MASK = "[REDACTED SECURITY CODE]"
-CARD_DIGITS_MASK = "[REDACTED CARD DIGITS]"
-EXPIRY_MASK = "[REDACTED EXPIRY]"
-
-# Digits joined by up to three separator characters: "5555 5555", "5555.5555", "5555//5555", "5555  5555".
-_DIGIT_RUN = re.compile(r"(?<![0-9A-Za-z])\d(?:[ .\-/_,]{0,3}\d)*(?![0-9A-Za-z])")
-_ISO_DATES = re.compile(r"(\d{4}-\d{2}-\d{2}[ ,;]*)+")
-_CARD_CONTEXT = re.compile(
-    r"\b(cvv2?|cvc2?|csc|cid|security code|card code|verification code|code|on the back|back of (the|my) card|"
-    r"three digits|3 digits|four digits|expir\w*|exp\.?|valid (thru|through))\b", re.IGNORECASE)
-_EXPIRY = re.compile(r"(?<![\d/])(0?[1-9]|1[0-2])\s?[/\-]\s?(\d{4}|\d{2})(?![\d/])")
-_SHORT_CODE = re.compile(r"(?<![\d$€£.,/])\d{3,4}(?![\d/%]|[.,]\d)")
-_NOT_A_CODE = re.compile(r"(ending|ends in|ending in|last 4|last four|zip|postal code)\s*(is\s*)?$", re.IGNORECASE)
-
-
-def _digits(text: str) -> str:
-    return re.sub(r"\D", "", text)
-
-
-def _passes_luhn(digits: str) -> bool:
-    total = 0
-    for position, char in enumerate(reversed(digits)):
-        value = int(char)
-        if position % 2:
-            value = value * 2 - 9 if value > 4 else value * 2
-        total += value
-    return total % 10 == 0
-
-
-def _trailing_digits(text: str) -> str:
-    """The digit run a message ends with, if it ends with one (a fragment a next message might complete)."""
-    match = re.search(r"\d(?:[ .\-/_,]{0,3}\d)*\W*$", text)
-    return _digits(match.group()) if match else ""
-
-
-def redact_card_secrets(text: str, previous_customer_texts: tuple[str, ...] = ()) -> str:
-    """Mask card numbers, security codes and expiry dates before the message is stored anywhere.
-
-    - Any run of 12 or more digits, whatever separates them (spaces, dots, slashes, hyphens, doubles), is
-      masked: a card number, or a card number run together with its expiry and code ("5555555555554444 / 12/29
-      / 737"). Twelve is below every card length on purpose: the agent never needs a number that long. ISO
-      dates written back to back are the one exception.
-    - A shorter run that *completes* a Luhn-valid 13-19 digit number together with the digit runs the
-      previous one to three customer messages ended with is the second half of a split number, and is
-      masked. (The earlier fragments were stored before the number was complete; they never include the
-      last four digits, and they leave with the transcript at retention.)
-    - In a message about card security (CVV, "the digits on the back", expiry...), or one that follows a
-      message in which anything was masked, a standalone 3-4 digit group is masked (a security code, or a
-      fragment of a number being typed in pieces) and mm/yy is an expiry.
-
-    The harness applies this to every customer message before it enters the session, so the event log,
-    every checkpoint, every memory store and the model itself only see the masks.
-    `previous_customer_texts` are the earlier customer messages of this session, oldest first, already masked.
-    """
-    tails = [t for t in (_trailing_digits(p) for p in previous_customer_texts[-3:]) if t]
-    completed_split = False
-
-    def mask_run(match: re.Match) -> str:
-        nonlocal completed_split
-        run, digits = match.group(), _digits(match.group())
-        if len(digits) >= 12 and not _ISO_DATES.fullmatch(run.strip()):
-            return CARD_NUMBER_MASK
-        for start in range(len(tails)):
-            combined = "".join(tails[start:]) + digits
-            if 13 <= len(combined) <= 19 and _passes_luhn(combined):
-                completed_split = True
-                return CARD_NUMBER_MASK
-        return run
-
-    masked = _DIGIT_RUN.sub(mask_run, text)
-    in_card_context = bool(
-        _CARD_CONTEXT.search(masked) or CARD_NUMBER_MASK in masked or completed_split
-        or any("[REDACTED" in p for p in previous_customer_texts[-1:])
-    )
-    if not in_card_context:
-        return masked
-    masked = _EXPIRY.sub(EXPIRY_MASK, masked)
-
-    token = SECURITY_CODE_MASK if _CARD_CONTEXT.search(masked) else CARD_DIGITS_MASK
-
-    def mask_code(match: re.Match) -> str:
-        return match.group() if _NOT_A_CODE.search(masked[:match.start()]) else token
-
-    return _SHORT_CODE.sub(mask_code, masked)
-
-
 def build_fact(key: str, value: str, valid_until: str | None, now: str) -> dict:
     """Validate a customer-stated fact and stamp it. Raises ValueError with a reason the model can relay."""
     if key not in FACT_KEYS:
         raise ValueError(f"'{key}' is not a fact this assistant may store. Storable facts: {', '.join(FACT_KEYS)}.")
     value = value.strip()
-    if not value or redact_card_secrets(value) != value or re.search(r"\d{6,}", _digits(value)):
+    if not value or mask_customer_text(value) != value or len(re.sub(r"\D", "", value)) >= 6:
         raise ValueError("That value contains digits that look like card or account data; it must never be stored.")
     if key == "contact_channel":
         if value not in CONTACT_CHANNELS:
@@ -183,9 +100,9 @@ def episode_is_expired(episode: dict, now: str) -> bool:
     return parse_instant(episode["expires_at"]) <= parse_instant(now)
 
 
-def transcript_is_expired(last_active_at: str | None, now: str) -> bool:
-    """A transcript with no recorded activity is treated as expired: it cannot be dated, so it cannot be kept."""
-    return not last_active_at or parse_instant(add_days(last_active_at, TRANSCRIPT_RETENTION_DAYS)) <= parse_instant(now)
+def transcript_is_expired(first_active_at: str | None, now: str) -> bool:
+    """A session expires 30 days after its first turn. One that cannot be dated cannot be kept."""
+    return not first_active_at or parse_instant(add_days(first_active_at, TRANSCRIPT_RETENTION_DAYS)) <= parse_instant(now)
 
 
 def session_is_idle(last_active_at: str | None, now: str) -> bool:

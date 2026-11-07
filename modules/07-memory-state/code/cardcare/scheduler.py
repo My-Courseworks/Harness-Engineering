@@ -7,7 +7,8 @@ Each record answers the module's five questions:
   done flag - `status`: pending, running, awaiting_approval, done, cancelled or failed; set by the
               harness on evidence (a sent message), never on the model's word
   approval  - who signs off before anything reaches the customer ("none" or "ops_reviewer"). The
-              reviewer approves the drafted message itself, after the agent has written it.
+              reviewer approves the drafted message itself, after the agent has written it, and a
+              draft that carries a masking token cannot be approved at all (`message_review_problems`).
 
 The agent's interface is narrow: tools write a record, read the customer's own records, and cancel a
 customer reminder. `fire_due_followups` wakes a fresh agent session when a record falls due; the record
@@ -17,6 +18,7 @@ recovered on the next run: done if its message was already sent, pending otherwi
 
 import inspect
 import json
+import re
 import sqlite3
 import uuid
 from collections.abc import Callable
@@ -47,6 +49,10 @@ CREATE TABLE IF NOT EXISTS followups (
   cancelled_at TEXT,
   last_error TEXT
 );
+-- One pending reminder per customer per day: a "send me three reminders" request, however it is phrased and
+-- however many parallel tool calls it becomes, cannot create three records.
+CREATE UNIQUE INDEX IF NOT EXISTS one_reminder_per_day
+  ON followups(user_id, substr(trigger_at, 1, 10)) WHERE action = 'customer_reminder' AND status = 'pending';
 """
 
 
@@ -68,17 +74,37 @@ def create_scheduler(db_path: Path) -> None:
         conn.executescript(SCHEMA)
 
 
-def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str, resume: dict, approval: str, now: str) -> dict:
+def schedule_followup(db_path: Path, user_id: str, action: str, trigger_at: str, resume: dict, approval: str, now: str) -> dict | None:
+    """Write a record. None if the customer already has a pending reminder that day."""
     followup_id = f"F-{uuid.uuid4().hex[:8]}"
-    with closing(_connect(db_path)) as conn, conn:
-        conn.execute(
-            "INSERT INTO followups (followup_id, user_id, action, trigger_at, resume_json, approval, status, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-            (followup_id, user_id, action, format_instant(parse_instant(trigger_at)), json.dumps(resume), approval,
-             format_instant(parse_instant(now))),
-        )
-        row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
+    try:
+        with closing(_connect(db_path)) as conn, conn:
+            conn.execute(
+                "INSERT INTO followups (followup_id, user_id, action, trigger_at, resume_json, approval, status, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+                (followup_id, user_id, action, format_instant(parse_instant(trigger_at)), json.dumps(resume), approval,
+                 format_instant(parse_instant(now))),
+            )
+            row = conn.execute("SELECT * FROM followups WHERE followup_id = ?", (followup_id,)).fetchone()
+    except sqlite3.IntegrityError:
+        return None
     return _record_view(row)
+
+
+def erase_customer_reminders(db_path: Path, user_id: str, now: str) -> list[str]:
+    """Erasure: the customer's pending reminders are cancelled, and the note of every reminder record they ever had,
+    whatever its status (pending, cancelled, done, failed), is purged, because the note is their words. Returns
+    the ids that were still pending. Case follow-ups carry only a case id and stay with the case."""
+    with closing(_connect(db_path)) as conn, conn:
+        ids = [row[0] for row in conn.execute(
+            "SELECT followup_id FROM followups WHERE user_id = ? AND action = 'customer_reminder' AND status IN ('pending', 'awaiting_approval')",
+            (user_id,))]
+        conn.execute(
+            "UPDATE followups SET status = 'cancelled', cancelled_at = ?, last_error = 'erased at the customer''s request'"
+            " WHERE user_id = ? AND action = 'customer_reminder' AND status IN ('pending', 'awaiting_approval')",
+            (format_instant(parse_instant(now)), user_id))
+        conn.execute("UPDATE followups SET resume_json = '{}' WHERE user_id = ? AND action = 'customer_reminder'", (user_id,))
+    return ids
 
 
 def list_followups(db_path: Path) -> list[dict]:
@@ -109,11 +135,20 @@ def cancel_followup(db_path: Path, followup_id: str, user_id: str, now: str) -> 
     return _record_view(row) if cursor.rowcount == 1 else None
 
 
+def message_review_problems(body: str) -> list[str]:
+    """What no approval can override: a customer-facing message never carries a masking token."""
+    return [f"the draft contains masked text: {token}" for token in re.findall(r"\S*\[REDACTED[^\]]*\]\S*", body)]
+
+
 def approve_followup(db_path: Path, bank_db: Path, followup_id: str, reviewer: str, now: str) -> dict:
-    """A person signs off the drafted message itself: it is released to the customer and the record is done."""
+    """A person signs off the drafted message itself: it is released to the customer and the record is done.
+    Raises ValueError if there is no draft, or if the draft fails `message_review_problems` (reject it instead)."""
     held = [m for m in world.outbound_messages(bank_db) if m["followup_id"] == followup_id and m["status"] == "held"]
     if not held:
         raise ValueError(f"{followup_id} has no drafted message awaiting approval")
+    problems = message_review_problems(held[-1]["body"])
+    if problems:
+        raise ValueError("; ".join(problems))
     world.release_message(bank_db, held[-1]["message_id"], reviewer, now)
     _set_status(db_path, followup_id, "awaiting_approval", "done", approved_by=reviewer, done_at=now)
     return get_followup(db_path, followup_id)

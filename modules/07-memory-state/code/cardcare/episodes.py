@@ -2,9 +2,11 @@
 
 Extraction is model-driven (the reflection prompt), so its output is a candidate and goes through a
 validation stage before it is stored:
-  - card data is masked again;
-  - anything that identifies another customer (their name, user id, or a case that is not on this
-    customer's account) is replaced, so one customer's episode can never carry another's data;
+  - card numbers are masked again (the card-number rule only: the input heuristics for codes and expiries
+    would corrupt case ids and dates in generated text);
+  - anything that identifies another customer (their name, user id, card's last four, ZIP, a case or a
+    transaction that is not on this customer's account) is replaced, so one customer's episode can never
+    carry another's data;
   - the structured outcome next to it comes from the case system of record, not from the model.
 
 Reflection is incremental. A session records how many of its customer turns are already reflected,
@@ -16,9 +18,11 @@ import json
 import re
 
 from cardcare import world
-from cardcare.memory_policy import episode_expires_at, redact_card_secrets
+from cardcare.masking import mask_card_numbers
+from cardcare.memory_policy import episode_expires_at
 
 _CASE_ID = re.compile(r"\bC-\d{4}\b")
+_TXN_ID = re.compile(r"\bT-\d{4}\b")
 
 REFLECTION_PROMPT = """You write the long-term memory entry for part of a conversation between a card issuer's support assistant and one customer.
 Return a JSON object with exactly two keys:
@@ -51,10 +55,13 @@ def reflection_prompt(turns: list[dict]) -> str:
 
 def scrub_other_customers(text: str, user_id: str, own_case_ids: set[str]) -> str:
     """Authorization before storage: nothing that identifies another customer enters this customer's memory."""
-    for other_id, display_name, _, _ in world.CUSTOMERS:
+    for other_id, display_name, last4, postal in world.CUSTOMERS:
         if other_id == user_id:
             continue
         text = re.sub(rf"\b({re.escape(other_id)}|{re.escape(display_name)})('s)?\b", "another customer", text, flags=re.IGNORECASE)
+        text = re.sub(rf"(?<!\d)({last4}|{postal})(?!\d)", "[another customer's detail]", text)
+    own_txns = {t[0] for t in world.TRANSACTIONS if t[1] == user_id}
+    text = _TXN_ID.sub(lambda m: m.group() if m.group() in own_txns else "[a transaction not on this account]", text)
     return _CASE_ID.sub(lambda m: m.group() if m.group() in own_case_ids else "[a case not on this account]", text)
 
 
@@ -66,7 +73,7 @@ def parse_reflection(raw: str, user_id: str, own_case_ids: set[str]) -> dict:
         data = {}
 
     def validate(value: str, limit: int) -> str:
-        return scrub_other_customers(redact_card_secrets(value[:limit]), user_id, own_case_ids)
+        return scrub_other_customers(mask_card_numbers(value[:limit]), user_id, own_case_ids)
 
     return {"summary": validate(str(data.get("summary") or raw.strip()), 600), "lesson": validate(str(data.get("lesson") or "none"), 300)}
 
@@ -75,7 +82,7 @@ def case_outcomes(bank_db, user_id: str, turns: list[dict]) -> list[dict]:
     """Structured outcomes of every case of this customer's that the turns touched, read from the case system."""
     case_ids = sorted({case_id for turn in turns for case_id in _CASE_ID.findall(turn["text"])})
     return [
-        {key: case[key] for key in ("case_id", "txn_id", "reason", "status", "resolution_code", "resolution_note", "resolved_at")}
+        {key: case[key] for key in ("case_id", "txn_id", "reason", "status", "resolution_code", "resolution_note", "resolved_at", "decision_id")}
         for case in world.cases_by_id(bank_db, case_ids)
         if case["user_id"] == user_id
     ]

@@ -11,6 +11,9 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 DEEPSEEK_MODEL = "deepseek-v4-flash"
+# The eval judge is a different, larger model than the agent, so the agent is not graded by itself.
+JUDGE_MODEL = "deepseek-v4-pro"
+JUDGE_SAMPLES = 3
 
 _CODE_DIR = Path(__file__).resolve().parent.parent
 _KEY_FILES = (

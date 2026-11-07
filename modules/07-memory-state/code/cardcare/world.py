@@ -9,7 +9,11 @@ the harness supplies it, so the model cannot name somebody else's account.
 
 import sqlite3
 from contextlib import closing
+from datetime import timedelta
 from pathlib import Path
+
+from cardcare.clock import format_instant, parse_instant
+from cardcare.memory_policy import VERIFICATION_LOCK_HOURS
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS customers (
@@ -38,7 +42,8 @@ CREATE TABLE IF NOT EXISTS cases (
   opened_at TEXT NOT NULL,
   resolution_code TEXT,
   resolution_note TEXT,
-  resolved_at TEXT
+  resolved_at TEXT,
+  decision_id TEXT               -- one back-office decision event; a batch shares one id
 );
 CREATE TABLE IF NOT EXISTS outbound_messages (
   message_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +55,15 @@ CREATE TABLE IF NOT EXISTS outbound_messages (
   drafted_at TEXT NOT NULL,
   sent_at TEXT,
   reviewed_by TEXT
+);
+-- "One message per follow-up" is a constraint, not a read-then-insert: parallel tool calls cannot race past it.
+CREATE UNIQUE INDEX IF NOT EXISTS one_message_per_followup
+  ON outbound_messages(followup_id) WHERE followup_id IS NOT NULL AND status != 'rejected';
+-- Step-up attempts are counted on the account, so a new conversation does not reset the lockout.
+CREATE TABLE IF NOT EXISTS verification_attempts (
+  user_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  succeeded INTEGER NOT NULL
 );
 """
 
@@ -178,27 +192,45 @@ def cases_by_id(db_path: Path, case_ids: list[str]) -> list[dict]:
     return [_case_view(row) for row in rows]
 
 
-def resolve_case(db_path: Path, case_id: str, status: str, resolution_code: str, note: str, now: str) -> dict:
-    """Back-office step: one decision on one case."""
+def resolve_case(db_path: Path, case_id: str, status: str, resolution_code: str, note: str, now: str, decision_id: str) -> dict:
+    """Back-office step: a decision on one case. Cases decided in one batch share a decision_id."""
     with closing(_connect(db_path)) as conn, conn:
         conn.execute(
-            "UPDATE cases SET status = ?, resolution_code = ?, resolution_note = ?, resolved_at = ? WHERE case_id = ?",
-            (status, resolution_code, note, now, case_id),
+            "UPDATE cases SET status = ?, resolution_code = ?, resolution_note = ?, resolved_at = ?, decision_id = ? WHERE case_id = ?",
+            (status, resolution_code, note, now, decision_id, case_id),
         )
         row = conn.execute("SELECT * FROM cases WHERE case_id = ?", (case_id,)).fetchone()
     return _case_view(row) if row else {"error": f"no case {case_id}: the dispute it stands for was never filed"}
 
 
-def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, held: bool, now: str) -> dict:
-    """Send a message now, or hold the draft for a reviewer when `held`."""
-    with closing(_connect(db_path)) as conn, conn:
-        cursor = conn.execute(
-            "INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_id, channel, body, followup_id, "held" if held else "sent", now, None if held else now),
-        )
-        row = conn.execute("SELECT * FROM outbound_messages WHERE message_id = ?", (cursor.lastrowid,)).fetchone()
+def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, held: bool, now: str) -> dict | None:
+    """Send a message now, or hold the draft for a reviewer when `held`. None if this follow-up already has its message."""
+    try:
+        with closing(_connect(db_path)) as conn, conn:
+            cursor = conn.execute(
+                "INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (user_id, channel, body, followup_id, "held" if held else "sent", now, None if held else now),
+            )
+            row = conn.execute("SELECT * FROM outbound_messages WHERE message_id = ?", (cursor.lastrowid,)).fetchone()
+    except sqlite3.IntegrityError:
+        return None
     return dict(row)
+
+
+def failed_verifications(db_path: Path, user_id: str, now: str) -> int:
+    """Failed step-up attempts in the lock window, since the account's last success."""
+    since = format_instant(parse_instant(now) - timedelta(hours=VERIFICATION_LOCK_HOURS))  # instants are stored normalised
+    with closing(_connect(db_path)) as conn:
+        last_ok = conn.execute("SELECT MAX(at) FROM verification_attempts WHERE user_id = ? AND succeeded = 1", (user_id,)).fetchone()[0]
+        start = max(since, last_ok) if last_ok else since
+        return conn.execute("SELECT COUNT(*) FROM verification_attempts WHERE user_id = ? AND succeeded = 0 AND at > ?",
+                            (user_id, start)).fetchone()[0]
+
+
+def record_verification(db_path: Path, user_id: str, succeeded: bool, now: str) -> None:
+    with closing(_connect(db_path)) as conn, conn:
+        conn.execute("INSERT INTO verification_attempts VALUES (?, ?, ?)", (user_id, format_instant(parse_instant(now)), int(succeeded)))
 
 
 def release_message(db_path: Path, message_id: int, reviewer: str, now: str) -> None:
