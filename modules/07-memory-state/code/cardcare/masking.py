@@ -61,13 +61,27 @@ _MONTHS = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
 _MONTH = re.compile(_MONTHS + r"$", re.IGNORECASE)
 _LAST_FOUR_CUE = re.compile(r"(ending|ends|ended)(\s+(in|with|on))?\W*$|last\s+(4|four)(\s+digits?)?(\s+of\s+(my|the)\s+card)?"
                             r"(\s+(are|is|were|was))?\W*$|last\s+digits(\s+(are|is))?\W*$", re.IGNORECASE)
+# "ok just the last four then: 4689", "you only need the last four? It's 4427": the cue may sit a few words before the number
+_LAST_FOUR_LOOSE = re.compile(r"\b(last\s+(4|four)(\s+digits?)?|ending(\s+(in|with))?|ends\s+(in|with))\b(?P<tail>[^\d\n]{0,25})$", re.IGNORECASE)
+# a number after one of these labels is that kind of reference, unless it is itself a valid card number
+_REFERENCE_CUE = re.compile(r"\b(tracking|order|booking|reference|ref|confirmation|invoice|ticket|receipt|claim|serial|parcel|shipment)"
+                            r"(\s+(number|no\.?|num|id|code|#))?\s*[:#]?\s*$", re.IGNORECASE)
+_CARD_CUE = re.compile(r"\b(card\s*(number|no\.?|num|#|:)|card\s+is|number\s+is|the\s+number|my\s+card\s+(number|is)|cc|visa|mastercard|"
+                       r"amex|discover|digits\s+are)\b", re.IGNORECASE)
+# an expiry cue about something other than the card ("exp. delivery 11/24", "travel notice expiration 12/10")
+_NOT_CARD_EXPIRY = re.compile(r"\b(notice|subscription|delivery|deliver|membership|trial|offer|warranty|passport|licen[cs]e|plan|contract|"
+                              r"lease|insurance|coupon|voucher|domain|prescription|visa\s+application|reservation|booking)\b", re.IGNORECASE)
+# a message answering the step-up: a last four with its usual words, or a ZIP
+_VERIFICATION_ANSWER = re.compile(r"\b(zip|zip\s*code|postal\s*code|postcode|card\s+ending|ending\s+in|last\s+(4|four))\b[^\d\n]{0,25}\d",
+                                  re.IGNORECASE)
 _ZIP_CUE = re.compile(r"\b(zip|zip\s*code|postal\s*code|post\s*code|postcode)(\s+(is|was|=))?\W*$", re.IGNORECASE)
 _YEAR_CUE = re.compile(r"\b(since|in|year|from|of|until|till|by)\W*$", re.IGNORECASE)
 _PHONE_CUE = re.compile(r"\b(call|phone|tel|telephone|mobile|cell|text me|whatsapp)\b[^.\n]{0,20}$", re.IGNORECASE)
 _CODE_CUE = re.compile(
     r"\b(cvv2?|cvc2?|cid|csc|cvn|security\s+(code|number|digits)|card\s+code|verification\s+(code|value|number)|"
     r"(code|number|digits?)\s+(on|at|from)\s+(the\s+)?(back|reverse|front)|(on|at)\s+the\s+(back|reverse)(\s+of\s+(my|the)\s+card)?|"
-    r"back\s+of\s+(my|the)?\s*card|signature\s+(strip|panel|box)|(three|3|four|4)[\s-]+digits?(\s+code)?)\b", re.IGNORECASE)
+    r"back\s+of\s+(my|the)?\s*card|signature\s+(strip|panel|box|line)|(by|next\s+to|beside|near|on|at)\s+the\s+signature|"
+    r"(three|3|four|4)[\s-]+(digits?|numbers?)(\s+code)?)\b", re.IGNORECASE)
 _WEAK_CODE_CUE = re.compile(r"\bcode\b", re.IGNORECASE)  # "my code is 737": for 3 digits only
 _EXPIRY_CUE = re.compile(r"\b(exp|expiry|expiration|exp\.?\s*date|valid\s+(thru|through|until|till)|good\s+(thru|through)|"
                          r"(card|it)\s+expires)\b", re.IGNORECASE)
@@ -218,7 +232,7 @@ def _classify(tokens: list[dict], text: str) -> None:
             t["role"] = "time"
         elif _ZIP_CUE.search(before) and len(t["digits"]) in (5, 9) and not joined_next:
             t["role"] = "zip"
-        elif _LAST_FOUR_CUE.search(before) and len(t["digits"]) == 4 and not joined_next:
+        elif len(t["digits"]) == 4 and not joined_next and (_LAST_FOUR_CUE.search(before) or _last_four_loose(before)):
             t["role"] = "last4"
             # "my last four is 4427/5127": an alternative right after it is a last four too
             if nxt and nxt["text"] in ("/", ",") and nxt2 and nxt2["digits"] and len(nxt2["digits"]) == 4 and nxt2["start"] - t["end"] <= 3:
@@ -227,6 +241,33 @@ def _classify(tokens: list[dict], text: str) -> None:
             t["role"] = "year"
     _classify_dates(tokens, text)
     _classify_phones(tokens, text)
+    _classify_references(tokens, text)
+
+
+def _last_four_loose(before: str) -> bool:
+    match = _LAST_FOUR_LOOSE.search(before)
+    return bool(match) and len(re.findall(r"[^\W\d_]+", match.group("tail"))) <= 3
+
+
+def _classify_references(tokens: list[dict], text: str) -> None:
+    """A run of digits right after "tracking", "order #", "booking ref" ... is that reference, unless the run is itself a
+    valid card number (a label never hides a card)."""
+    for i, t in enumerate(tokens):
+        if t["digits"] is None or t["role"] or t["spoken"] or not _REFERENCE_CUE.search(_before(text, t, 30)):
+            continue
+        run = [t]
+        for nxt in tokens[i + 1:]:
+            if nxt["digits"] is not None and not nxt["spoken"] and nxt["role"] is None and nxt["start"] - run[-1]["end"] <= 3 \
+                    and not re.search(r"[^\W\d_]|\n", text[run[-1]["end"]:nxt["start"]]):
+                run.append(nxt)
+            elif nxt["digits"] is None and nxt["kind"] == "symbol" and nxt["start"] - run[-1]["end"] <= 1:
+                continue
+            else:
+                break
+        digits = _digits(run)
+        if not (13 <= len(digits) <= 19 and _card_prefix(digits) and _passes_luhn(digits)):
+            for x in run:
+                x["role"] = "reference"
 
 
 def _classify_dates(tokens: list[dict], text: str) -> None:
@@ -270,7 +311,9 @@ def _classify_dates(tokens: list[dict], text: str) -> None:
         sep, year = tokens[i + 1], tokens[i + 2]
         if sep["text"] in ("/", "-", ".") and year["digits"] and year["role"] is None and len(t["digits"]) <= 2 \
                 and 1 <= int(t["digits"]) <= 12 and len(year["digits"]) in (2, 4) and sep["start"] - t["end"] <= 1 and year["start"] - sep["end"] <= 1 \
-                and (len(year["digits"]) == 2 or year["digits"][:2] == "20"):
+                and (len(year["digits"]) == 2 or year["digits"][:2] == "20") \
+                and not (i + 4 < len(tokens) and tokens[i + 3]["text"] in ("/", "-") and tokens[i + 3]["start"] == year["end"]
+                         and tokens[i + 4]["digits"] and tokens[i + 4]["start"] == tokens[i + 3]["end"]):
             t["role"] = year["role"] = "month_pair"
 
 
@@ -302,6 +345,8 @@ def _passes_luhn(digits: str) -> bool:
 
 
 def _card_prefix(digits: str) -> bool:
+    if len(digits) < 4:
+        return False
     if digits[0] in "456":
         return True
     if digits[0] == "3":
@@ -309,7 +354,7 @@ def _card_prefix(digits: str) -> bool:
     return digits[0] == "2" and 2221 <= int(digits[:4]) <= 2720
 
 
-def _card_grouping(lengths: list[int], spoken: bool) -> bool:
+def _card_grouping(lengths: list[int], spoken: bool, digits: str = "") -> bool:
     """How a card is written in groups: 4s (or 8s, 12s) with a last group no longer than the one before it, equal
     groups with a shorter last one (6-6-4), Amex 4-6-5, Diners 4-6-4; spoken groups and a single group are free."""
     if spoken or len(lengths) == 1:
@@ -321,7 +366,7 @@ def _card_grouping(lengths: list[int], spoken: bool) -> bool:
         else:
             merged.append(n)
     lengths = merged
-    if len(lengths) == 1:
+    if len(lengths) == 1 or (lengths == [5, 5, 5] and digits[:2] in ("34", "37")):  # an Amex read in fives
         return True
     head, last = lengths[:-1], lengths[-1]
     return lengths in ([4, 6, 5], [4, 6, 4]) or (all(n % 4 == 0 for n in head) and (last % 4 == 0 or last <= head[-1])) or \
@@ -333,6 +378,8 @@ def _runs(tokens: list[dict], text: str, message: int = 0, fine: bool = False) -
     its own that may only END a card number: the last group of a card read out loud is its last four."""
     runs: list[list[dict]] = []
     for t in (t for t in tokens if t["digits"] is not None and t["role"] in (None, "last4", "year")):
+        if runs:
+            t["words_before"] = bool(re.search(r"[^\W\d_]", text[runs[-1][-1]["end"]:t["start"]].replace("REDACTED", "")))
         if runs and t["role"] != "last4" and runs[-1][-1]["role"] != "last4":
             gap = text[runs[-1][-1]["end"]:t["start"]]
             # one line, separators only; for codes (`fine`), a sentence or list break (". ", ", ", " / ") starts a new run too
@@ -368,17 +415,27 @@ def _card_sequences_in(runs: list[list[dict]]) -> list[list[dict]]:
                 pieces = [run for run in runs[i:j]] + [runs[j][:cut]]
                 tokens = [t for run in pieces for t in run]
                 digits = _digits(tokens)
+                last = tokens[-1]
+                # a number run into its code: one spoken group, or one long written token, with 3-4 code digits on the end
+                if cut == len(runs[j]) and (last["spoken"] or len(last["digits"]) >= 16) and len(digits) <= 23 and _card_prefix(digits):
+                    tails = [k for k in ((1, 2, 3, 4) if last["spoken"] else (3, 4)) if k < len(last["digits"])]
+                    if any(13 <= len(digits) - k <= 19 and _passes_luhn(digits[:-k]) for k in tails):
+                        found.append(tokens)
+                        break
                 if not 13 <= len(digits) <= 19 or not _card_prefix(digits):
                     continue
                 spoken = all(t["spoken"] for t in tokens)
                 lengths = [len(_digits(run)) for run in pieces] if any(t["spoken"] for t in tokens) else [len(t["digits"]) for t in tokens]
-                if _passes_luhn(digits) and (len(pieces) == 1 or _card_grouping(lengths, spoken)):
+                if _passes_luhn(digits) and (len(pieces) == 1 or _card_grouping(lengths, spoken, digits)):
                     found.append(tokens)
                     break
                 # a mistyped card: one written run, card grouping, Luhn fails
-                if len(pieces) == 1 and cut == len(runs[j]) and not spoken and (
-                        [len(t["digits"]) for t in tokens] in ([4, 4, 4, 4], [4, 6, 5], [4, 4, 4, 4, 3]) or
-                        (len(tokens) == 1 and len(digits) in (15, 16))):
+                # ... or pasted one group per line, nothing but line breaks and list markers between the groups
+                shape = [len(t["digits"]) for t in tokens]
+                one_message = len({t.get("message", 0) for t in tokens}) == 1
+                no_words = not any(t.get("words_before") for run in pieces[1:] for t in run[:1])
+                if cut == len(runs[j]) and not spoken and one_message and (len(pieces) == 1 or no_words) and (
+                        shape in ([4, 4, 4, 4], [4, 6, 5], [4, 4, 4, 4, 3], [5, 5, 5]) or (len(tokens) == 1 and len(digits) in (15, 16))):
                     found.append(tokens)
                     break
             total += len(_digits(runs[j]))
@@ -433,7 +490,7 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
     for i, t in enumerate(tokens):
         if t["role"] not in ("month_pair", "month_year") or inside(t):
             continue
-        cue = _EXPIRY_CUE.search(_before(text, t, 30))
+        cue = _card_expiry_cue(_before(text, t, 30), text, t)
         if card_context or cue:
             if t["role"] == "month_pair":
                 partner = next((x for x in tokens[i + 1:i + 3] if x["role"] == "month_pair"), None)
@@ -445,9 +502,22 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
     # a spoken expiry after a cue: "exp twelve twenty-nine" (one spoken group "1229")
     for t in tokens:
         if t["spoken"] and not inside(t) and t["role"] is None and len(t["digits"]) == 4 and 1 <= int(t["digits"][:2]) <= 12 \
-                and (card_context or _EXPIRY_CUE.search(_before(text, t, 30))):
+                and (card_context or _card_expiry_cue(_before(text, t, 30), text, t)):
             spans.append((t["start"], t["end"], EXPIRY_MASK))
     return spans
+
+
+def _card_expiry_cue(before: str, text: str, token: dict) -> bool:
+    """An expiry cue right before the date ("exp 12/29", "expiry date: 12/29"), and not about something else
+    ("exp. delivery 11/24", "my travel notice expiration should be 12/10")."""
+    for cue in _EXPIRY_CUE.finditer(before):
+        between = before[cue.end():]
+        context = text[max(0, token["start"] - len(before) - 30):token["start"] - len(before) + cue.start()]
+        between = re.sub(_MONTHS + r"\.?[\W_]*$", "", between, flags=re.IGNORECASE)  # "expiry December 2029": the month is the expiry's
+        if re.fullmatch(r"[\W_]*((date|is|was|on|of|should\s+be|reads?|says?)[\W_]+)*", between, re.IGNORECASE) \
+                and not _NOT_CARD_EXPIRY.search(context + " " + between):
+            return True
+    return False
 
 
 def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[str, dict[int, str]]:
@@ -468,6 +538,9 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
         earlier_tokens = [dict(t, message=index) for t in _tokens(earlier_text)]
         for run in _runs(earlier_tokens, earlier_text, index):
             earlier.append([dict(t, message=index) for t in run])
+    answers = {index for index in window if _VERIFICATION_ANSWER.search(previous[index])}
+    if _VERIFICATION_ANSWER.search(text):
+        answers.add(len(previous))
     if earlier:
         current = [[dict(t, message=len(previous)) for t in run] for run in runs]
         combined = earlier + current
@@ -476,14 +549,42 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
             there = [t for t in seq if t["message"] != len(previous)]
             if not here or not there:
                 continue
+            involved = {t["message"] for t in seq}
+            # verification answers typed in turn ("hmm, 2425?", "try 0634", "card ending 8230, ZIP 81775") can pass Luhn
+            # together by chance: they complete a card number only if the customer said they were giving one
+            texts = [normalize(previous[i]) if i < len(previous) else text for i in involved]
+            if involved & answers and not any(_CARD_CUE.search(x) for x in texts):
+                continue
             spans.append((here[0]["start"], here[-1]["end"], CARD_DIGITS_MASK))
             for index in {t["message"] for t in there}:
                 part = [t for t in there if t["message"] == index]
                 rewrites.setdefault(index, []).append((part[0]["start"], part[-1]["end"], CARD_DIGITS_MASK))
+    # a card number here corrects a mistyped one sent just before ("4000 0566 5562 5556" ... "no wait, 4000 0566 5566 5556"):
+    # the earlier, nearly identical number is card data too
+    for seq in _card_sequences(runs):
+        digits = _digits(seq)
+        for index in window:
+            earlier_text = normalize(previous[index])
+            earlier_runs = _runs(_tokens(earlier_text), earlier_text)
+            for a in range(len(earlier_runs)):
+                for b in range(a + 1, min(len(earlier_runs), a + 8) + 1):
+                    piece = [t for run in earlier_runs[a:b] for t in run]
+                    if len(_digits(piece)) >= 12 and abs(len(_digits(piece)) - len(digits)) <= 2 and _edit_distance(_digits(piece), digits) <= 2:
+                        rewrites.setdefault(index, []).append((piece[0]["start"], piece[-1]["end"], CARD_DIGITS_MASK))
     card_context = bool(spans) or any(CARD_NUMBER_MASK in p or CARD_DIGITS_MASK in p for p in previous[-2:]) \
-        or bool(_EXPIRY_CUE.search(text)) or bool(re.search(r"\b(cvv2?|cvc2?|cid|csc|security\s+code|card\s+number)\b", text, re.IGNORECASE))
+        or any(_card_expiry_cue(text[:t["start"]][-30:], text, t) for t in tokens if t["role"] in ("month_pair", "month_year")) \
+        or bool(re.search(r"\b(cvv2?|cvc2?|cid|csc|security\s+code|card\s+number)\b", text, re.IGNORECASE))
     spans += _code_and_expiry_spans(tokens, text, card_context, spans)
     return _replace(text, spans), {index: _replace(normalize(previous[index]), parts) for index, parts in rewrites.items()}
+
+
+def _edit_distance(a: str, b: str) -> int:
+    row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, cb in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
+    return row[-1]
 
 
 def mask_customer_text(text: str, previous_customer_texts: tuple[str, ...] = ()) -> str:

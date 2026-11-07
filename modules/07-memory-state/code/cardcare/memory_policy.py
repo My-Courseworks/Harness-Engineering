@@ -18,7 +18,8 @@ DEFAULT_CHANNEL = "secure_message"
 FACT_KEYS = ("contact_channel", "travel_notice")
 # Changing where the bank contacts a customer is a classic account-takeover step, and so is removing the channel
 # (messages would then go to the app, which whoever holds the phone reads): writing or deleting this key, unlike a
-# travel notice, needs a fresh step-up verification. So does erasing everything (request_memory_erasure).
+# travel notice, needs a fresh step-up verification. Erasing everything does not: the login is enough to exercise the
+# right to erasure, and an erasure gives whoever holds the phone nothing (round 4 tried a gate and reverted it).
 FACT_KEYS_NEEDING_VERIFICATION = ("contact_channel",)
 
 # A fact is preloaded into every later system prompt, so its value is data with a grammar, never free text: a
@@ -115,10 +116,18 @@ def render_profile(facts: dict[str, dict], now: str) -> str:
     return "\n".join(lines)
 
 
-def typed_in_session(customer_texts: list[str], *values: str) -> bool:
-    """Did the customer type each of these values in this conversation (as a whole number, not inside a longer one)?
-    verify_identity accepts only such values: digits remembered from an earlier conversation, guessed or filled in
-    never verify anyone."""
+def typed_in_session(customer_texts: list[str], *values: str, turn_times: list[str] | None = None, now: str | None = None) -> bool:
+    """Did the customer type each of these values in this conversation, in the last VERIFICATION_TTL_MINUTES (as a whole
+    number, not inside a longer one)? verify_identity accepts only such values: digits remembered from an earlier
+    conversation, guessed or filled in never verify anyone, and digits typed longer ago than a step-up lasts do not
+    renew it (a step-up proves possession now; the chat's scrollback is visible to whoever holds the phone).
+    `turn_times` are the harness instants of the customer's messages, oldest first, aligned from the end."""
+    if turn_times and now:
+        recent = []
+        for text, at in zip(reversed(customer_texts), reversed(turn_times)):
+            if (parse_instant(now) - parse_instant(at)).total_seconds() <= VERIFICATION_TTL_MINUTES * 60:
+                recent.append(text)
+        customer_texts = recent
     said = "\n".join(customer_texts)
     return all(str(v).strip() and re.search(rf"(?<!\d){re.escape(str(v).strip())}(?!\d)", said) for v in values)
 

@@ -6,8 +6,9 @@ Each customer has a memory generation, and every session is registered with the 
     lets the write through only if the writing session's generation is current. A session that started before the
     erasure, including the one the customer asked in, can write nothing more, whatever runs concurrently;
   - the erasure then deletes facts, episodes, reminders and their notes, and every transcript except the one the
-    request was made in, which is still running. That one is deleted when it ends (end of session, idle close by
-    maintenance, or the customer's next turn in another session) and its request is then marked executed;
+    request was made in, which is still running. That one is deleted at its end, at the next maintenance run, or at the
+    customer's next turn in another session, whichever comes first, and its request is then marked executed. It
+    stays registered as stale, so if the chat goes on, it still stores nothing;
   - scheduled work created in an older generation can no longer write memory either: a reminder is cancelled with
     the rest, and a case follow-up, which must still reach the customer, runs without storing a session at all.
 Bank records (cases, the ledger, messages already sent) are not memory and are not touched. This database keeps
