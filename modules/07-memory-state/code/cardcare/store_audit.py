@@ -38,7 +38,8 @@ def auditor_text(data: bytes | str) -> str:
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
     text = unicodedata.normalize("NFKC", text)
     # a UUID (a LangGraph message or checkpoint id) is never card data; its digit groups ("…-a296-4321-…") are not codes
-    text = re.sub(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", " ", text)
+    # (also back to back), replaced by filler of the same length so the distance between other digits does not shrink
+    text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", lambda m: "#" * len(m.group()), text)
     return "".join(str(unicodedata.decimal(ch)) if ch.isdecimal() and not ch.isascii() else ch for ch in text)
 
 
@@ -152,8 +153,8 @@ def expiry_present(text: str, expiry: str) -> bool:
     yy = year[-2:]
     sep = r"\s*[/\-.]\s*|\s+"
     patterns = [
-        rf"(?<![\d\-:/.$]){month_number:02d}(?:{sep})(?:20)?{yy}(?!\d)(?![:.]\d)",
-        rf"(?<![\d\-:/.$]){month_number}(?:{sep})(?:20)?{yy}(?!\d)(?![:.]\d)" if month_number < 10 else None,
+        rf"(?<![0-9A-Za-z\-:/.$]){month_number:02d}(?:{sep})(?:20)?{yy}(?![0-9A-Za-z])(?![:.]\d)",
+        rf"(?<![0-9A-Za-z\-:/.$]){month_number}(?:{sep})(?:20)?{yy}(?![0-9A-Za-z])(?![:.]\d)" if month_number < 10 else None,
         rf"\b{month_name}[a-z]*\.?,?\s*(?:20\s?)?{yy}\b",
     ]
     for view_text in (text, _spoken_to_digits(text)):

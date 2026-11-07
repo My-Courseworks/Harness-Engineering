@@ -370,8 +370,12 @@ def main() -> None:
     cell = lambda v: repr(v).replace("|", "\\|")
     shown = [r for r in rows if not r[0]] + (rows[:30] if generated else rows)
     for ok, case, stored, why in shown:
-        lines.append(f"| {'pass' if ok else '**FAIL**'} | {case['expect']} | {case.get('note', '')} | {cell(case['messages'])} | "
-                     f"{cell(stored)} | {why} |")
+        # a randomly generated number could be someone's real card (A20): such a case is described, never printed
+        if any(pan not in _TEST_PANS for pan in case.get("pans", [])):
+            messages = stored_cell = "(uses a randomly generated card number, not printed; regenerate it locally from the seed)"
+        else:
+            messages, stored_cell = cell(case["messages"]), cell(stored)
+        lines.append(f"| {'pass' if ok else '**FAIL**'} | {case['expect']} | {case.get('note', '')} | {messages} | {stored_cell} | {why} |")
     out_path = CODE_DIR / "evidence" / "redaction" / f"{out_name}.md"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n")
