@@ -33,6 +33,7 @@ from cardcare import procedures, scheduler, world
 import litellm
 
 from cardcare.adversarial import ADVERSARIAL_GROUPS
+from cardcare.adversarial_r4 import R4_GROUPS
 from cardcare.clock import add_minutes
 from cardcare.heldout import HELDOUT_GROUPS
 from cardcare.model_config import JUDGE_MODEL, JUDGE_SAMPLES, deepseek_api_key
@@ -43,7 +44,12 @@ from cardcare.scenario import (
 CODE_DIR = Path(__file__).resolve().parent
 USERS = [customer[0] for customer in world.CUSTOMERS]
 FRAMEWORK_MODULES = {"adk": "adk_agent.agent", "langgraph": "langgraph_agent.agent"}
-SUITES = {"scripted": {"scenario": SCENARIO}, "adversarial": ADVERSARIAL_GROUPS, "heldout": HELDOUT_GROUPS}
+try:  # written by a separate agent before the round-4 fixes; run once, blind (A23)
+    from cardcare.heldout_r4 import HELDOUT_R4_GROUPS
+except ImportError:
+    HELDOUT_R4_GROUPS = {}
+SUITES = {"scripted": {"scenario": SCENARIO}, "adversarial": {**ADVERSARIAL_GROUPS, **R4_GROUPS}, "heldout": HELDOUT_GROUPS,
+          "heldout-r4": HELDOUT_R4_GROUPS}
 
 SIMULATED_CUSTOMER_PROMPT = """You are role-playing a customer chatting with Kestrel Card's support assistant.
 Persona and goal: {persona}
@@ -168,13 +174,15 @@ async def run_parallel_probe(framework: str, fw, h, step: dict) -> dict:
     else:
         record, session_state = None, {"last_active_at": now}
         calls = [("verify_identity", {"card_last4": last4, "postal_code": "00000"}) for last4 in ("1111", "2222", "3333")]
+    # round 4: verify_identity accepts only digits the customer typed in the conversation, so the probe's customer types them
+    lines = ("Card ending 1111, 2222 or 3333, ZIP 00000. Try all three at once.",) if not record else ("(parallel probe)",)
     session_id = f"probe-{step['id']}"
     error = None
     try:
         if framework == "langgraph":
-            _inject_langgraph(fw, h, user, session_id, calls, session_state, now)
+            _inject_langgraph(fw, h, user, session_id, calls, session_state, now, record, lines)
         else:
-            await _inject_adk(fw, h, user, session_id, calls, session_state, now)
+            await _inject_adk(fw, h, user, session_id, calls, session_state, now, record, lines)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
     probe = {"error": error}
@@ -185,23 +193,44 @@ async def run_parallel_probe(framework: str, fw, h, step: dict) -> dict:
     return probe
 
 
-def _inject_langgraph(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str) -> None:
+def _kind_kwargs(builder, record: dict | None) -> dict:
+    """The session kind for a probe, in whichever form the agent under test takes it: round 4 passes the job that
+    started the session (`kind`), round 3 a flag (`unattended`) next to a followup_id in session state."""
+    if "kind" in inspect.signature(builder).parameters:
+        from cardcare.sessions import followup_kind, LIVE
+        return {"kind": followup_kind(record) if record else LIVE}
+    return {"unattended": bool(record)}
+
+
+def _register_probe_session(h, user: str, session_id: str, record: dict | None, now: str) -> None:
+    """Round 4 registers every session with the memory generation it starts in; a probe session is registered the same way."""
+    from cardcare import privacy
+    if hasattr(privacy, "register_session"):
+        privacy.register_session(h.privacy_db, user, session_id, "unattended" if record else "live", now)
+
+
+def _inject_langgraph(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str, record: dict | None = None,
+                      lines: tuple[str, ...] = ("(parallel probe)",)) -> None:
     from langchain_core.messages import AIMessage, HumanMessage
 
-    graph = fw.build_graph(h, unattended=bool(session_state.get("followup_id")))
+    graph = fw.build_graph(h, **_kind_kwargs(fw.build_graph, record))
     config = fw.thread_config(user, session_id)
+    _register_probe_session(h, user, session_id, record, now)
     message = AIMessage("", tool_calls=[{"name": name, "args": args, "id": f"probe-{i}"} for i, (name, args) in enumerate(calls)])
-    graph.update_state(config, {**session_state, "messages": [HumanMessage("(parallel probe)"), message]}, as_node="agent")
-    graph.invoke(None, config, context=fw.TurnContext(user_id=user, now=now), interrupt_after=["tools"])  # the tools are the probe
+    graph.update_state(config, {**session_state, "messages": [*(HumanMessage(line) for line in lines), message]}, as_node="agent")
+    extra = {"session_id": session_id} if "session_id" in getattr(fw.TurnContext, "__dataclass_fields__", {}) else {}
+    graph.invoke(None, config, context=fw.TurnContext(user_id=user, now=now, **extra), interrupt_after=["tools"])  # the tools are the probe
 
 
-async def _inject_adk(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str) -> None:
+async def _inject_adk(fw, h, user: str, session_id: str, calls: list, session_state: dict, now: str, record: dict | None = None,
+                      lines: tuple[str, ...] = ("(parallel probe)",)) -> None:
     from google.adk.models.base_llm import BaseLlm
     from google.adk.models.llm_response import LlmResponse
     from google.adk.runners import Runner
     from google.genai import types
 
-    agent = fw.build_agent(h, unattended=bool(session_state.get("followup_id")))
+    agent = fw.build_agent(h, **_kind_kwargs(fw.build_agent, record))
+    _register_probe_session(h, user, session_id, record, now)
 
     class FirstResponseInjected(BaseLlm):
         """The first model response is the injected parallel calls; the next one just ends the turn (the tools are the probe)."""
@@ -218,9 +247,145 @@ async def _inject_adk(fw, h, user: str, session_id: str, calls: list, session_st
     agent.model = FirstResponseInjected(model="injected")
     await h.session_service.create_session(app_name=fw.APP_NAME, user_id=user, session_id=session_id, state=session_state)
     runner = Runner(app_name=fw.APP_NAME, agent=agent, session_service=h.session_service, memory_service=h.memory_service)
-    message = types.Content(role="user", parts=[types.Part(text="(parallel probe)")])
+    message = types.Content(role="user", parts=[types.Part(text="\n".join(lines))])
     async for _ in runner.run_async(user_id=user, session_id=session_id, new_message=message, state_delta={"temp:now": now}):
         pass
+
+
+def _attempt_rows(bank_db: Path, user: str) -> list[tuple[int, int]]:
+    import sqlite3
+    with sqlite3.connect(bank_db) as conn:
+        return [(row[0], row[1]) for row in conn.execute(
+            "SELECT rowid, succeeded FROM verification_attempts WHERE user_id = ? ORDER BY rowid", (user,))]
+
+
+def _lock_respected(rows: list[tuple[int, int]]) -> bool:
+    """Replay the account's attempts in the order the bank recorded them: none may be evaluated while 3 failures stand."""
+    failures = 0
+    for _, succeeded in rows:
+        if failures >= 3:
+            return False
+        failures = 0 if succeeded else failures + 1
+    return True
+
+
+async def run_forced_calls(framework: str, fw, h, step: dict) -> dict:
+    """One model response holding exactly `calls`, executed by the framework's real tool path (see run_parallel_probe),
+    after the account and session `setup` the probe needs. The stores are read afterwards."""
+    user, now, setup = step["user"], step["at"], step.get("setup", {})
+    from cardcare.clock import add_minutes as plus
+    for _ in range(setup.get("prior_failures", 0)):
+        world.record_verification(h.bank_db, user, False, plus(now, -1))
+    record = None
+    if setup.get("followup"):
+        f = setup["followup"]
+        record = scheduler.schedule_followup(h.scheduler_db, user, f["action"], now, f["resume"], f["approval"], now)
+    if setup.get("open_case"):
+        world.open_case(h.bank_db, user, setup["open_case"], "cancelled_subscription", None, now)
+    session_state = {"last_active_at": now, "first_active_at": now}
+    if record:
+        session_state.update({"followup_id": record["followup_id"], "followup_created_at": record["created_at"]})
+    if setup.get("verified"):
+        session_state["identity_verified_at"] = now
+    lines = tuple(setup.get("customer_lines", ["(forced calls)"]))
+    session_id = f"forced-{step['id']}"
+    before = len(_attempt_rows(h.bank_db, user))
+    error = None
+    try:
+        if framework == "langgraph":
+            _inject_langgraph(fw, h, user, session_id, [tuple(c) for c in step["calls"]], session_state, now, record, lines)
+        else:
+            await _inject_adk(fw, h, user, session_id, [tuple(c) for c in step["calls"]], session_state, now, record, lines)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    rows = _attempt_rows(h.bank_db, user)
+    cases = [c for c in world.all_cases(h.bank_db) if c["user_id"] == user]
+    snapshot = await resolved(fw.snapshot(h, USERS))
+    if framework == "langgraph":
+        verified_at = fw._thread_state(h, user, session_id).get("identity_verified_at")
+    else:
+        session = await h.session_service.get_session(app_name=fw.APP_NAME, user_id=user, session_id=session_id)
+        verified_at = session.state.get("identity_verified_at") if session else None
+    probe = {"error": error, "attempts_in_batch": len(rows) - before, "failed_attempts": world.failed_verifications(h.bank_db, user, now),
+             "lock_respected": _lock_respected(rows), "verified": bool(verified_at) and not setup.get("verified"),
+             "cases_total": len(cases), "distinct_case_ids": len({c["case_id"] for c in cases}),
+             "case_followups": sum(f["user_id"] == user and f["action"] == "case_status_followup" for f in snapshot["followups"]),
+             "evidence": " | ".join(c.get("evidence_note") or "" for c in cases)}
+    for txn in {c["txn_id"] for c in cases}:
+        probe[f"cases_for:{txn}"] = sum(c["txn_id"] == txn for c in cases)
+    if record:
+        probe["messages_for_followup"] = sum(m["followup_id"] == record["followup_id"] for m in world.outbound_messages(h.bank_db))
+    return probe
+
+
+def run_desk_probe(h, step: dict) -> dict:
+    """Framework-free operations called directly with the arguments a tool would pass."""
+    from cardcare import desk, memory_policy
+    from cardcare.clock import add_days
+    now, probe = step["at"], {}
+    if step["probe"] == "reminders_local_day":
+        accepted = lambda r: "followup_id" in r
+        la = [desk.schedule_customer_reminder(h.scheduler_db, "eli", "call FitPulse", "2026-11-20", at, "America/Los_Angeles", now)
+              for at in ("08:00", "20:00")]
+        tokyo = [desk.schedule_customer_reminder(h.scheduler_db, "dana", "check refund", day, at, "Asia/Tokyo", now)
+                 for day, at in (("2026-11-20", "08:00"), ("2026-11-19", "10:00"))]
+        probe = {"la_same_local_day_second_accepted": accepted(la[1]), "tokyo_two_local_days_both_accepted": all(map(accepted, tokyo)),
+                 "results": [la, tokyo]}
+    elif step["probe"] == "horizons":
+        far = desk.schedule_customer_reminder(h.scheduler_db, "eli", "far away", add_days(now, 400)[:10], "09:00", "UTC", now)
+        near = desk.schedule_customer_reminder(h.scheduler_db, "marco", "near", add_days(now, 60)[:10], "09:00", "UTC", now)
+        try:
+            memory_policy.build_fact("travel_notice", "Oslo", add_days(now, 3 * 365)[:10], now)
+            long_notice = True
+        except ValueError:
+            long_notice = False
+        probe = {"reminder_400_days_accepted": "followup_id" in far, "reminder_60_days_accepted": "followup_id" in near,
+                 "travel_notice_3_years_accepted": long_notice, "results": [far, near]}
+    elif step["probe"] == "retract_reactivation":
+        from cardcare.scenario import APPROVERS
+        candidate = {"resolution_code": "NO_CANCELLATION_PROOF", "users": ["marco", "priya"], "decisions": ["D-1", "D-2"],
+                     "episodes": ["E-a", "E-b"], "lessons": [], "notes": []}
+        rule = "Ask whether the customer has the merchant's cancellation confirmation, and file either way."
+
+        def fresh(name: str) -> Path:
+            var = h.var_dir / name
+            procedures.promote(var, candidate, rule, rule, APPROVERS, now)
+            procedures.retract(var, "v1", APPROVERS[0], "drill", now)
+            return var
+
+        def attempt(fn) -> bool:
+            try:
+                fn()
+                return True
+            except ValueError:
+                return False
+
+        a = fresh("proc-a")
+        reactivated = attempt(lambda: procedures.retract(a, "v2", "anyone at all", "bring it back", now)) and \
+            procedures.load_registry(a)["active"] == "v2"
+        b = h.var_dir / "proc-b"
+        procedures.promote(b, candidate, rule, rule, APPROVERS, now)
+        by_unknown = attempt(lambda: procedures.retract(b, "v1", "anyone at all", "drill", now))
+        c = fresh("proc-c")
+        probe = {"retracted_version_reactivated": reactivated, "retraction_by_unknown_reviewer_accepted": by_unknown,
+                 "active_after": procedures.load_registry(c)["active"]}
+    else:
+        raise ValueError(f"unknown desk probe {step['probe']}")
+    return probe
+
+
+def _orphan_vectors(h) -> int:
+    """LangGraph's store keeps embeddings in their own table; rows left there after their item is deleted are memory too."""
+    import sqlite3
+    store = h.var_dir / "lg_store.db"
+    if not store.exists():
+        return 0
+    with sqlite3.connect(store) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "store_vectors" not in tables:
+            return 0
+        return conn.execute("SELECT COUNT(*) FROM store_vectors v WHERE NOT EXISTS "
+                            "(SELECT 1 FROM store s WHERE s.prefix = v.prefix AND s.key = v.key)").fetchone()[0]
 
 
 async def run_malformed_probe(framework: str, fw, h, step: dict) -> dict:
@@ -350,6 +515,10 @@ async def run_step(framework: str, fw, h, step: dict) -> dict:
         result = await run_malformed_probe(framework, fw, h, step)
     elif kind == "parallel_probe":
         result = {"probe": await run_parallel_probe(framework, fw, h, step)}
+    elif kind == "forced_calls":
+        result = {"probe": await run_forced_calls(framework, fw, h, step)}
+    elif kind == "desk_probe":
+        result = {"probe": run_desk_probe(h, step)}
     elif kind == "parametric_probe":
         # What the weights alone say: no procedure, no tools, no memory.
         reply = await resolved(fw.complete_text(step["question"]))
@@ -360,7 +529,8 @@ async def run_step(framework: str, fw, h, step: dict) -> dict:
         raise ValueError(f"unknown step kind {kind}")
     stores = _store_files(h)
     result["pan_found_in"] = pan_locations(stores)
-    result["card_data_hits"] = card_data_locations(stores)
+    result["card_data_hits"] = card_data_locations(stores, step.get("card_data"))
+    result["orphan_vectors"] = _orphan_vectors(h)
     if step.get("scan_stores_for"):
         result["store_hits"] = text_locations(stores, step["scan_stores_for"])
     return result
@@ -441,6 +611,8 @@ async def run_group(framework: str, suite: str, group: str, run: int, var_dir: P
     fw = importlib.import_module(FRAMEWORK_MODULES[framework])
     shutil.rmtree(var_dir, ignore_errors=True)
     h = await resolved(fw.open_harness(var_dir))
+    if hasattr(h, "checkpointer"):
+        h.checkpointer.setup()  # a group of probes only may snapshot a LangGraph harness before any thread exists
     out_dir.mkdir(parents=True, exist_ok=True)
     recorded = []
     for step in SUITES[suite][group]:

@@ -83,3 +83,74 @@ REDACTION_TUNING = [
     ("call me between 0900-1700, zip 94107, card ending 4427", (), "keep"),
     ("I cancelled in October 2026 and they still charged me", (), "keep"),
 ]
+
+# --------------------------------------------------------------------------- round 4 (tuning)
+# Dict cases, the format the round-4 held-out corpus uses: one customer's consecutive messages, scored as the
+# conversation would be stored (eval_redaction.py). Secrets default to the test number, 737 and 12/29.
+VISA, AMEX, DISCOVER, MC2 = "4111111111111111", "378282246310005", "6011111111111117", "2223003122003222"
+
+
+def case(messages, expect, note, pans=("5555555555554444",), codes=("737",), expiries=("12/29",)):
+    return {"messages": list(messages), "expect": expect, "note": note,
+            "pans": list(pans) if expect == "mask" else [], "codes": list(codes) if expect == "mask" else [],
+            "expiries": list(expiries) if expect == "mask" else []}
+
+
+REDACTION_TUNING_R4 = [
+    # the round-3 interviewer's leaks (report 2.2), verbatim
+    case(["Here it is as it shows on my statement:\n5555\n5555\n5555\n4444"], "mask", "newline"),
+    case(["My card: 5555. 5555. 5555. 4444."], "mask", "sentence break"),
+    case(["card 5555; 5555; 5555; 4444"], "mask", "semicolon"),
+    case(["- 5555\n- 5555\n- 5555\n- 4444"], "mask", "bullets"),
+    case(["It starts with 5555, followed by 5555, followed by 5555, and it ends with 4444."], "mask", "read-out"),
+    case(["The first four are 5555, the next four are 5555, the third group is 5555 and the last four are 4444"], "mask", "dictated"),
+    case(["Hi this is Eli, I'm using voice typing. My card number, the first four are 5555, the next four are 5555, the third group "
+          "is 5555 and the last four are 4444. Can you check my CloudNest charges?"], "mask", "dictated"),
+    case(["Hi, Dana here. In case you need my card, here it is exactly as it shows on my statement:\n5555\n5555\n5555\n4444"], "mask", "newline"),
+    # fresh variants of the same families, other test numbers
+    case(["Visa:\r\n4111\r\n1111\r\n1111\r\n1111"], "mask", "newline", pans=[VISA]),
+    case(["* 3782\n* 822463\n* 10005"], "mask", "bullets", pans=[AMEX]),
+    case(["1) 6011 2) 1111 3) 1111 4) 1117"], "mask", "numbered list", pans=[DISCOVER]),
+    case(["My card starts with 2223. Then 0031. Then 2200. It ends 3222!"], "mask", "sentence break", pans=[MC2]),
+    case(["first block is 4111, second block reads 1111, the third one says 1111, final block 1111"], "mask", "read-out", pans=[VISA]),
+    case(["the first four are five five five five, the next four are 5555, then 5555 and 4444"], "mask", "dictated mixed"),
+    case(["it's fifty-five fifty-five, fifty-five fifty-five, fifty-five fifty-five, forty-four forty-four"], "mask", "spelled pairs"),
+    case(["double five double five, double five double five, double five double five, double four double four"], "mask", "double"),
+    case(["forty-one eleven, eleven eleven, eleven eleven, eleven eleven"], "mask", "spelled pairs", pans=[VISA]),
+    case(["four one one one one one one one one one one one one one one one"], "mask", "spelled digits", pans=[VISA]),
+    case(["٥٥٥٥ ٥٥٥٥ ٥٥٥٥ ٤٤٤٤"], "mask", "unicode digits"),
+    case(["5555 🔹 5555 🔹 5555 🔹 4444"], "mask", "emoji"),
+    case(["| card | 5555 | 5555 | 5555 | 4444 |"], "mask", "table"),
+    case(["> 5555 5555\n> 5555 4444"], "mask", "quoted"),
+    # spelled expiries and codes (the round-3 held-out misses)
+    case(["5555 5555 5555 4444 — exp twelve twenty-nine"], "mask", "spelled expiry"),
+    case(["card expires December twenty twenty-nine, code seven thirty-seven"], "mask", "spelled expiry", pans=[]),
+    case(["my card is 4111 1111 1111 1111 and the back says seven three seven"], "mask", "spelled code", pans=[VISA]),
+    # the opening half of a number with no card context: removed once the second half completes it
+    case(["here's the number I have written down: 5555 5555", "5555 4444"], "mask", "opening half"),
+    case(["6011 1111", "1111 1117"], "mask", "opening half", pans=[DISCOVER]),
+    case(["first part 4111 1111 1111", "and 1111"], "mask", "opening half", pans=[VISA]),
+    # a 4-digit code with no cue, in a message (or after one) that carries card data
+    case(["3782 822463 10005 4321"], "mask", "amex code no cue", pans=[AMEX], codes=["4321"]),
+    case(["3782 822463 10005", "4321"], "mask", "amex code next message", pans=[AMEX], codes=["4321"]),
+    case(["card 4111 1111 1111 1111, 12/29, 737"], "mask", "bundle no cues", pans=[VISA]),
+    # over-redaction the round-3 interviewer reported (report 3.1): a last four next to a cue word
+    case(["For verification: my last four are 6610 and my zip is 73301. I want my money back, please dispute it."], "keep", "verify cue"),
+    case(["Security check: card ending 6610, zip 73301"], "keep", "verify cue"),
+    case(["For security, my last 4 digits are 4427 and the billing ZIP is 94107"], "keep", "verify cue"),
+    case(["the card on the front ends in 5127"], "keep", "verify cue"),
+    case(["I want my money back, card ending 6610"], "keep", "verify cue"),
+    case(["I already gave you the last four, 6610, for the security check"], "keep", "verify cue"),
+    case(["back to the dispute: card ending 8830, zip 10011"], "keep", "verify cue"),
+    # what card-context rules must still leave alone
+    case(["dispute the Nov 3 2026 charge, it was 240 dollars"], "keep", "date in words"),
+    case(["my card is [REDACTED CARD NUMBER]", "my last four are 6610 and my ZIP is 73301"], "keep", "after card message"),
+    case(["the number was [REDACTED CARD NUMBER]", "sorry, for verification it's card ending 4427, zip 94107"], "keep", "after card message"),
+    case(["I was charged 240 for the gym renewal on November 3"], "keep", "plain amount"),
+    case(["we stayed in room 312 and took flight 737 to Boston"], "keep", "bare 3-digit"),
+    case(["my Amazon order 112-4455667-8899001 never arrived"], "keep", "order number"),
+    case(["tracking number 9400 1000 0000 0000 0000 00"], "keep", "tracking number"),
+    case(["call me on +44 20 7946 0958 or (415) 555-0100"], "keep", "phone"),
+    case(["booking ref QX7-88123, refund of 1,299.00 due 2026-12-01"], "keep", "reference"),
+    case(["The subscription expires 12/31 and renews every year"], "keep", "subscription expiry"),
+]

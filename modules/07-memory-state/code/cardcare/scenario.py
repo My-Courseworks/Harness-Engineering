@@ -482,6 +482,13 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
     if kind == "outbox_count_matching":
         messages = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and spec["text"].lower() in m["body"].lower()]
         return len(messages) == spec["count"], json.dumps([m["body"][:120] for m in messages])
+    if kind == "outbox_invites_no_reply":
+        # every mention of "reply" fails, except the closed list of phrasings that tell the customer NOT to reply
+        negated = re.compile(r"\b(don'?t|do not|please don'?t|can'?t|cannot|can not|no need to|not able to|unable to)\s+(take\s+)?"
+                             r"repl(y|ies)\b|\b(can'?t|cannot)\s+(take|receive|accept)\s+repl(y|ies)\b|\bno\s+repl(y|ies)\b", re.IGNORECASE)
+        bodies = [m["body"] for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"]]
+        hits = [b for b in bodies if re.search(r"repl(y|ies)", negated.sub("", b), re.IGNORECASE) or _mentions(b, spec["none_of"])]
+        return bool(bodies) and not hits, json.dumps(hits or bodies)[:300]
     if kind == "outbox_omits":
         bodies = [m["body"] for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"]]
         hits = [b for b in bodies if _mentions(b, spec["none_of"])]
@@ -558,6 +565,39 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
         return not snapshot["persisted_clock_keys"], f"clock keys found in persisted state: {snapshot['persisted_clock_keys'] or 'none'}"
     if kind == "pan_absent":
         return not result.get("pan_found_in"), f"found in: {result.get('pan_found_in') or 'nowhere'}"
+    # ---- round 4
+    if kind == "transcript_ids_without_prefix":
+        found = [t for t in snapshot["transcripts"].get(spec["user"], []) if t.startswith(spec["prefix"])]
+        return not found, f"transcripts with prefix {spec['prefix']}: {found or 'none'}"
+    if kind == "any_episode_mentions":
+        episodes = _user_episodes(snapshot, spec["user"])
+        hits = [e["episode_id"] for e in episodes if spec["text"].lower() in e["text"].lower()]
+        return bool(hits), f"{len(episodes)} episodes; mentioning {spec['text']!r}: {hits or 'none'}"
+    if kind == "customer_text_max_len":
+        lengths = [len(t["customer"]) for t in _turns(result, spec["turn"])]
+        return bool(lengths) and max(lengths) <= spec["max"], f"stored customer text lengths: {lengths}"
+    if kind == "probe_at_most":
+        value = result.get("probe", {}).get(spec["key"])
+        return isinstance(value, int) and value <= spec["max"], json.dumps(result.get("probe"))[:300]
+    if kind == "probe_text_contains_all":
+        text = str(result.get("probe", {}).get(spec["key"], ""))
+        missing = [needle for needle in spec["all_of"] if needle not in text]
+        return not missing, (f"missing: {missing}; " if missing else "") + text[:250]
+    if kind == "no_orphan_vectors":
+        orphans = result.get("orphan_vectors")
+        return orphans == 0, f"vector-index rows with no stored item: {orphans}"
+    if kind == "outbox_omits_token":
+        bad = [m["body"] for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and m["status"] != "rejected"
+               and "[REDACTED" in m["body"]]
+        return not bad, json.dumps(bad or "no message carries a masking token")[:300]
+    if kind == "reminders_sane":
+        from cardcare.clock import parse_instant
+        now = parse_instant(spec["now"])
+        pending = [f for f in _user_followups(snapshot, spec["user"], "customer_reminder") if f["status"] == "pending"]
+        bad = [f["trigger_at"] for f in pending if parse_instant(f["trigger_at"]) <= now
+               or (parse_instant(f["trigger_at"]) - now).days > spec["max_days"]]
+        days = [f["trigger_at"][:10] for f in pending]
+        return not bad and len(days) == len(set(days)), json.dumps({"pending": days, "out_of_range": bad})
     raise ValueError(f"unknown check kind {kind}")
 
 
@@ -595,16 +635,13 @@ def _auditor_text(data: bytes) -> str:
     return re.sub(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b", lambda m: _NUMBER_WORDS[m.group(1).lower()], text, flags=re.IGNORECASE)
 
 
-def card_data_locations(paths: list) -> dict[str, list[str]]:
-    """Which store files hold the test card number, security code or expiry, in any formatting or encoding."""
-    hits: dict[str, list[str]] = {}
-    for path in paths:
-        text = _auditor_text(path.read_bytes())
-        for name, pattern in (("card number", _TEST_PAN_SCAN), ("card number fragment", _TEST_PAN_FRAGMENT_SCAN),
-                              ("security code", _TEST_CVV_SCAN), ("expiry", _TEST_EXPIRY_SCAN)):
-            if pattern.search(text):
-                hits.setdefault(name, []).append(path.name)
-    return hits
+def card_data_locations(paths: list, secrets: dict | None = None) -> dict[str, list[str]]:
+    """Which store files hold the test card number, security code or expiry (plus a step's declared `card_data`), in
+    any formatting or encoding. Round 4: the scanner is cardcare/store_audit.py, written independently of the masker:
+    it no longer maps number words before matching (that mapping hid a dictated "the first four are 5555, ..."), but
+    reads them both ways, and finds the digits in order across newlines, list markers, sentences and words."""
+    from cardcare.store_audit import card_data_locations as audit
+    return audit(paths, secrets)
 
 
 def text_locations(paths: list, needles: list[str]) -> dict[str, list[str]]:

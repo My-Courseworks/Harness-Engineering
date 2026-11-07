@@ -109,8 +109,10 @@ ADVERSARIAL_GROUPS = {
          "checks": [
              check("prospective", "the case follow-up is sent on the channel on file at send time (sms)",
                    "outbox_channel", user="priya", channel="sms"),
+             # round 4: "outbox_omits reply" failed messages saying "please don't reply to this text"; now only a message that
+             # mentions replying other than to say not to (or promises to add to the case) fails
              check("parametric", "no outbound message invites a reply or promises to 'add it to your case'",
-                   "outbox_omits", user="priya", none_of=["reply", "add it to your case", "add it to the case"]),
+                   "outbox_invites_no_reply", user="priya", none_of=["add it to your case", "add it to the case"]),
          ]},
         {"kind": "maintenance", "id": "p1-maintenance-2027-06-15", "at": "2027-06-15T00:00:00Z",
          "scan_stores_for": ["StreamMax", "Tokyo"],
@@ -266,7 +268,8 @@ ADVERSARIAL_GROUPS = {
          "turns": ["Hi, Priya (card ending 4427, ZIP 94107). I'm in Lisbon until November 30 and please email me from now on."],
          "checks": []},
         {"kind": "session", "id": "er-s2", "user": "priya", "at": "2026-11-10T10:00:00Z",
-         "turns": ["Please delete everything you remember about me: my preferences and our past conversations."],
+         # round 4: erasure needs a step-up verification, so the customer gives her last four and ZIP with the request
+         "turns": ["Card ending 4427, ZIP 94107. Please delete everything you remember about me: my preferences and our past conversations."],
          "scan_stores_for": ["Lisbon"],
          "checks": [
              check("semantic", "erasure: no fact remains", "facts_empty", user="priya"),
@@ -401,7 +404,7 @@ ADVERSARIAL_GROUPS = {
                    "remind me on November 20 to book my Lisbon airport transfer."],
          "checks": []},
         {"kind": "session", "id": "ect-s2", "user": "priya", "at": "2026-11-10T10:00:00Z", "end": False,
-         "turns": ["Please delete everything you remember about me: my preferences and our past conversations."],
+         "turns": ["Card ending 4427, ZIP 94107. Please delete everything you remember about me: my preferences and our past conversations."],
          "checks": []},
         {"kind": "maintenance", "id": "ect-tick", "at": "2026-11-10T11:00:00Z", "scan_stores_for": ["Lisbon", "airport transfer"],
          "checks": [
