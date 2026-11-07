@@ -334,6 +334,9 @@ CORPORA = {
     "fuzz-v2": fuzz_v2,
     # seeds fixed before the round-4 final pass and never run before it: the round-4 grammar on inputs not tuned against
     "fuzz-v2-fresh": lambda: [case for seed in (7001, 7002, 7003) for case in fuzz_v2(seed=seed, per_family=100)],
+    # declared after the first final pass spent the seeds above and the independent fuzzer's default seed; run only in the second
+    "fuzz-v2-fresh2": lambda: [case for seed in (8001, 8002, 8003) for case in fuzz_v2(seed=seed, per_family=100)],
+    "fuzz-independent-fresh": lambda: [case for seed in (41, 42, 43) for case in __import__("cardcare.heldout_fuzz_r4", fromlist=["generate"]).generate(seed=seed)],
     "fuzz-independent": _independent,
 }
 

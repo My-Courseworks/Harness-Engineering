@@ -452,7 +452,12 @@ async def run_malformed_probe(framework: str, fw, h, step: dict) -> dict:
 
 
 async def run_followups(fw, h, step: dict) -> dict:
+    """The scheduler's job, through the agent's own entry point when it has one (round 4: `fire_followups`, which finishes
+    pending erasures before firing), else the scheduler directly with the agent's resume callback (the round-3 code)."""
     sessions = []
+    if hasattr(fw, "fire_followups"):
+        outcomes = await fw.fire_followups(h, step["at"], sessions.append)
+        return {"outcomes": outcomes, "followup_sessions": sessions}
 
     async def resume(record: dict, now: str):
         sessions.append(await resolved(fw.run_followup_session(h, record, now)))

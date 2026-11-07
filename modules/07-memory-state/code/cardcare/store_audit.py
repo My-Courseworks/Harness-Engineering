@@ -37,6 +37,8 @@ def auditor_text(data: bytes | str) -> str:
     text = data.decode("utf-8", errors="ignore") if isinstance(data, bytes) else data
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
     text = unicodedata.normalize("NFKC", text)
+    # a UUID (a LangGraph message or checkpoint id) is never card data; its digit groups ("…-a296-4321-…") are not codes
+    text = re.sub(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", " ", text)
     return "".join(str(unicodedata.decimal(ch)) if ch.isdecimal() and not ch.isascii() else ch for ch in text)
 
 
@@ -133,10 +135,13 @@ def fragment_present(text: str, pan: str) -> bool:
 
 
 def code_present(text: str, code: str) -> bool:
+    """A whole-token match, never a JSON number value: ADK stores usage metadata such as "total_token_count": 4321 in
+    its events, while anything a customer or the model says is inside a JSON string."""
     for view_text in (text, _spoken_to_digits(text)):
         pattern = r"(?<![0-9A-Za-z.])" + r"[^0-9A-Za-z]{0,2}".join(code) + r"(?![0-9A-Za-z])"
-        if re.search(pattern, view_text):
-            return True
+        for match in re.finditer(pattern, view_text):
+            if not re.search(r'":\s*$', view_text[max(0, match.start() - 4):match.start()]):
+                return True
     return False
 
 

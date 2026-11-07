@@ -154,3 +154,23 @@ REDACTION_TUNING_R4 = [
     case(["booking ref QX7-88123, refund of 1,299.00 due 2026-12-01"], "keep", "reference"),
     case(["The subscription expires 12/31 and renews every year"], "keep", "subscription expiry"),
 ]
+
+# Added after the round-4 blind run (heldout-r4 corpus and the independent fuzzer) found these shapes; variants of
+# them, not the held-out strings. The held-out results stay as first recorded.
+JCB = "3530111333300000"
+REDACTION_TUNING_R4 += [
+    case(["Amex:\n34343\n43434\n34343"], "mask", "amex in fives", pans=["343434343434343"]),
+    case(["it reads 37828 then 22463 then 10005 on the card"], "mask", "amex in fives", pans=[AMEX]),
+    case(["the code next to the signature is 604"], "mask", "code by signature", pans=[], codes=["604"], expiries=[]),
+    case(["4111\n1111\n1121\n1111", "sorry typo, it's 4111 1111 1111 1111"], "mask", "correction over messages", pans=[VISA]),
+    case(["8530 1113 3330 0000", "no wait: 3530 1113 3330 0000"], "mask", "correction over messages", pans=[JCB]),
+    case(["four one one one one one one one one one one one one one one one seven three seven is the cvv"], "mask",
+         "spoken number run into code", pans=[VISA]),
+    case(["41111111111111117370"], "mask", "run together with code", pans=[VISA], codes=[], expiries=[]),
+    case(["My subscription expiration date is 11/30, not 11/03"], "keep", "expiry cue, not a card"),
+    case(["The parcel says exp. delivery 12/02, still not here"], "keep", "expiry cue, not a card"),
+    case(["the number was [REDACTED CARD NUMBER]", "you only need the last four? fine, it's 6610, zip 73301"], "keep", "after card message"),
+    case(["the number was [REDACTED CARD NUMBER]", "ok the last four then: 8830 and ZIP 10011"], "keep", "after card message"),
+    case(["UPS tracking 4521 3367 8810, card ending 4427"], "keep", "reference then last four"),
+    case(["hmm, 4111?", "or 1111?", "maybe 1111", "found it, card ending 1112, ZIP 73301"], "keep", "verification guesses"),
+]
