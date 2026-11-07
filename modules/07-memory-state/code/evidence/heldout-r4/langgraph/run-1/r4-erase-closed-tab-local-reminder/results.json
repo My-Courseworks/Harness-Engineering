@@ -1,0 +1,86 @@
+[
+  {
+    "step": "r4e2-cli",
+    "type": "prospective",
+    "label": "r4: the reminder is a scheduler record on 2026-11-16 (18:00 New York is 23:00 UTC)",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-16T23:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"note\": \"Return the FitPulse locker key\"}}]"
+  },
+  {
+    "step": "r4e2-cli",
+    "type": "semantic",
+    "label": "r4: the travel notice is stored until 2026-11-18",
+    "passed": true,
+    "evidence": "{\"value\": \"Montreal\", \"as_of\": \"2026-11-12T10:00:00Z\", \"valid_until\": \"2026-11-18\", \"expires_at\": \"2026-11-19T00:00:00Z\"}"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "prospective",
+    "label": "r4: a reminder falling due while the erasure is pending is never sent",
+    "passed": false,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "semantic",
+    "label": "r4: no fact remains",
+    "passed": false,
+    "evidence": "{\"travel_notice\": {\"value\": \"Montreal\", \"as_of\": \"2026-11-12T10:00:00Z\", \"valid_until\": \"2026-11-18\", \"expires_at\": \"2026-11-19T00:00:00Z\"}}"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "episodic",
+    "label": "r4: no episode remains or is written by the fire",
+    "passed": false,
+    "evidence": "2 episodes; purged 0"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "working",
+    "label": "r4: no transcript remains or is written by the fire",
+    "passed": false,
+    "evidence": "3 transcripts: ['followup-F-fba5617e-1', 'r4e2-cli', 'r4e2-s2']"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "guard",
+    "label": "r4: the reminder note and the trip are in no memory store",
+    "passed": false,
+    "evidence": "{\"locker key\": [\"lg_store.db\", \"lg_checkpoints.db-wal\"], \"Montreal\": [\"lg_store.db\", \"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "r4e2-fire-next",
+    "type": "prospective",
+    "label": "r4: nothing retries afterwards",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "r4e2-fire-next",
+    "type": "prospective",
+    "label": "r4: still no message to the erased customer",
+    "passed": false,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "episodic",
+    "label": "r4: resuming the erased session id brings nothing back",
+    "passed": false,
+    "evidence": "Here's what my records show from earlier:\n\n- A conversation on **Nov 12**: you asked for a reminder to return the **FitPulse locker key** on Nov 16 at 6pm New York time, and mentioned a **Montreal** trip with a travel notice until **Nov 18**. The reminder was sent by secure message on Nov 16.\n- As f"
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "semantic",
+    "label": "r4: no fact is recreated",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "episodic",
+    "label": "r4: the new chat's episode holds nothing erased",
+    "passed": false,
+    "evidence": "Conversation on 2026-11-12: Marco requested a Nov 16, 2026 6pm New York reminder to return the FitPulse locker key and a Montreal travel notice until Nov 18. Reminder scheduled (followup F-fba5617e) by Kestrel secure message; travel notice stored. The customer said he expects Canadian charges (not v"
+  }
+]

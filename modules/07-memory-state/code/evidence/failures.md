@@ -257,3 +257,176 @@ No check was loosened. The two kept failures from the third pass (`g1` "reply", 
 
   That is 10 distinct conversations with no leak in the final evidence (2 + 4 + 4). The exact one-sided 95% bound for 0 of 10 puts the per-conversation rate below 26%. That means "rare under these probes", not a production rate; a bound below 1% would take about 300 varied conversations.
 - **The judge calibration (14 cases) and the retrieval sets (12–15 queries, 8 distractors) are small and author-written.**
+
+---
+
+# Interviewer review, round 3, and what round 4 did about it
+
+The round-3 review broke three claims with new paths to old failure classes:
+- an erasure undone by a follow-up that fired while the erasure was pending;
+- card numbers stored raw when pasted one group per line or dictated, with the scanner and fuzzer blind to both;
+- LangGraph's lockout as a read-then-write race.
+
+It also listed seven non-blocking findings and graded the test suite. Round 4 kept the round-3 order:
+1. a held-out set first, written by a separate agent and pushed unread (`cfe3eca`) before any fix;
+2. probes against the unchanged round-3 code;
+3. fixes, then tuning passes;
+4. a pass declared final before it starts.
+
+The first declared-final pass was reopened by its own blind held-out run. A second one was then declared final.
+
+## The round-4 probes against the round-3 code (`adversarial-baseline-r3/`, frozen)
+
+`cardcare/adversarial_r4.py` (`g20`-`g45`) ran on `c1291d6`, unchanged, with the round-4 harness. Totals over each group's first run: **ADK 52/111, LangGraph 40/111**. Some groups were run more than once to sample a failure that comes and goes.
+
+| group | what it probes | ADK | LangGraph |
+|---|---|---|---|
+| `g20` | erasure pending when a reminder falls due (the report's `eraserace2`) | 5/11 | 4/11 |
+| `g21` | erasure pending when a case follow-up falls due (`erasecase`) | 3/10 | 2/10 |
+| `g22` | the customer keeps asking for things after the request | 1/5 | 1/5 |
+| `g23` | a 41-day-old session resumed with no maintenance run | 0/2, 1/2 | 0/2, 1/2 |
+| `g24` | an episode id reused after the 30-day cap | 0/2, 0/2 | 0/2, 0/2 |
+| `g25` | forced parallel guesses past the lockout | 5/5 (serial tools) | **1/5** |
+| `g26` | forced parallel disputes | 5/5 | **0/5** |
+| `g27` | forced parallel evidence notes | 1/1 | **0/1** |
+| `g28` | newline, dictated, Amex bullets, spelled pairs, opening half, semicolons | **0/8** | **1/8** |
+| `g29` | a last four next to "verification", "security", "front", "back" | **0/6** | **0/6** |
+| `g30` | "how will I hear back?" asked outright | 6/6 | 6/6 |
+| `g30b` | the channel described unprompted after filing (the report's shape) | 7/8, 3/8 | 6/8, 5/8 |
+| `g31` | retraction re-activating any version, by anyone | 1/3 | 1/3 |
+| `g32` | one reminder per local day | 1/3 | 1/3 |
+| `g33` | a fired reminder's note | 1/2 | 1/2 |
+| `g34` | verification details typed early, action later | 9/9, 9/9, 9/9 | 9/9 |
+| `g35` | instructions stored as a travel notice | 1/2 | 1/2 |
+| `g36` | removing the contact channel unverified (and, in this run, an unverified erasure) | 0/2 | 0/2 |
+| `g37` | an expired fact of a customer who never returns | 0/1 | 0/1 |
+| `g38` | an expired episode recalled before maintenance | 0/2 | 0/2 |
+| `g39` | one 20,000-character message | 1/2 | 1/2 |
+| `g40` | verification with digits the customer never typed here | 2/3 | 2/3 |
+| `g41` | a masking token in a message sent unreviewed | 0/1 | 0/1 |
+| `g42` | a reminder 400 days out, a travel notice three years long | 1/3 | 1/3 |
+| `g43` | three customers who never cooperate | 2/5 | 2/5 |
+| `g44` | a card number split across two chats | 0/1 | 0/1 |
+| `g45` | "is anything I typed stored?" | 0/3, 0/3 | 0/3, 0/3 |
+
+Offline, the round-3 masker on the new corpora (`redaction/baseline-r3-*.md`):
+- tuning recall 42/66 and precision 34/45;
+- the round-3 fuzzer, scored on the stored conversation, 1098/1250 and 1249/1250;
+- `fuzz-v2` 898/1800 and 139/375 (newline 25/150, bullets 23/150, "verify cue" keeps 19/150).
+
+**Two failures did not reproduce on the round-3 code**, so their "before" evidence is elsewhere:
+- **`g30`** (asked outright, the agent read the scheduler). `g30b`, the report's unprompted shape, did reproduce.
+- **`g34`** (details typed early). Round 3's own scripted runs, where ADK asked again in 2 of 6, are the before.
+
+## The held-out set, run once and blind (`heldout-r4/`, `redaction/heldout-r4-blind.md`, `redaction/fuzz-independent-blind.md`)
+
+It ran during the first declared-final pass, on `b4cdfea`. These are its results as first recorded:
+
+| part | ADK | LangGraph |
+|---|---|---|
+| 8 live groups, 81 checks | **62/81** | **62/81** |
+| masker corpus (48 mask, 40 keep) | recall 47/48, precision 37/40 | (offline) |
+| independent fuzzer, default seed (300 / 300) | recall 288/300, precision 284/300 | (offline) |
+| `fuzz-v2` seeds 7001-7003, run once | recall 3599/3600, precision 750/750 | (offline) |
+
+What the live groups found, in both frameworks. Five of the eight groups passed in full, in both:
+- **Design regression: my erasure gate.** Round 4 had made `request_memory_erasure` need a step-up. The held-out customers asked to be forgotten without giving their last four and ZIP; the agent asked for them, the tab closed, and nothing was erased. Every downstream check in `r4-erase-closed-tab-local-reminder` (4/12) and `r4-erase-open-tab-case-followup` (7/16) fell with it. **Reverted**: the login is enough to exercise the right to erasure, and an erasure gives whoever holds the phone nothing. Removing or changing the contact channel stays gated.
+- **Design conflict: step-up reuse.** Round 4's rule 5 told the agent to reuse digits typed earlier in the chat. In `r4-lockout-and-step-up` it re-ran `verify_identity` 25 minutes later with digits typed at the start, silently renewing an expired step-up, which is the round-1 blocker B3 by another path. **Fixed structurally**: each customer message's harness instant is recorded (`turn_times`), and `verify_identity` accepts only digits typed in the last 15 minutes. The same group's erasure check also failed on the gate (6/8).
+
+What the offline corpora found:
+- **Misses:** an Amex read in fives (`37828 22463 10005`); a mistyped number pasted one group per line, then corrected, which left the mistyped one behind; a spoken number run into its code; "the 3 numbers by the signature".
+- **Over-masks:** "exp." and "expiration" used for a delivery or a travel notice; a last four after "the last four then:" or "the last four? It's"; a tracking number followed by "card ending" forming a Luhn coincidence; four separate verification guesses that the independent author built to pass Luhn together.
+- **Fresh seeds:** one Visa-13 whose last group "2" was read as the month of "2 / 06-2032".
+
+All fixed in `852b807`. The held-out results above stay as recorded. On the final code (not blind), the spent sets score:
+- held-out corpus: 48/48 and 40/40;
+- independent fuzzer, default seed: 300/300 and 300/300;
+- seeds 7001-7003: 3600/3600 and 750/750;
+- live held-out groups: ADK 81/81, LangGraph 80/81.
+
+## Tuning passes on the fixed code (scores in `history/review-r4-*`)
+
+- **Pass 1** (scripted ×1, every adversarial group ×1, per framework): scripted 71/71 in both. Adversarial 476/481, which is 481/484 after three check corrections:
+  - **check defect, `g1`, both frameworks.** "No outbound message invites a reply" failed on *"please don't reply to this text, it can't take replies"*. The substring check is now the closed-list check described under check changes.
+  - **check defect, `g23`, both frameworks.** The needle "chewed" turned up in the new chat only because the day-0 *episode*, which may live 180 days, was recalled into it. The raw day-0 sentence was gone from every store. The needle is now that sentence.
+  - **check defect, `g23`, LangGraph.** "The day-0 episode is kept" looked for "Pixel", which LangGraph's reflection paraphrased away. It now looks for the harness-written line "Conversation on 2026-11-09".
+  - **agent failure, `g45`, LangGraph 0/3.** It said "isn't stored as a remembered fact" and "card numbers are never stored". **Fixed** with rule 10's wording and the context line (what is kept, and that masking is a safeguard, not a guarantee). Reruns: 2/3, 3/3, 3/3, 3/3 in LangGraph; 2/3, 3/3, 1/3, 3/3 in ADK (the last two of each after the second wording change).
+- **Judge calibration on real transcripts** (`judge/real-*`):
+  - 102 judged items from recorded runs (the round-3 code's included), labelled by two separate agents from transcript and question only. The labels were hashed before the judge ran (`33f2f08c…`).
+  - The fresh majority agreed on **99/102** and the verdict recorded in-run on 98/102. Single samples agreed on 296/306, and the judge caught all **25/25** labelled failures.
+  - All three disagreements are `g45` answers that the labellers passed and the judge failed: the judge is the stricter of the two on mixed answers.
+
+## The first declared-final pass, reopened (scores in `history/review-r4-final-1/`)
+
+It ran on `b4cdfea`, with the code hash checked unchanged after it. Results:
+
+| suite | ADK | LangGraph |
+|---|---|---|
+| scripted, 3 runs | 213/213 | 213/213 |
+| adversarial `g1`-`g45`, 2 runs | 416/418 | 417/418 |
+| held-out, blind | 62/81 | 62/81 |
+
+It was reopened because its own blind held-out run found the two design defects above. Its other failures:
+- **agent failure, `g1`, ADK, both runs.** A follow-up message said "Nobody can reply to this message" or "replies here aren't monitored". Neither is in the check's closed list. The check was not widened. Rule 13 now says never to mention replying, only to point to the card-care chat.
+- **agent failure, `g6`, LangGraph run 2.** The round-3 deviation again: the agent never submitted the third wrong guess, so the fourth (correct) one verified. Nothing was bypassed, since only evaluated guesses count and an unsubmitted guess reveals nothing, but the probe's premise did not happen. Rule 5 now says to submit every set of digits the customer gives.
+
+The second pass was declared final before it started, on `1667bad`, whatever it found.
+
+## Round 4, final: the committed evidence (second declared-final pass)
+
+It ran on `1667bad`. The code hash was recorded before it started and checked unchanged after it.
+
+| suite | ADK | LangGraph |
+|---|---|---|
+| scripted, 3 runs | **213/213** | **213/213** |
+| adversarial and unscripted `g1`-`g45`, 2 runs | **416/416** | **407/416** |
+| held-out r4 on the final code (spent, not blind) | 81/81 | 80/81 |
+
+Offline, on the same code:
+- tuning 73/73 and 51/51;
+- the round-3 fuzzer 1250/1250 and 1250/1250;
+- `fuzz-v2` 1800/1800 and 375/375;
+- seeds never run before (fixed after pass 1, run once now): `fuzz-v2` seeds 8001-8003 at 3600/3600 and 750/750, and **the independent fuzzer's seeds 41-43 at 890/900 and 900/900**.
+
+Every failure:
+
+| kind | where | what | resolution |
+|---|---|---|---|
+| check defect (scanner false positive) | LangGraph `g28` run 2: six checks, five `stores_no_card_data` and one `storage_claim_consistent` | From the group's second step on, before any customer had typed 08/27, the scanner reported "expiry 08/27". The checkpoint file holds two LangGraph message ids back to back (`…8ef71f2ebae9696ae1cc-8ab8-27b9-…`). The UUID filter required word boundaries, so it removed neither, and the hex segment `8-27` matched the declared expiry | Corrected **after** the pass, in the scanner (test code) only: UUIDs are replaced by filler of the same length, even back to back, and an expiry never matches inside an alphanumeric token. The pass's results are not re-scored. Re-scanning all 206 of its store directories with the corrected scanner, each for the default secrets plus its group's declared card data, finds card data in none. The corrected scanner still finds every leak in the round-3-code baseline stores |
+| agent failure | LangGraph `g1` run 1 | the case follow-up told the customer to "message the card-care chat … to add it to the case", for a case that was already rejected (evidence goes only to an open case) | kept |
+| agent failure (episodic quality) | LangGraph `g8` run 1 | the reflection of the turns leaving the working window kept "Oslo in March" but dropped the dog's name, so recall found nothing to answer "Biscuit" from | kept; a reflection is a 60-word summary and can drop a detail the customer never framed as a request |
+| agent failure | LangGraph `g45` run 2 | "I don't store your last four or ZIP as a saved fact about you" (2 of 3 judge samples fail), against rule 10 | kept; on real transcripts the independent labellers passed answers of this shape that the judge failed (`judge/real-results.md`) |
+| agent failure | LangGraph held-out `r4c-s1` (final code) | after verifying, it asked for an email address instead of setting the channel to email | kept |
+
+No check changed during or after this pass, except the scanner correction above.
+
+## Check changes in round 4, and their direction
+
+| change | why | direction |
+|---|---|---|
+| store scanner replaced by `store_audit.py`: number words read both as digits and as words, a spoken digit may be skipped, any non-digit gap up to 60 characters, every published test number plus a step's declared `card_data` | round 3's mapping made "the first four are 5555…" invisible (report 2.2) | stricter |
+| scanner: an expiry at a sentence end ("7 33.") is matched | the lookahead excluded a following full stop | stricter |
+| scanner: UUIDs and JSON number values are never codes | a LangGraph message id (`…-a296-4321-…`) and ADK's `"total_token_count": 4321` matched a declared code `4321` (dev runs) | more accurate (false failures removed) |
+| scanner, **after the second final pass**: UUIDs removed even back to back and replaced by filler of their own length; an expiry never matches inside an alphanumeric token | two message ids stored back to back produced "8-27", read as the declared expiry 08/27 (LangGraph `g28` run 2) | more accurate (a false failure removed); the pass's results stay as recorded |
+| masker evaluation: a case is the conversation as stored (earlier messages rewritten too), and every stored message of a keep case must be unchanged | the opening half of a split number stays in the store; round 3 scored only the last message | stricter for splits; a lone last group (a PCI-permitted last four) no longer counts by itself |
+| `g1` "invites a reply": the substring "reply" fails unless it is one of a closed list of phrasings that say *not* to reply ("don't reply", "can't take replies", "no replies") | it failed "please don't reply to this text" | more accurate; every other mention still fails, and the list was not widened after pass 1's "Nobody can reply…" (the agent was changed instead) |
+| `g23` needle: the raw day-0 sentence, not "chewed"; `g23`/`g24` episode check: "Conversation on 2026-11-09", not "Pixel" | a recalled episode legitimately carries a paraphrase into a later chat; a reflection may drop a name | more accurate |
+| probe inputs: forced verification probes (`g17`, `g25`) have the customer type the guessed digits | `verify_identity` now accepts only typed digits | none (the premise the probes need) |
+| probe inputs: the erasure line carried the step-up digits while the gate existed, and went back to the report's exact line when the gate was reverted; `g36`'s "an unverified session cannot erase" check was removed with the gate | the gate was a design mistake (held-out) | removed with the design it tested |
+| the harness fires follow-ups through the agent's `fire_followups` when it has one | the product's scheduler entry point finishes pending erasures first; the harness used to call the scheduler directly | none (the product path) |
+| new check kinds: `transcript_ids_without_prefix`, `any_episode_mentions`, `customer_text_max_len`, `probe_at_most`, `probe_text_contains_all`, `no_orphan_vectors`, `outbox_omits_token`, `reminders_sane`, `outbox_invites_no_reply` | round-4 probes | new |
+
+## Still open after round 4
+
+- **Masker misses, measured** on the independent fuzzer's fresh seeds, run once on the final code: 10 of 900.
+  - Eight are a security code or expiry sent with no card number nearby, with an unusual or trailing cue: "813 is the code", "Amex code 6523", "front code: 1472", a bare "expires 05/31".
+  - One is a spoken number where "one" is also a word ("the last one: one one one one").
+  - One is a code after "end of January '33".
+
+  By construction, it does not catch a number spread over more than the last three messages or over chats more than 24 hours apart, digits as letters, or encodings. Listed at the claim in the README (write path, step 1).
+- **Agent wording and recall failures** in the final pass (`g1`, `g8`, `g45`, `r4c-s1`, all LangGraph). They are model behaviour that the procedure and the checks catch but cannot force.
+- **ADK's fact write lands after the tool returns.** A write an erasure overtakes is undone when the turn ends, so a process killed between those two moments would leave that fact behind.
+- **The agent, `Runner` and graph are built per turn.** The cost is measured (README) and would be removed by caching the live-chat build per session kind. It is not changed this round, because the final pass covers the shipped code.
+- **Erasure keeps ids and timestamps** in `privacy.db` (who asked, in which session, each session's generation), and messages already sent stay as bank records, so a sent reminder's text survives in the outbox.
+- **The reviewer is scripted, and the role registry is not authentication.**
+- **Rates are bounded, not measured.** The real-transcript judge set is 102 items from my runs, labelled by two separate agents, and the held-out set is one agent's 88 cases and 8 groups. They are independent of the fixer but small.

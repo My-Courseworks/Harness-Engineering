@@ -1,0 +1,23 @@
+[
+  {
+    "step": "rr-probe",
+    "type": "procedural",
+    "label": "a retracted version cannot be made active again by retraction",
+    "passed": false,
+    "evidence": "{\"retracted_version_reactivated\": true, \"retraction_by_unknown_reviewer_accepted\": true, \"active_after\": \"v1\"}"
+  },
+  {
+    "step": "rr-probe",
+    "type": "procedural",
+    "label": "a retraction needs a reviewer who holds a registry role",
+    "passed": false,
+    "evidence": "{\"retracted_version_reactivated\": true, \"retraction_by_unknown_reviewer_accepted\": true, \"active_after\": \"v1\"}"
+  },
+  {
+    "step": "rr-probe",
+    "type": "procedural",
+    "label": "the legitimate retraction (v2 back to v1, by an ops lead) still works",
+    "passed": true,
+    "evidence": "{\"retracted_version_reactivated\": true, \"retraction_by_unknown_reviewer_accepted\": true, \"active_after\": \"v1\"}"
+  }
+]

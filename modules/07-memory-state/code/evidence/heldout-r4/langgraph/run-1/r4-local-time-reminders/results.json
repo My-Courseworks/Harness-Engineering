@@ -1,0 +1,93 @@
+[
+  {
+    "step": "r4t-s1",
+    "type": "semantic",
+    "label": "r4: the channel is sms",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-14T15:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "r4t-s1",
+    "type": "prospective",
+    "label": "r4: two reminders on two local days are both kept, though both fall on 2026-11-22 UTC",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-22T03:30:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Move money into savings\"}}, {\"trigger_at\": \"2026-11-22T14:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Call landlord\"}}]"
+  },
+  {
+    "step": "r4t-s2",
+    "type": "prospective",
+    "label": "r4: the cancel goes to the scheduler",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-5b532133\"}]"
+  },
+  {
+    "step": "r4t-s2",
+    "type": "prospective",
+    "label": "r4: the readback comes from the scheduler",
+    "passed": true,
+    "evidence": "[{}]"
+  },
+  {
+    "step": "r4t-s2",
+    "type": "prospective",
+    "label": "r4: exactly one reminder is left",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-22T03:30:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Move money into savings\"}}, {\"trigger_at\": \"2026-11-22T14:00:00Z\", \"status\": \"cancelled\", \"resume\": {}}]"
+  },
+  {
+    "step": "r4t-s2",
+    "type": "prospective",
+    "label": "judge: In its last reply, did the assistant say the one remaining reminder is the savings reminder at 9:30 pm US Central time on November 21 (it may add the UTC equivalent, but must not present 03:30 or November 22 as the local time), and that it will arrive by SMS / text message?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said: 'Still scheduled: - **Sat, 2026-11-21 at 9:30 PM CST** - \\\"Move money into savings\\\" (F-277b1815), arriving as an SMS text message.'\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r4t-fire-early",
+    "type": "prospective",
+    "label": "r4: 9:30 pm Central is 03:30 UTC: nothing fires at 03:20",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "r4t-fire-due",
+    "type": "prospective",
+    "label": "r4: the savings reminder fires at its local time",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-277b1815\", \"user_id\": \"eli\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "r4t-fire-due",
+    "type": "prospective",
+    "label": "r4: it carries its note on the channel on file (sms)",
+    "passed": true,
+    "evidence": "{\"message_id\": 1, \"user_id\": \"eli\", \"channel\": \"sms\", \"body\": \"Reminder: Move money into savings. (This is the reminder you scheduled - if you'd like to change or cancel it, message the card-care chat.)\", \"followup_id\": \"F-277b1815\", \"status\": \"sent\", \"drafted_at\": \"2026-11-22T03:35:00Z\", \"sent_at\": \"2026-11-22T03:35:00Z\", \"reviewed_by\": null}"
+  },
+  {
+    "step": "r4t-fire-due",
+    "type": "prospective",
+    "label": "r4: one message",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r4t-fire-cancelled",
+    "type": "prospective",
+    "label": "r4: the cancelled 8 am reminder does not fire",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "r4t-fire-cancelled",
+    "type": "prospective",
+    "label": "r4: no message was ever sent for a cancelled record",
+    "passed": true,
+    "evidence": "cancelled records: ['F-5b532133']; messages sent for them: []"
+  },
+  {
+    "step": "r4t-fire-cancelled",
+    "type": "prospective",
+    "label": "r4: still one message in total",
+    "passed": true,
+    "evidence": "1 messages"
+  }
+]
