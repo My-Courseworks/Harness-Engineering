@@ -32,7 +32,7 @@ CREATE TABLE room_bookings (
     booking_id  INTEGER PRIMARY KEY,
     room_id     INTEGER NOT NULL REFERENCES rooms(room_id),
     booked_by   INTEGER NOT NULL REFERENCES employees(emp_id),
-    start_time  TEXT NOT NULL,   -- ISO datetime, minute precision
+    start_time  TEXT NOT NULL,   -- ISO datetime (UTC), minute precision
     end_time    TEXT NOT NULL,
     status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled')),
     CHECK (end_time > start_time)

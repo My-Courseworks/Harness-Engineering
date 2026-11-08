@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 
 def iso_date(value: date) -> str:
@@ -10,8 +10,10 @@ def iso_date(value: date) -> str:
 
 
 def iso_datetime(value: datetime) -> str:
-    """Minute precision, so string comparison matches chronological order."""
-    return value.strftime("%Y-%m-%dT%H:%M")
+    """UTC, minute precision, so string comparison matches chronological order."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)      # naive seed values are UTC by definition
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M") + "Z"
 
 
 def at_hour(day: date, hour: int, minute: int = 0) -> datetime:

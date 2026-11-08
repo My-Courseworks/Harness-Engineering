@@ -23,7 +23,7 @@ CREATE TABLE expense_claims (
     description        TEXT,
     status             TEXT NOT NULL DEFAULT 'submitted'
                        CHECK (status IN ('submitted', 'needs_review', 'approved', 'rejected', 'paid')),
-    submitted_at       TEXT NOT NULL,   -- ISO datetime
+    submitted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M','now') || 'Z'),
     CHECK ((category = 'equipment') = (asset_category_id IS NOT NULL)),
     CHECK (category = 'equipment' OR asset_id IS NULL)
 );
@@ -38,7 +38,7 @@ CREATE TABLE claim_checks (
     rule_name   TEXT NOT NULL,
     result      TEXT NOT NULL CHECK (result IN ('pass', 'fail', 'pending')),
     details     TEXT,
-    checked_at  TEXT NOT NULL   -- ISO datetime
+    checked_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M','now') || 'Z')  -- ISO datetime (UTC)
 );
 
 CREATE INDEX idx_claim_checks_claim ON claim_checks(claim_id);

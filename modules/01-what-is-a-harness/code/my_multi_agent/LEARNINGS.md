@@ -1,0 +1,3 @@
+- Even while using `mode="task"` for sub agents, its better if each agent in their descriptions carry the descriptions(docstrings) of their tools as well, tool by tool.
+    - cause: the super agent (orchestrator) cannot see into which tools its subagent has, it only sees the description of its subagents.
+    - this can be done dynamically, as demonstrated in [commons/]() .

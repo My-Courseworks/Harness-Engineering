@@ -21,6 +21,7 @@ class Database:
     def __enter__(self) -> Database:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self._path)
+        self._conn.row_factory = sqlite3.Row 
         # SQLite does not enforce foreign keys unless asked, per connection.
         self._conn.execute("PRAGMA foreign_keys = ON")
         return self
@@ -68,3 +69,12 @@ class Database:
         if self._conn is None:
             raise RuntimeError("Database is not open; use it as a context manager.")
         return self._conn
+
+    def fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list:
+        """Run a read query. SQL text is a literal from source; values go through params."""
+        return self._require_conn().execute(sql, params).fetchall()
+
+    def execute(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run one write statement. Returns affected rows; __exit__ handles the commit."""
+        return self._require_conn().execute(sql, params).rowcount
+

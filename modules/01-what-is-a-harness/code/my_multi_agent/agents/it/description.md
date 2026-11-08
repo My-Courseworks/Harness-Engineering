@@ -1,0 +1,1 @@
+The IT agent that manages equipment assignment and employee-facing IT requests.
