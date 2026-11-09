@@ -613,7 +613,8 @@ my_multi_agent/
     │   ├── 03_scheduling.sql    #   leave_balances, leave_requests, rooms, room_bookings
     │   ├── 04_it.sql            #   asset_categories, assets, it_tickets
     │   ├── 05_finance.sql       #   expense_limits, expense_claims, claim_checks
-    │   └── 06_orchestrator.sql  #   notifications
+    │   ├── 06_orchestrator.sql  #   notifications
+    │   └── 07_users.sql         #   users (terminal operators and their role)
     ├── seed/
     │   ├── base.py              #   Seeder (abstract) and SeedContext
     │   ├── common.py            #   pure date and rounding helpers
@@ -622,6 +623,7 @@ my_multi_agent/
     │   ├── scheduling.py        #   SchedulingSeeder
     │   ├── it.py                #   ITSeeder
     │   ├── finance.py           #   FinanceSeeder
+    │   ├── users.py             #   UsersSeeder (fixed list: 3 admins, 3 users)
     │   └── __init__.py          #   default_seeders(): the ordered registry
     └── generated/
         └── ops.db               # build output; gitignored
@@ -679,7 +681,7 @@ How to create the database after cloning or moving this folder to another locati
    ```
 
 5. Check the output: a line `Built <path>/data_setup/generated/ops.db`, the list of schema files applied, and a row count per table. The counts for a default build are:
-   - `employees` 200, `cities` 15, `rooms` 12, `expense_claims` 83;
+   - `employees` 200, `cities` 15, `rooms` 12, `expense_claims` 83, `users` 6;
    - `notifications` 0, because it starts empty by design.
 
 **Options**

@@ -35,10 +35,18 @@ def now_local(date: bool = False) -> str:
 
 # ----------  NOTIFICATIONS -----------------
 
-def notify_db(emp_id: str, message: str):
+def notify_db(emp_id: str, message: str) -> bool:
     """
     """
     with _connect() as db:
+        LIST_EMPLOYEES_WITH_GIVEN_EMP_ID_QUERY = """
+select emp_name, status
+from employees
+where emp_id = ? 
+"""
+        emp_record = db.fetch_all(LIST_EMPLOYEES_WITH_GIVEN_EMP_ID_QUERY, (emp_id,))
+        if not emp_record:
+            return False
         db.insert_many(
             table = 'notifications',
             columns=['emp_id', 'message'],
@@ -46,6 +54,7 @@ def notify_db(emp_id: str, message: str):
                 (emp_id, message)
             ]
         )
+        return True
 
 def list_notifications_db(emp_id: str):
     """
@@ -76,3 +85,15 @@ def list_employees_from_db():
             """,
         )
     return [dict(r) for r in rows]
+
+# ----------  LIST CHAT USERS. -------------------
+def list_chat_users():
+    """
+    """
+    with _connect() as db:
+        rows = db.fetch_all(
+            """
+            SELECT * FROM users
+            """
+        )
+        return [dict(r) for r in rows]

@@ -8,6 +8,7 @@ from .it import ITSeeder
 from .people import PeopleSeeder
 from .reference import ReferenceSeeder
 from .scheduling import SchedulingSeeder
+from .users import UsersSeeder
 
 
 def default_seeders() -> list[Seeder]:
@@ -17,6 +18,7 @@ def default_seeders() -> list[Seeder]:
         SchedulingSeeder(),
         ITSeeder(),
         FinanceSeeder(),
+        UsersSeeder(),
     ]
 
 

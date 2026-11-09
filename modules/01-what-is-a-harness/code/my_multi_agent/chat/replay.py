@@ -1,0 +1,60 @@
+"""
+"""
+
+from rich.console import Console
+
+from google.adk.sessions import DatabaseSessionService
+
+from chat.render_chat import (
+    View,
+    print_user, 
+    print_answer,
+    print_thinking_header, print_thinking_delta,
+    print_tool_call, print_tool_response
+)
+
+async def replay_session(
+    app_name: str, session_id: str, user_id: str, session_service: DatabaseSessionService,
+    console: Console, view: View
+):
+    """
+    """
+    # check if session exists, and retrieve last 5 messages to be displayed.
+    try:
+        session = await session_service.get_session(
+            app_name=app_name, user_id=user_id, session_id = session_id
+        )
+        if session:
+            invocations = {}
+            for event in getattr(session, 'events'):
+                if event.invocation_id not in invocations:
+                    invocations[event.invocation_id] = event.timestamp
+                else:
+                    invocations[event.invocation_id] = max(event.timestamp, invocations[event.invocation_id])
+
+            last_5_invocations = [x[0] for x in sorted(invocations.items(), key=lambda x: x[1], reverse=True)][:5][::-1]
+
+            for event in getattr(session, 'events'):
+                if event.invocation_id not in last_5_invocations:
+                    continue
+                if not event.content or not event.content.parts:
+                    continue
+
+                author = event.author or "agent"
+
+                for part in getattr(event.content, 'parts') or []:
+                    if event.content.role == "user" and part.text:
+                        print_user(console=console, view=view, text=part.text)
+                    elif part.function_call:
+                        print_tool_call(console=console, view=view, author=author, name = part.function_call.name, args = part.function_call.args)
+                    elif part.function_response:
+                        print_tool_response(console=console, view=view, name = part.function_response.name, response = part.function_response.response)
+                    elif part.text and part.thought:
+                        print_thinking_header(console=console, view=view, author=author)
+                        print_thinking_delta(console=console, view=view, delta=part.text)
+                        console.print()
+                    elif part.text:
+                        print_answer(console=console, view=view, author=author, text=part.text)
+                    
+    except Exception as _:
+        console.print_exception()
