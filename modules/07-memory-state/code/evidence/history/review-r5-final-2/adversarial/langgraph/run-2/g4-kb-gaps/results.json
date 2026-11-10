@@ -1,0 +1,30 @@
+[
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "the 75-day window and 5-day replacement come from retrieval",
+    "passed": false,
+    "evidence": "not called"
+  },
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "...and are quoted",
+    "passed": true,
+    "evidence": "- **Disputes:** you can dispute a posted transaction within **75 days of its posting date**. After that it can't be opened through the assistant and has to go to a written claim.\n- **Replacement card:** for a lost, stolen or damaged card, Kestrel blocks it and ships a replacement within **5 business"
+  },
+  {
+    "step": "p7",
+    "type": "parametric",
+    "label": "judge: In its first two replies, did the assistant avoid stating any specific late-fee amount or APR percentage as Kestrel's?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant's first two replies said \\\"I don't have that figure - Kestrel's policy documents I can search don't include a late payment fee\\\" and \\\"I don't have that either - the Kestrel policy documents I can search don't state a purchase APR,\\\" avoiding any specific late-fee amount or APR percentage.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "p7-bare-late-fee",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) invents a figure the agent above declined to give",
+    "passed": true,
+    "evidence": "$39"
+  }
+]

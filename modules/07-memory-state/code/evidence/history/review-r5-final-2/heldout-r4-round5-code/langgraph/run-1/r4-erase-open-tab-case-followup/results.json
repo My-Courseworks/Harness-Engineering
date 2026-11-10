@@ -1,0 +1,114 @@
+[
+  {
+    "step": "r4e1-s1",
+    "type": "external",
+    "label": "r4: the dispute is filed on T-3002",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5001\", \"status\": \"under_review\"}]"
+  },
+  {
+    "step": "r4e1-s1",
+    "type": "prospective",
+    "label": "r4: its follow-up is due 2026-11-23, no approval",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-23T10:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5001\"}}]"
+  },
+  {
+    "step": "r4e1-s1",
+    "type": "semantic",
+    "label": "r4: the travel notice is stored until 2026-11-28",
+    "passed": true,
+    "evidence": "{\"value\": \"Reykjavik\", \"as_of\": \"2026-11-13T10:00:00Z\", \"valid_until\": \"2026-11-28\", \"expires_at\": \"2026-11-29T00:00:00Z\"}"
+  },
+  {
+    "step": "r4e1-fire-1",
+    "type": "semantic",
+    "label": "r4: an erasure pending at fire time still runs: no fact remains",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4e1-fire-1",
+    "type": "episodic",
+    "label": "r4: no episode remains, and the fired follow-up wrote none",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "r4e1-fire-1",
+    "type": "working",
+    "label": "r4: no transcript remains: not the open tab, not the follow-up's own session",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "r4e1-fire-1",
+    "type": "working",
+    "label": "r4: the follow-up session is unattended even though an erasure ran around it",
+    "passed": true,
+    "evidence": "[\"find_transactions\", \"get_case_status\", \"list_my_followups\", \"load_memory\", \"notify_customer\", \"report_malformed_tool_call\", \"search_policy\"]"
+  },
+  {
+    "step": "r4e1-fire-1",
+    "type": "guard",
+    "label": "r4: nothing she said is in any memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "r4e1-fire-2",
+    "type": "prospective",
+    "label": "r4: the case follow-up still reaches the erased customer, exactly once",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r4e1-fire-2",
+    "type": "guard",
+    "label": "r4: no outbound message carries a masking token or a masked identifier",
+    "passed": true,
+    "evidence": "1 outbound messages and episodes clean"
+  },
+  {
+    "step": "r4e1-fire-2",
+    "type": "episodic",
+    "label": "r4: still no episode after the retry window",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "r4e1-fire-2",
+    "type": "working",
+    "label": "r4: still no transcript after the retry window",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "r4e1-s3",
+    "type": "episodic",
+    "label": "r4: nothing erased comes back in a later chat",
+    "passed": true,
+    "evidence": "Here's what I have on file for you:\n\n- **Contact channel:** none set - so follow-ups and reminders reach you by secure message in the Kestrel app (the default).\n- **Travel notice:** none on file.\n- **Saved facts:** nothing else.\n\nOn your travel plans: I have no record of an earlier conversation wher"
+  },
+  {
+    "step": "r4e1-s3",
+    "type": "episodic",
+    "label": "r4: recall, if used, returns nothing erased",
+    "passed": true,
+    "evidence": "{\"memories\": []}"
+  },
+  {
+    "step": "r4e1-s3",
+    "type": "semantic",
+    "label": "r4: no fact was recreated",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4e1-s3",
+    "type": "guard",
+    "label": "r4: the erased trip is still in no memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  }
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "step": "vg-marco",
+    "type": "external",
+    "label": "the dispute is filed with the details the customer gave at the start",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled their FitPulse membership in October, before the November 3 annual renewal charge.\"}]"
+  },
+  {
+    "step": "vg-marco",
+    "type": "working",
+    "label": "verification uses only digits the customer typed",
+    "passed": true,
+    "evidence": "[{\"card_last4\": \"8830\", \"postal_code\": \"10011\"}]"
+  },
+  {
+    "step": "vg-marco",
+    "type": "working",
+    "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant did not ask again after the customer stated \\\"card ending 8830, ZIP 10011,\\\" instead using those values directly in the verify_identity tool.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "vg-dana",
+    "type": "external",
+    "label": "the dispute is filed with the details the customer gave at the start",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October; the 1 Nov 2026 charge of $9.99 for \\\"CloudNest 2TB monthly\\\" was billed after the cancellation.\"}]"
+  },
+  {
+    "step": "vg-dana",
+    "type": "working",
+    "label": "verification uses only digits the customer typed",
+    "passed": true,
+    "evidence": "[{\"card_last4\": \"5127\", \"postal_code\": \"60614\"}]"
+  },
+  {
+    "step": "vg-dana",
+    "type": "working",
+    "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"After the customer provided their last four digits and ZIP, the assistant did not ask for them again and later said, \\\"No card numbers, please.\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "vg-eli",
+    "type": "external",
+    "label": "the dispute is filed with the details the customer gave at the start",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says the subscription was cancelled in October, before the 2026-11-01 charge.\"}]"
+  },
+  {
+    "step": "vg-eli",
+    "type": "working",
+    "label": "verification uses only digits the customer typed",
+    "passed": true,
+    "evidence": "[{\"card_last4\": \"6610\", \"postal_code\": \"73301\"}]"
+  },
+  {
+    "step": "vg-eli",
+    "type": "working",
+    "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"After the customer stated \\\"My card ends in 6610 and my billing ZIP is 73301,\\\" the assistant did not ask for those details again and the verify_identity tool used \\\"card_last4\\\": \\\"6610\\\", \\\"postal_code\\\": \\\"73301\\\".\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

@@ -27,7 +27,9 @@ What is covered, in the review's numbering:
        store scanner must see a secret that begins or ends a string stored as msgpack (LangGraph's checkpoints), which
        the scanner of `f0300c2` did not (scanner-check-before.md in the same folder);
 - fp3  (found by the tuning pass before the second final pass) the turn the harness returns carries no one-time code even
-       when the model repeated one the customer typed. Fails on `1a31895` (evidence/adversarial-before-reply-echo/).
+       when the model repeated one the customer typed. Fails on `1a31895` (evidence/adversarial-before-reply-echo/);
+- fp4  (found by the second declared-final pass) the status of a decided case says what can still be done with it.
+       Fails on `5140524` (evidence/adversarial-before-case-next-step/).
 """
 
 import argparse
@@ -214,6 +216,22 @@ def check_reply_that_repeats_a_code() -> list[tuple[str, bool, str]]:
     returned = masking.turn_without_codes(record, record["customer"], {"018899"})
     return [("fp3 a reply that repeats a one-time code the customer typed is returned without it", "018899" not in json.dumps(returned),
              json.dumps(returned))]
+
+
+def check_decided_case_says_what_can_be_done(tmp: Path) -> list[tuple[str, bool, str]]:
+    """The second final pass, LangGraph, both runs: the follow-up for a rejected case told the customer to message the chat
+    "and we can add it to your case". Nothing can be added to a decided case (add_case_evidence refuses and says to file a
+    new dispute), but the status the model read did not say so. The record must."""
+    bank = tmp / "bank_next_step.db"
+    world.seed_bank(bank)
+    opened, _ = world.open_case(bank, "priya", "T-1002", "cancelled_subscription", "says she cancelled", NOW)
+    open_view = world.with_next_step(world.list_cases(bank, "priya", opened["case_id"])[0])
+    world.resolve_case(bank, opened["case_id"], "rejected", "NO_CANCELLATION_PROOF", "Merchant states no cancellation request is on record.", NOW, "D-1")
+    decided = world.with_next_step(world.list_cases(bank, "priya", opened["case_id"])[0])
+    said = json.dumps(decided).lower()
+    return [("fp4 a decided case's status says nothing can be added to it and that new proof means a new dispute",
+             "next_step" in decided and "new dispute" in said and "nothing can be added" in said, json.dumps(decided)),
+            ("fp4 an open case's status makes no such statement", "next_step" not in open_view, json.dumps(open_view))]
 
 
 def check_reasoning_last4() -> list[tuple[str, bool, str]]:
@@ -415,7 +433,7 @@ def main() -> int:
         without_files = (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
                          check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code)
         with_files = (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names,
-                      check_repeats_after_lost_result, check_scanner_reads_msgpack_stores)
+                      check_repeats_after_lost_result, check_scanner_reads_msgpack_stores, check_decided_case_says_what_can_be_done)
         for fn in (*without_files, *with_files):
             try:
                 rows += fn(tmp) if fn in with_files else fn()

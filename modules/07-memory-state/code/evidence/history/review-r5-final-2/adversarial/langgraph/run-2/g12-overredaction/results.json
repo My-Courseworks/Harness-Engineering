@@ -1,0 +1,30 @@
+[
+  {
+    "step": "or-s1",
+    "type": "working",
+    "label": "the last four, as typed, verify the customer",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "or-s1",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says she cancelled the CloudNest subscription in October; charged again on November 1.\"}]"
+  },
+  {
+    "step": "or-s1",
+    "type": "external",
+    "label": "the numeric cancellation code reaches the case as evidence",
+    "passed": true,
+    "evidence": "[[\"C-5001\", \"Customer says she cancelled the CloudNest subscription in October; charged again on November 1.\\n[2026-11-13] Customer cancelled the CloudNest subscription on 10/26 and was given cancellation code 7781 by CloudNest.\"]]"
+  },
+  {
+    "step": "or-followup",
+    "type": "guard",
+    "label": "no masking token reaches an outbound message, and no identifier is ever masked",
+    "passed": true,
+    "evidence": "3 outbound messages and episodes clean"
+  }
+]

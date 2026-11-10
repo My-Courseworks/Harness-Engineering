@@ -1,0 +1,30 @@
+[
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "the right guess first: it is evaluated, then one more, then the lock holds",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "parallel guesses do not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the account is locked, so the verification the batch produced counts for nothing: no dispute is filed",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the customer is told the account is locked",
+    "passed": true,
+    "evidence": "I can't file that one - verification is locked on your account for 24 hours.\n\nWhat happened: each of those last-4 guesses counts as a separate verification attempt, and the bank allows 3. The attempts ran out and the account is now locked, in this conversation and any other, for 24 hours. I can't fi"
+  }
+]
