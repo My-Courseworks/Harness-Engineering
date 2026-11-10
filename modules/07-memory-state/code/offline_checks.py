@@ -20,7 +20,12 @@ What is covered, in the review's numbering:
 - 012  (the captain's question) a write tool called again after its result was lost to a crash is recognised as a repeat;
 - fp1  (found by round 5's first declared-final pass, not by the review) a security code said twice in one message, in
        words and digits or typed twice: the two renderings joined into one six-digit run that was neither a code nor a
-       card. These fail on `8051dbd`; that "before" is in evidence/adversarial-before-code-said-twice/.
+       card. These fail on `8051dbd`; that "before" is in evidence/adversarial-before-code-said-twice/;
+- fp2  (found by twelve more unscripted runs before the second final pass) an expiry written as a month name and two
+       digits ("July / 29"), and a bare last four beside a ZIP masked as a security code right after a card paste. These
+       fail on `f0300c2`; that "before" is in evidence/adversarial-before-sweep-shapes/. And the check of the check: the
+       store scanner must see a secret that begins or ends a string stored as msgpack (LangGraph's checkpoints), which
+       the scanner of `f0300c2` did not (scanner-check-before.md in the same folder).
 """
 
 import argparse
@@ -109,6 +114,34 @@ SAID_TWICE_KEEPS = [
     "the parcel arrives Jul 29",
 ]
 
+# before the second final pass the unscripted "notes-app paste" persona was run twelve more times on the fixed code: one
+# customer wrote her expiry as "July / 29" (kept raw, and invisible to the scanner until it learned the shape), and one
+# answered the verification question right after her paste with "it's 5127 and ZIP 60614", which was masked as a security code
+SWEEP_LEAKS = [
+    ["expiry: July / 29"],
+    ["exp Jul '29"],
+    ["old card: 6011 1111 1111 1117\nsec code: 386\nexpiry: Jul/29"],
+    ["the card expires July of 29"],
+    ["exp Jul 33"],
+    ["expiry: seven twenty-nine"],
+    ["old card: 6011 1111 1111 1117", "cvv 1386 and ZIP 60614"],
+    ["old card: 6011 1111 1111 1117", "386 and ZIP 60614"],
+    # the scanner, once it could see a month name with an apostrophe year, found this in the independent fuzzer's corpus:
+    # one of its twelve expiry phrasings had never been masked, and had never been counted as a miss
+    ["starts 6011 1111 1111", "next 1117", "expires end of July '29"],
+    ["oh, expires end of July '29"],
+    ["old card 6011 1111 1111 1117, expiring Jul '29"],
+]
+SWEEP_KEEPS = [
+    ["old card: 6011 1111 1111 1117\nsecurity code: 386\nexpiry: 07/29", "Fine, it's 5127 and ZIP 60614."],
+    ["old card: 6011 1111 1111 1117\nsecurity code: 386\nexpiry: 07/29", "5127, ZIP 60614."],
+    ["my trial exp Jul 29, cancel it before then"],
+    ["the parcel arrives July / 29 at the latest"],
+    ["my subscription expires end of July '29"],
+    ["the dispute window expires December 2026, right?"],
+    ["my travel notice expires July 2029"],
+]
+
 
 def _secrets_left(stored: list[str]) -> list[str]:
     return store_audit.secrets_left("\n".join(stored), {"pans": PANS, "codes": ["737", "7891", "7293", "1234"], "expiries": ["12/29", "08/27"]})
@@ -137,6 +170,36 @@ def check_code_said_twice() -> list[tuple[str, bool, str]]:
         stored = masking.mask_conversation([message])
         rows.append((f"fp1 kept: {message!r}", stored == [masking.normalize(message)], json.dumps(stored)))
     return rows
+
+
+def check_sweep_shapes() -> list[tuple[str, bool, str]]:
+    secrets = {"pans": ["6011111111111117"], "codes": ["386", "1386"], "expiries": ["07/29", "07/33"]}
+    rows = []
+    for messages in SWEEP_LEAKS:
+        stored = masking.mask_conversation(messages)
+        left = store_audit.secrets_left("\n".join(stored), secrets)
+        rows.append((f"fp2 masked: {messages!r}", not left, json.dumps({"stored": stored, "left": left})))
+    for messages in SWEEP_KEEPS:
+        stored = masking.mask_conversation(messages)
+        rows.append((f"fp2 last message kept as typed: {messages!r}", stored[-1] == masking.normalize(messages[-1]), json.dumps(stored)))
+    return rows
+
+
+def check_scanner_reads_msgpack_stores(tmp: Path) -> list[tuple[str, bool, str]]:
+    """The check of the check. LangGraph's checkpoints are msgpack: a stored string is followed directly by the header byte
+    of the next value. A scanner that reads the file as text and drops what is not text sees "expiry: 12/29additional_kwargs"
+    and "entered737id", and its whole-token patterns match neither."""
+    import sqlite3
+
+    import ormsgpack
+    path = tmp / "lg_like.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute("CREATE TABLE writes (channel TEXT, value BLOB)")
+        conn.execute("INSERT INTO writes VALUES ('messages', ?)", (ormsgpack.packb({"content": "old card, expiry: 12/29", "additional_kwargs": {}}),))
+        conn.execute("INSERT INTO writes VALUES ('__pregel_tasks', ?)", (ormsgpack.packb({"name": "confirm", "args": {"entered": "737"}, "id": "call_1"}),))
+    found = store_audit.card_data_locations([path], {"pans": [], "codes": ["737"], "expiries": ["12/29"]})
+    return [("fp2 the scanner sees an expiry that ends a msgpack-stored message", "expiry 12/29" in found, json.dumps(found)),
+            ("fp2 the scanner sees a code that is a whole msgpack-stored string (a tool-call argument)", "security code 737" in found, json.dumps(found))]
 
 
 def check_reasoning_last4() -> list[tuple[str, bool, str]]:
@@ -336,9 +399,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = Path(tmp_name)
         for fn in (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
-                   check_code_said_twice):
+                   check_code_said_twice, check_sweep_shapes):
             rows += fn()
-        for fn in (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names, check_repeats_after_lost_result):
+        for fn in (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names, check_repeats_after_lost_result,
+                   check_scanner_reads_msgpack_stores):
             try:
                 rows += fn(tmp)
             except Exception as exc:  # a missing function on old code is a failed check, not a crash

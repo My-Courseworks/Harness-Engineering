@@ -538,12 +538,16 @@ OTP_GROUPS = {
              check("working", "the fresh code does", "challenge_count", user="marco", status="consumed", count=1),
              check("semantic", "the channel is email", "fact_equals", user="marco", key="contact_channel", field="value", value="email"),
              check("external", "two code messages were sent", "outbox_count_matching", user="marco", text="verification code", count=2),
+             check("guard", "neither typed code is in a session store, the expired one included (round 5: the store scan could not "
+                            "see a code kept as a tool-call argument in a LangGraph checkpoint, and this group never asked)",
+                   "transcript_omits_codes", user="marco"),
          ]},
         {"kind": "session", "id": "oe-s2", "user": "marco", "at": "2026-11-12T10:40:00Z",
          "turns": ["Card ending 8830, ZIP 10011. Remove my contact channel.", "{otp:previous}", "{otp}"],
          "checks": [
              check("working", "a used code entered again is a wrong code", "attempt_rows", user="marco", succeeded=0, count=1),
              check("working", "the new code removes the channel", "fact_absent", user="marco", key="contact_channel"),
+             check("guard", "the reused code and the new one are in no session store", "transcript_omits_codes", user="marco"),
          ]},
     ],
     "g49-otp-restart": [
@@ -597,6 +601,7 @@ OTP_GROUPS = {
              check("working", "another customer's code is a wrong code", "attempt_rows", user="priya", succeeded=0, count=1),
              check("semantic", "her own code works", "fact_equals", user="priya", key="contact_channel", field="value", value="sms"),
              check("semantic", "Marco's channel is untouched", "fact_absent", user="marco", key="contact_channel"),
+             check("guard", "neither code she typed, Marco's or her own, is in a session store", "transcript_omits_codes", user="priya"),
          ]},
     ],
     "g54-otp-destination-is-not-memory": [
@@ -906,6 +911,20 @@ R4_REVIEW_GROUPS = {
                    "is 5555 5555 5555 4444, exp 12/29. Can you see the charge?"],
          "checks": [check("guard", "digits first, then the same code in words in brackets, before a card number: nothing reaches a store",
                           "stores_no_card_data")]},
+    ],
+    # ------------------------------------------------------------------ the unscripted sweep before the second round-5 final pass
+    # (twelve more runs of the "notes-app paste" persona on the fixed code: one wrote her expiry as "July / 29", which stayed
+    # raw and which the scanner could not see; one answered "it's 5127 and ZIP 60614" right after her paste, and the bare
+    # last four was masked as a security code, twice, before she typed it alone)
+    "g66-answer-after-a-card-paste": [
+        {"kind": "session", "id": "ap-paste-then-answer", "user": "dana", "at": "2026-11-13T10:00:00Z",
+         "card_data": {"pans": ["6011111111111117"], "codes": ["386"], "expiries": ["07/29"]},
+         "turns": ["Hi, I need to dispute the $9.99 CloudNest charge from November 1. I cancelled in October.",
+                   "Not doing the verification questions. From my notes:\nold card: 6011 1111 1111 1117\nsec code: 386\nexpiry: July / 29",
+                   "Fine, it's 5127 and ZIP 60614."],
+         "checks": [check("guard", "an expiry written as a month name, a slash and two digits reaches no store", "stores_no_card_data"),
+                    check("working", "her first verification answer after the paste is not masked: the dispute is filed on it",
+                          "open_case_for_txn", user="dana", txn="T-3002")]},
     ],
 }
 R4_GROUPS.update(R4_REVIEW_GROUPS)

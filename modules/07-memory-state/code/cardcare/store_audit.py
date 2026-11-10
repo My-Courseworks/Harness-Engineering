@@ -16,7 +16,10 @@ month name and year, or spelled).
 
 import json
 import re
+import sqlite3
 import unicodedata
+from contextlib import closing
+from pathlib import Path
 
 DEFAULT_SECRETS = {"pans": ["5555555555554444"], "codes": ["737"], "expiries": ["12/29"]}
 # Published test numbers only; no real card.
@@ -33,8 +36,66 @@ _MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct",
 _WORD = re.compile(r"[A-Za-z]+")
 
 
+def store_text(path: Path) -> str:
+    """A store file as the text the scanner reads: its raw bytes, and every string it holds as a string.
+
+    Round 5 found the raw bytes alone misleading for LangGraph's checkpoints. They are msgpack: a string is followed
+    directly by the header byte of the next value, which is not text. Dropping such bytes glued a stored string to its
+    neighbours ("...expiry: July / 29additional_kwargs", "entered325096id"), so a secret that began or ended a stored
+    string had no boundary and matched nothing. Undecodable bytes are now separators, and an SQLite file is also read as
+    a database: every text value, and every string inside a blob decoded as msgpack (nested extension payloads too), on
+    a line of its own. The raw bytes stay in the text because they also cover the write-ahead log and freed pages."""
+    raw = Path(path).read_bytes()
+    return raw.decode("utf-8", errors="replace").replace("\ufffd", " ") + "\n" + "\n".join(_sqlite_strings(Path(path), raw))
+
+
+def _sqlite_strings(path: Path, raw: bytes) -> list[str]:
+    if not raw.startswith(b"SQLite format 3\x00"):
+        return []
+    found: list[str] = []
+    try:
+        with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)) as conn:
+            for (table,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall():
+                for row in conn.execute(f'SELECT * FROM "{table}"'):
+                    for value in row:
+                        if isinstance(value, str):
+                            found.append(value)
+                        elif isinstance(value, (bytes, bytearray, memoryview)):
+                            found += _blob_strings(bytes(value))
+    except sqlite3.Error:
+        pass  # a file that cannot be opened as a database is still scanned as bytes
+    return found
+
+
+def _blob_strings(blob: bytes) -> list[str]:
+    """Every string inside a msgpack value; a blob that is not msgpack is read as text."""
+    try:
+        import ormsgpack
+    except ImportError:
+        return [blob.decode("utf-8", errors="replace").replace("\ufffd", " ")]
+
+    def unpack(data: bytes):
+        return ormsgpack.unpackb(data, ext_hook=lambda _code, payload: unpack(payload), option=ormsgpack.OPT_NON_STR_KEYS)
+
+    def strings(value) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (bytes, bytearray)):
+            return _blob_strings(bytes(value)) if value else []
+        if isinstance(value, dict):
+            return [s for pair in value.items() for item in pair for s in strings(item)]
+        if isinstance(value, (list, tuple)):
+            return [s for item in value for s in strings(item)]
+        return []
+
+    try:
+        return strings(unpack(blob))
+    except Exception:  # not msgpack (JSON metadata, plain bytes)
+        return [blob.decode("utf-8", errors="replace").replace("\ufffd", " ")]
+
+
 def auditor_text(data: bytes | str) -> str:
-    text = data.decode("utf-8", errors="ignore") if isinstance(data, bytes) else data
+    text = data.decode("utf-8", errors="replace").replace("\ufffd", " ") if isinstance(data, bytes) else data
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
     text = unicodedata.normalize("NFKC", text)
     # a UUID (a LangGraph message or checkpoint id) is never card data; its digit groups ("…-a296-4321-…") are not codes
@@ -155,7 +216,9 @@ def expiry_present(text: str, expiry: str) -> bool:
     patterns = [
         rf"(?<![0-9A-Za-z\-:/.$]){month_number:02d}(?:{sep})(?:20)?{yy}(?![0-9A-Za-z])(?![:.]\d)",
         rf"(?<![0-9A-Za-z\-:/.$]){month_number}(?:{sep})(?:20)?{yy}(?![0-9A-Za-z])(?![:.]\d)" if month_number < 10 else None,
-        rf"\b{month_name}[a-z]*\.?,?\s*(?:20\s?)?{yy}\b",
+        # "July 29", "Jul. 2029", and (round 5: an unscripted customer wrote "expiry: July / 29", which this pattern did not
+        # see) "July / 29", "Jul/29", "Jul '29", "July of 29"
+        rf"\b{month_name}[a-z]*[\s.,/'’\-]{{0,4}}(?:of\s+)?['’]?(?:20\s?)?{yy}\b",
     ]
     for view_text in (text, _spoken_to_digits(text)):
         for pattern in filter(None, patterns):
@@ -201,7 +264,7 @@ def card_data_locations(paths: list, secrets: dict | None = None) -> dict[str, l
     secrets = merged_secrets(secrets)
     hits: dict[str, list[str]] = {}
     for path in paths:
-        for finding in secrets_left(path.read_bytes().decode("utf-8", errors="ignore"), secrets):
+        for finding in secrets_left(store_text(path), secrets):
             hits.setdefault(finding, []).append(path.name)
     return hits
 

@@ -403,6 +403,31 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
                            f"the subscription exp {a:02d} {b} is the one I cancelled", f"seats {a} {b} on the flight to Lisbon",
                            f"my passport expires {a:02d} 20{b}"])
         cases.append({"messages": [text], "expect": "keep", "note": "an amount or a date, not an expiry", "pans": [], "codes": [], "expiries": []})
+    # ---- round 5, from the unscripted sweep before the second final pass (appended, as above)
+    for _ in range(per_family):  # an expiry as a month name and two digits after its cue
+        month, year = rng.randint(1, 12), rng.randint(26, 34)
+        name = rng.choice([_MONTHS[month - 1], _MONTHS[month - 1][:3], _MONTHS[month - 1][:3].lower()])
+        written = name + rng.choice([" / ", "/", " '", " ", ". ", " of ", "-"]) + str(year)
+        cue = rng.choice(["exp {}", "expiry: {}", "exp. date {}", "expiration: {}", "valid thru {}", "the card expires {}"])
+        pan = _random_pan(rng) if rng.random() < 0.5 else None
+        text = cue.format(written) if pan is None else rng.choice(["{n}\n{e}", "{n}, {e}", "card {n} {e}"]).format(
+            n=" ".join(_groups(pan, rng)), e=cue.format(written))
+        cases.append({"messages": [text], "expect": "mask", "note": "expiry as a month name and two digits", "pans": [pan] if pan else [],
+                      "codes": [], "expiries": [f"{month:02d}/{year}"]})
+    for _ in range(per_family):  # keep: a bare last four beside a ZIP, typed right after a message that carried card data
+        last4, zip_code = f"{rng.randint(1000, 9999)}", f"{rng.randint(10000, 99999)}"
+        answer = rng.choice(["Fine, it's {a} and ZIP {z}.", "{a}, ZIP {z}.", "{a} and my zip is {z}", "ok: {a} / zip {z}", "it's {a}, zip code {z}"])
+        cases.append({"messages": [rng.choice(["my card is [REDACTED CARD NUMBER]", "[REDACTED CARD NUMBER] exp [REDACTED EXPIRY]"]),
+                                   answer.format(a=last4, z=zip_code)],
+                      "expect": "keep", "note": "bare last four with a zip after a card message", "pans": [], "codes": [], "expiries": []})
+    for _ in range(per_family):  # ... which must not let a code through: three digits, or four with a cue, beside a ZIP
+        zip_code = f"{rng.randint(10000, 99999)}"
+        code3, _ = _code(rng, amex=False)
+        code4, _ = _code(rng, amex=True)
+        code, answer = rng.choice([(code3, f"{code3} and ZIP {zip_code}"), (code4, f"cvv {code4} and ZIP {zip_code}"),
+                                   (code4, f"the security code is {code4}, zip {zip_code}"), (code3, f"it's {code3}, zip {zip_code}")])
+        cases.append({"messages": ["my card is [REDACTED CARD NUMBER]", answer], "expect": "mask", "note": "a code with a zip after a card message",
+                      "pans": [], "codes": [code], "expiries": []})
     return cases
 
 
