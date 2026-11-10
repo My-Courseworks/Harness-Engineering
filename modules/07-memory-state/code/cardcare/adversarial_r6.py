@@ -19,6 +19,12 @@ LIST_REQUEST = ("Hi! Small favour, nothing to do with my account: these are parc
 PACKING = ("passport", "charger", "adapter", "sunscreen", "raincoat", "umbrella", "toothbrush", "sandals", "notebook", "headphones",
            "water bottle", "first-aid kit", "sunglasses", "guidebook", "travel pillow")
 
+# a nineteen-line checklist, numbers in most items: the first of 400 generated lists that the masker of 3bf1a29 damaged
+CHECKLIST = ["1. Charge 2 power banks", "2. Keep 75 euros in cash", "3. Verify your phone number", "4. Turn on alerts", "5. Tell 90 family members",
+             "6. Pack 75 copies of your passport", "7. Save the 7-hour helpline number", "8. Save the 3-hour helpline number", "9. Keep 75 euros in cash",
+             "10. Save the 7-hour helpline number", "11. Carry 3 adapters", "12. Book 30 nights first", "13. Carry 12 adapters", "14. Charge 12 power banks",
+             "15. Pack 75 copies of your passport", "16. Verify your phone number", "17. Keep 2 euros in cash", "18. Add a travel notice", "19. Bring 2 spare cards"]
+
 R6_GROUPS = {
     # ------------------------------------------------------------------ 2.1: the hash-match redaction as a guess oracle
     "g67-otp-list-oracle": [
@@ -76,6 +82,33 @@ R6_GROUPS = {
          "checks": [check("working", "amounts, a date and a points balance are not codes: no failed attempt", "attempt_rows", user="eli", succeeded=0, count=0),
                     check("working", "and they are stored as typed", "customer_text_contains", turn=1, text="$1,234.56 on 2026-11-13 and I have 123,456 points"),
                     check("semantic", "and the code typed after them is accepted", "fact_equals", user="eli", key="contact_channel", field="value", value="email")]},
+    ],
+    # ------------------------------------------------------------------ what the blind held-out run found (round 6's first final pass)
+    # (1) after an earlier card paste, the first twelve digits of a number sent in two goes are masked at once, and the
+    # message that completes it, "CVC 047 1111", was then stored whole; (2) a month name and two digits directly before
+    # a card number stayed as a date; (3) seen while reading the run: a number followed by "... days ago, so it can't be
+    # that one" took the last word for a seventeenth digit and the words between went with it; (4) a numbered list whose
+    # items hold other numbers lost its middle lines (171 of 400 generated lists).
+    "g81-what-the-blind-run-found": [
+        {"kind": "session", "id": "bf-seam", "user": "marco", "at": "2026-11-25T10:00:00Z",
+         "card_data": {"pans": ["4242424242424242", "4111111111111111"], "codes": ["047"]},
+         "turns": ["FitPulse keeps billing a card I closed. My new one is 4242 4242 4242 4242, that one is fine.",
+                   "The closed one, in two goes because the app keeps cutting me off: 4111 1111 1111", "CVC 047 1111"],
+         "checks": [check("guard", "a code at the seam of a number sent in two goes, after an earlier card paste, reaches no store", "stores_no_card_data"),
+                    check("guard", "the message that completes the number holds a marker, not the code", "customer_text_contains", turn=2, text="[REDACTED")]},
+        {"kind": "session", "id": "bf-month-expiry", "user": "eli", "at": "2026-11-26T10:00:00Z",
+         "card_data": {"pans": ["4242424242424242"], "expiries": ["09/27"]},
+         "turns": ["Sorry, in a rush. Here's my old card note: September 27 4242 4242 4242 4242 / cvc 123. Can you see my CloudNest charges?"],
+         "checks": [check("guard", "a month name and two digits directly before the number are its expiry: nothing of the note reaches a store", "stores_no_card_data")]},
+        {"kind": "session", "id": "bf-unit-word", "user": "dana", "at": "2026-11-27T10:00:00Z", "card_data": {"pans": ["3530111333300000"]},
+         "turns": ["I stopped using 3530 1113 3330 0000 days ago, so it can't be that one. Which card do you have on my account?"],
+         "checks": [check("guard", "a number followed by a unit word is masked", "stores_no_card_data"),
+                    check("working", "and the words after it are stored as typed", "customer_text_contains", turn=0, text="days ago, so it can't be that one.")]},
+        {"kind": "session", "id": "bf-list", "user": "priya", "at": "2026-11-28T10:00:00Z",
+         "turns": ["Unrelated to my card. This is my packing checklist, exactly as I wrote it:\n" + "\n".join(CHECKLIST) + "\nHow many lines is that?"],
+         "checks": [check("working", "a numbered list whose items hold other numbers is stored whole: line 5", "customer_text_contains", turn=0, text=CHECKLIST[4]),
+                    check("working", "and line 13", "customer_text_contains", turn=0, text=CHECKLIST[12]),
+                    check("working", "and nothing in the reply was masked", "reply_omits", turn=0, none_of=["REDACTED"])]},
     ],
     # ------------------------------------------------------------------ nb 5: what counts as an entry
     "g69-otp-what-is-an-entry": [

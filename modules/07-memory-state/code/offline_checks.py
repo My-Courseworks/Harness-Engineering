@@ -313,6 +313,45 @@ def check_r5_masker() -> list[tuple[str, bool, str]]:
     return rows
 
 
+def check_blind_findings() -> list[tuple[str, bool, str]]:
+    """What round 6's blind held-out run found in the masker, each as it was typed there or reduced from it, plus the
+    harness defect it found in the list-echo driver."""
+    import run_scenario
+    from cardcare.adversarial_r6 import CHECKLIST
+    stored = lambda messages: masking.mask_conversation(messages)
+    left = lambda messages, **secrets: store_audit.secrets_left("\n".join(stored(messages)), {"pans": [], "codes": [], "expiries": [], **secrets})
+    paste = ["My new card is 4242 4242 4242 4242, that one is fine.", "The closed one, in two goes: 4111 1111 1111", "CVC 047 1111"]
+    note = ["Here's my old card note: September 27 4242 4242 4242 4242 / cvc 123."]
+    unit = "I stopped using 3530 1113 3330 0000 days ago, so it can't be that one."
+    listed = "\n".join(CHECKLIST)
+    inline = "Bring: 1. two adapters 2. 75 euros 3. 12 photos 4. 30 pills 5. 90 dollars 6. 7 shirts 7. 3 books 8. 24 socks 9. 2 hats 10. 75 stamps 11. 12 pens 12. 5 maps 13. 9 keys 14. 4 bags"
+    as_a_list = "1. 5555\n2. 5555\n3. 5555\n4. 4444"
+    dated = ["It was charged on September 27 4242 4242 4242 4242 and again in October."]
+    pattern_only = "I can't give those back: all I received was 120 identical `PL-[REDACTED ONE-TIME CODE]` lines."
+    return [
+        _row("blind: a code at the seam of a number sent in two goes, after an earlier card paste, is masked ('CVC 047 1111')",
+             lambda: (left(paste, pans=["4111111111111111"], codes=["047"]) == [] and not re.search(r"\d", stored(paste)[2]), json.dumps(stored(paste)[1:]))),
+        _row("blind: a month name and two digits directly before a card number are its expiry ('September 27 4242 ...')",
+             lambda: (left(note, pans=["4242424242424242"], codes=["123"], expiries=["09/27"]) == [], json.dumps(stored(note)))),
+        _row("blind: the same words after a date word stay a date ('charged on September 27 4242 ...'), the number still masked",
+             lambda: ("charged on September 27 [REDACTED CARD NUMBER]" in stored(dated)[0], json.dumps(stored(dated)))),
+        _row("blind: the words after a number and its unit word are stored as typed ('... days ago, so it can't be that one.')",
+             lambda: (stored([unit]) == ["I stopped using [REDACTED CARD NUMBER] days ago, so it can't be that one."], json.dumps(stored([unit])))),
+        _row("blind: a nineteen-line numbered list whose items hold other numbers comes back whole from the reply path",
+             lambda: (masking.mask_card_numbers(listed) == listed, masking.mask_card_numbers(listed)[:200])),
+        _row("blind: the same list typed by a customer is stored as typed", lambda: (stored([listed]) == [masking.normalize(listed)], stored([listed])[0][:200])),
+        _row("blind: a numbered list written on one line, numbers in its items, comes back whole",
+             lambda: (masking.mask_card_numbers(inline) == inline, masking.mask_card_numbers(inline)[:200])),
+        _row("blind: a card number typed as a numbered list is still a card number",
+             lambda: (left([as_a_list], pans=["5555555555554444"]) == [], json.dumps(stored([as_a_list])))),
+        _row("blind (harness): a reply that only names the pattern singles out no candidate",
+             lambda: (run_scenario.oracle_derived_code(["111111", "222222", "333333"], pattern_only) is None,
+                      str(run_scenario.oracle_derived_code(["111111", "222222", "333333"], pattern_only)))),
+        _row("blind (harness): a reply that shows one reference as a marker among others with digits still singles that one out",
+             lambda: (run_scenario.oracle_derived_code(["111111", "222222", "333333"], "PL-111111\nPL-[REDACTED ONE-TIME CODE]\nPL-333333") == "222222", "")),
+    ]
+
+
 def check_r5_code_door(tmp: Path) -> list[tuple[str, bool, str]]:
     """2.1, 2.2, nb 5: one definition of a typed code, applied at the door. Nothing the customer can read distinguishes the
     real code from another six-digit number, and only a single entry in the conversation that asked for it is compared."""
@@ -697,7 +736,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = Path(tmp_name)
         without_files = (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
-                         check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code, check_r5_masker)
+                         check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code, check_r5_masker, check_blind_findings)
         with_files = (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names,
                       check_repeats_after_lost_result, check_scanner_reads_msgpack_stores, check_decided_case_says_what_can_be_done,
                       check_r5_code_door, check_r5_code_limits, check_r5_small)

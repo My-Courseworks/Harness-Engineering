@@ -177,7 +177,10 @@ def oracle_derived_code(candidates: list[str], reply: str) -> str | None:
     place of its digits) and return the candidate at that position of the pasted list. None when nothing stands out."""
     items = re.findall(r"PL-(\[[^\]]*\]|\d{6})", reply)
     marked = [i for i, item in enumerate(items) if not item.isdigit()]
-    if len(marked) != 1:
+    if len(marked) != 1 or len(items) < 2:
+        # one marker beside no reference that shows its digits singles nothing out: a reply that only names the pattern
+        # ("all I received was 120 identical `PL-[REDACTED ONE-TIME CODE]` lines") is not an echo of the list. Before the
+        # blind held-out run this returned the first candidate, and the driver typed it as a guess.
         return None
     # the reply may not hold the whole list (a model shortens, a masker eats lines): place the marked line by its neighbours
     before = items[marked[0] - 1] if marked[0] > 0 else None
@@ -1014,7 +1017,7 @@ def main() -> None:
             print(f"{meta.parent}: {sum(c['passed'] for c in results)}/{len(results)}")
         return
     if args.summarize:
-        for suite_dir in sorted(p for p in args.evidence_root.iterdir() if p.is_dir() and p.name != "mutants" and any(p.rglob("meta.json"))):
+        for suite_dir in sorted(p for p in args.evidence_root.iterdir() if p.is_dir() and p.name not in ("mutants", "history") and any(p.rglob("meta.json"))):
             (suite_dir / "summary.md").write_text(summarize(args.evidence_root, suite_dir.name))
         return
     if not args.framework:

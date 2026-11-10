@@ -487,6 +487,32 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
         messages = [first] + [rng.choice(["", "then ", "and ", "the rest: "]) + piece for piece in pieces]
         cases.append({"messages": messages, "expect": "mask", "note": "the last four first, then the other twelve over one or two messages", "pans": [pan],
                       "codes": [], "expiries": []})
+    # ---- what round 6's blind held-out run found
+    for _ in range(per_family):  # after an earlier card message, a number in two goes with its code at the seam
+        other, pan = rng.choice([p for p in _TEST_PANS if len(p) == 16]), _random_pan(rng)
+        while len(pan) != 16 or pan == other:
+            pan = _random_pan(rng)
+        code = "".join(rng.choice("0123456789") for _ in range(3))
+        first = rng.choice(["my new card is {}", "{} is the one that works", "the card on file: {}"]).format(" ".join(other[i:i + 4] for i in range(0, 16, 4)))
+        opening = rng.choice(["the old one, in two goes: {}", "and the closed one: {}", "{}"]).format(" ".join(pan[i:i + 4] for i in range(0, 12, 4)))
+        closing = f"{rng.choice(['CVC', 'CVV', 'cvv', 'cvc:', 'security code'])} {code} {pan[12:]}"
+        cases.append({"messages": [first, opening, closing], "expect": "mask", "note": "after a card message: twelve digits, then its code and last group",
+                      "pans": [other], "codes": [code], "expiries": []})
+    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    for _ in range(per_family):  # a card note with no cue: month name, two-digit year, the number
+        pan, month, year = _random_pan(rng), rng.randint(1, 12), rng.randint(27, 34)
+        name = months[month - 1] if rng.random() < 0.5 else months[month - 1][:3]
+        text = rng.choice(["my old card note: {} {} {}", "{} {} {}", "the note says {} {} {} / cvc 123", "card: {} {} {}"]).format(name, year, number(pan))
+        cases.append({"messages": [text], "expect": "mask", "note": "a month name and a two-digit year directly before the number, no cue", "pans": [pan],
+                      "codes": [], "expiries": [f"{month:02d}/{year}"]})
+    items = ["Add a travel notice", "Check the card's expiry date", "Note the {n}-day dispute window", "Carry {n} adapters", "Save the {n}-hour helpline number",
+             "Set a daily limit of {n} dollars", "Pack {n} copies of your passport", "Check the {n}% foreign fee", "Keep {n} euros in cash", "Turn on alerts",
+             "Book {n} nights first", "Tell {n} family members", "Bring {n} spare cards", "Charge {n} power banks", "Decline currency conversion"]
+    for _ in range(per_family):  # a numbered list of thirteen to twenty lines whose items hold other numbers
+        style = rng.choice(["{k}. ", "{k}) ", "{k}. ", "({k}) ", "{k}: "])
+        lines = [style.format(k=k) + rng.choice(items).format(n=rng.choice([2, 3, 4, 5, 7, 12, 24, 30, 75, 90])) for k in range(1, rng.randint(13, 20) + 1)]
+        cases.append({"messages": ["\n".join(lines) if rng.random() < 0.8 else " ".join(lines)], "expect": "keep",
+                      "note": "a numbered list whose items hold other numbers", "pans": [], "codes": [], "expiries": []})
     return cases
 
 
