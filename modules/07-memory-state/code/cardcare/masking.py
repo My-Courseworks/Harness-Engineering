@@ -92,6 +92,9 @@ _CODE_CUE = re.compile(
 _WEAK_CODE_CUE = re.compile(r"\bcode\b", re.IGNORECASE)  # "my code is 737": for 3 digits only
 _EXPIRY_CUE = re.compile(r"\b(exp|expiry|expiration|exp\.?\s*date|valid\s+(thru|through|until|till)|good\s+(thru|through)|"
                          r"(card|it)\s+expires)\b", re.IGNORECASE)
+# after a card number, these words introduce its code or its expiry, never more of the number ("…1111, cvv 1 8 1")
+_AFTER_NUMBER_CUE = re.compile(r"\b(cvv2?|cvc2?|cid|csc|cvn|security\s+(code|number|digits)|verification\s+(code|value|number)|"
+                               r"exp|expiry|expiration|expires)\b", re.IGNORECASE)
 _TOKEN = re.compile(r"\d+|[^\W\d_]+|\S")
 
 
@@ -405,12 +408,16 @@ def _runs(tokens: list[dict], text: str, message: int = 0, fine: bool = False) -
     runs: list[list[dict]] = []
     for t in (t for t in tokens if t["digits"] is not None and t["role"] in (None, "last4", "year")):
         if runs:
-            t["words_before"] = bool(re.search(r"[^\W\d_]", text[runs[-1][-1]["end"]:t["start"]].replace("REDACTED", "")))
+            between = text[runs[-1][-1]["end"]:t["start"]]
+            t["words_before"] = bool(re.search(r"[^\W\d_]", between.replace("REDACTED", "")))
+            t["after_number_cue"] = bool(_AFTER_NUMBER_CUE.search(between))
         if runs and t["role"] != "last4" and runs[-1][-1]["role"] != "last4":
             gap = text[runs[-1][-1]["end"]:t["start"]]
             # one line, separators only; for codes (`fine`), a sentence or list break (". ", ", ", " / ") starts a new run too
             breaks = r"[^\W\d_]|\n|\r|[.,;:!?]\s|\s/\s" if fine else r"[^\W\d_]|\n|\r"
-            if not re.search(breaks, gap) and len(gap) <= 3 and not MASK_TOKEN.search(gap):
+            # except a code dictated one digit at a time: "three, eight, six", "3, 8, 6" is one code, not a list of three
+            dictated = fine and len(t["digits"]) == 1 and len(runs[-1][-1]["digits"]) == 1 and bool(re.fullmatch(r", ?", gap))
+            if (dictated or not re.search(breaks, gap)) and len(gap) <= 3 and not MASK_TOKEN.search(gap):
                 runs[-1].append(t)
                 continue
         runs.append([t])
@@ -444,6 +451,8 @@ def _card_sequences_from(runs: list[list[dict]], i: int, first: list[dict]) -> l
     found = []
     total = 0
     for j in range(i, min(len(runs), i + 19)):
+        if j > i and runs[j][0].get("after_number_cue"):
+            break  # the digits after "cvv" or "exp" are the code or the expiry: a number never continues through them
         head = [first] + runs[i + 1:j]
         if any(t["role"] == "last4" for run in head for t in run):
             break  # a last four may only end a card number
@@ -516,6 +525,26 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
                 and not inside(t) \
                 and _card_expiry_cue(_before(text, t, 30), text, t):
             spans.append((t["start"], t["end"], EXPIRY_MASK))
+    # an expiry typed as two numbers with a space or a dot between: "exp 12 29", "exp 12.29" (which reads as an amount),
+    # "expiry 12 2029" after its cue; "12 2029" without one when the message carries card data, as "12/2029" already is
+    numeric = [t for t in tokens if t["digits"] is not None]
+    for month, year in zip(numeric, numeric[1:]):
+        if month["spoken"] or year["spoken"] or month["role"] not in (None, "amount") or year["role"] not in (None, "amount") \
+                or inside(month) or not (len(month["digits"]) <= 2 and 1 <= int(month["digits"]) <= 12):
+            continue
+        gap = text[month["end"]:year["start"]]
+        full_year = len(year["digits"]) == 4 and year["digits"][:2] == "20"
+        before = _before(text, month, 30)
+        cued = _card_expiry_cue(before, text, month) or card_context and bool(re.search(r"\bexpir\w*\W*$", before))  # "…4444 expires 12 29"
+        if cued and (len(year["digits"]) == 2 or full_year) and re.fullmatch(r"[ ./\-]{1,3}", gap) or card_context and full_year and gap == " ":
+            spans.append((month["start"], year["end"], EXPIRY_MASK))
+    # "exp Dec 29": after an expiry cue, a month name and two digits are a month and a year, not a day of the month
+    for i, t in enumerate(tokens):
+        if t["role"] == "date" and len(t["digits"]) == 2 and not t["spoken"] and not inside(t) and i and tokens[i - 1]["kind"] == "word" \
+                and _MONTH.match(tokens[i - 1]["text"]) and _card_expiry_cue(_before(text, t, 30), text, t):
+            spans.append((tokens[i - 1]["start"], t["end"], EXPIRY_MASK))
+    codes: set[str] = set()  # every code found in this message: the same digits again are the same secret
+    unclaimed: list[list[dict]] = []
     for run in _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True):  # never a last four, ZIP or year
         first, last = run[0], run[-1]
         digits = _digits(run)
@@ -524,12 +553,24 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
         cue = _CODE_CUE.search(before)
         cue_before = bool(cue) and not re.search(r"\d", before[cue.end():])
         cue_after = bool(re.match(r"\W{0,3}(is|are|was)?\W{0,3}(my|the)?\W{0,2}" + _CODE_CUE.pattern, after, re.IGNORECASE))
-        weak = bool(_WEAK_CODE_CUE.search(before[-20:])) and n == 3
+        weak_cue = bool(_WEAK_CODE_CUE.search(before[-20:]))
         spaced = len(run) == n  # "7 3 7": one digit per token
-        if n in (3, 4) and (len(run) == 1 or spaced) and (card_context or cue_before or cue_after or weak):
+        said_twice = _code_said_more_than_once(run)
+        if n in (3, 4) and (len(run) == 1 or spaced) and (card_context or cue_before or cue_after or weak_cue and n == 3):
             spans.append((first["start"], last["end"], SECURITY_CODE_MASK))
+            codes.add(digits)
         elif card_context and n >= 8 and (all(len(t["digits"]) == 4 for t in run) or len(run) == 1 and n <= 12):
             spans.append((first["start"], last["end"], CARD_DIGITS_MASK))  # "5555/5555": part of a number sent in pieces
+        elif said_twice and (card_context or cue_before or cue_after or weak_cue and len(said_twice) == 3):
+            # "three eight six (386)", "386 386": one code in two renderings reads as one six-digit run
+            closes = text[last["end"]:last["end"] + 1] in (")", "]", "}") and bool(re.search(r"[(\[{]", text[first["end"]:last["start"]]))
+            spans.append((first["start"], last["end"] + closes, SECURITY_CODE_MASK))
+            codes.add(said_twice)
+        else:
+            unclaimed.append(run)
+    for run in unclaimed:  # "sec code three eight six, in digits 386": no cue of its own, the digits of a code just found
+        if _digits(run) in codes and (len(run) == 1 or len(run) == len(_digits(run))):
+            spans.append((run[0]["start"], run[-1]["end"], SECURITY_CODE_MASK))
     for i, t in enumerate(tokens):
         if t["role"] not in ("month_pair", "month_year") or inside(t):
             continue
@@ -548,6 +589,21 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
                 and (card_context or _card_expiry_cue(_before(text, t, 30), text, t)):
             spans.append((t["start"], t["end"], EXPIRY_MASK))
     return spans
+
+
+def _code_said_more_than_once(run: list[dict]) -> str | None:
+    """The 3- or 4-digit code a run repeats ("three eight six (386)", "386 386", "3 8 6/386"), or None. Every repetition
+    must end where a token ends; a spoken group may end at any of its digits ("three eight six three eight six")."""
+    digits = _digits(run)
+    ends, at = set(), 0
+    for t in run:
+        ends |= set(range(at + 1, at + len(t["digits"]) + 1)) if t["spoken"] else {at + len(t["digits"])}
+        at += len(t["digits"])
+    for size in (3, 4):
+        if len(digits) >= 2 * size and digits == digits[:size] * (len(digits) // size) \
+                and all(end in ends for end in range(size, len(digits) + 1, size)):
+            return digits[:size]
+    return None
 
 
 def _card_expiry_cue(before: str, text: str, token: dict) -> bool:
