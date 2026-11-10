@@ -39,11 +39,11 @@ from langchain_core.tools import tool
 from langchain_deepseek import ChatDeepSeek
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode, ToolRuntime, tools_condition
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, ToolRuntime
 from langgraph.runtime import Runtime
 from langgraph.store.sqlite import SqliteStore
-from langgraph.types import Command, interrupt
+from langgraph.types import Command, Send, interrupt
 from pydantic import BaseModel
 
 from cardcare import desk, privacy, procedures, scheduler, world
@@ -407,7 +407,8 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
         """Check the one-time code that was just sent. If the customer already typed it in their latest message, pass it as
         `entered`. Otherwise call it with no argument: the conversation pauses until the customer's next message, which is
         taken as their entry. Never ask the customer to read the code to you and never repeat it."""
-        # Nothing with a side effect may precede interrupt(): LangGraph re-runs the tool from the top on resume. A read may:
+        # Nothing with a side effect may precede interrupt(): LangGraph re-runs the interrupted task from the top on resume
+        # (this call only: every tool call is its own task, see dispatch_tool_calls). A read may:
         # when the bank already holds this conversation's proof (a code consumed just before a crash), there is no wait
         now = runtime.context.now
         proved = world.possession_proved_at(h.bank_db, runtime.context.user_id, _session(runtime), now)
@@ -538,13 +539,23 @@ def build_graph(h: Harness, disabled_tools: tuple[str, ...] = (), kind: SessionK
             response = model.invoke(context)  # one retry: an empty turn is a model stall, not an answer
         return {"messages": [route_malformed_calls(mask_model_output(response))]}
 
+    def dispatch_tool_calls(state: SessionState) -> list[Send] | str:
+        """Each tool call of the model's response is its own task (Send), not one step for the whole response. A call
+        that pauses (confirm_verification_code's interrupt) is then the only thing re-run when the customer's entry
+        resumes it; the calls beside it keep the results they already produced. With one ToolNode step for all calls,
+        a code sent in the same response as the wait was sent again on resume, more than a minute later, and the
+        customer's correct entry was judged wrong against the new code (round 5, g64). The tasks of one response still
+        run concurrently and each reads the state from before the response, as the single step did."""
+        calls = getattr(state["messages"][-1], "tool_calls", None) or []
+        return [Send("tools", [call]) for call in calls] if calls else END
+
     graph = StateGraph(SessionState, context_schema=TurnContext)
     graph.add_node("forget_expired_facts", forget_expired_facts)
     graph.add_node("agent", call_model)
     graph.add_node("tools", ToolNode(tools))
     graph.add_edge(START, "forget_expired_facts")
     graph.add_edge("forget_expired_facts", "agent")
-    graph.add_conditional_edges("agent", tools_condition)
+    graph.add_conditional_edges("agent", dispatch_tool_calls, ["tools", END])
     graph.add_edge("tools", "agent")
     # a follow-up whose record predates an erasure keeps its thread in memory only: nothing about it is stored
     return graph.compile(checkpointer=h.checkpointer if kind.persist else InMemorySaver(), store=h.store)
@@ -644,17 +655,26 @@ def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str, now
     dangling = [c for m in messages if isinstance(m, AIMessage) for c in [*m.tool_calls, *m.invalid_tool_calls] if c["id"] not in answered]
     if not dangling:
         return 0
-    # every unanswered call is answered, so the history is well-formed whatever else the model called next to the confirmation
+    # Every unanswered call is answered, so the history is well-formed whatever else the model called next to the
+    # confirmation. A call beside the interrupted one that had finished keeps the result it recorded (each call is its
+    # own task, and LangGraph holds a finished task's writes with the checkpoint): only a call with no recorded result
+    # is reported lost.
+    graph, config = build_graph(h), thread_config(user_id, session_id)
+    finished = [task.result for task in graph.get_state(config).tasks if isinstance(task.result, dict)]
+    recorded = {m.tool_call_id: m for result in finished for m in result.get("messages") or [] if isinstance(m, ToolMessage)}
     matched = {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK,
                "note": "the code was entered correctly before the process stopped; this result is rebuilt from the bank's record of it, "
                        "so carry out the change or removal the customer asked for before the code was sent"}
-    update = {"messages": [ToolMessage(json.dumps(matched if proved and c["name"] == "confirm_verification_code" else {"error": LOST_RESULT}),
-                                       tool_call_id=c["id"], name=c["name"] or "unknown") for c in dangling]}
+    lost = [c for c in dangling if c["id"] not in recorded]
+    update = {key: value for result in finished for key, value in result.items() if key != "messages"}
+    update["messages"] = [recorded.get(c["id"]) or ToolMessage(
+        json.dumps(matched if proved and c["name"] == "confirm_verification_code" else {"error": LOST_RESULT}),
+        tool_call_id=c["id"], name=c["name"] or "unknown") for c in dangling]
     if proved:
         update["possession_verified_at"] = proved
-    if now:
+    if now and lost:
         update["lost_result_at"] = now
-    build_graph(h).update_state(thread_config(user_id, session_id), update, as_node="tools")
+    graph.update_state(config, update, as_node="tools")
     return len(dangling)
 
 
