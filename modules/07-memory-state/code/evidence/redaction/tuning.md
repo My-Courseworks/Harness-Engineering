@@ -66,7 +66,7 @@ Every failure, then every case.
 | pass | mask | r2-r3 tuning | ["it's five five five five five five five five five five five five four four four four"] | ["it's [REDACTED CARD NUMBER]"] |  |
 | pass | mask | r2-r3 tuning | ['5555 5555 dash 5555 dash 4444'] | ['[REDACTED CARD NUMBER]'] |  |
 | pass | mask | r2-r3 tuning | ['first 8: 5555 5555, last 8: 5555 4444'] | ['first 8: [REDACTED CARD NUMBER]'] |  |
-| pass | mask | r2-r3 tuning | ['my card starts 5555', 'next is 5555', 'then 5555', '5555 4444'] | ['my card starts 5555', 'next is [REDACTED CARD DIGITS]', 'then [REDACTED CARD DIGITS]', '[REDACTED CARD DIGITS]'] |  |
+| pass | mask | r2-r3 tuning | ['my card starts 5555', 'next is 5555', 'then 5555', '5555 4444'] | ['my card starts [REDACTED CARD DIGITS]', 'next is [REDACTED CARD DIGITS]', 'then [REDACTED CARD DIGITS]', '[REDACTED CARD DIGITS]'] |  |
 | pass | mask | r2-r3 tuning | ['5555555555554444/12/29/737'] | ['[REDACTED CARD NUMBER]'] |  |
 | pass | mask | r2-r3 tuning | ['the number on the reverse is 737'] | ['the number on the reverse is [REDACTED SECURITY CODE]'] |  |
 | pass | mask | r2-r3 tuning | ['the digits by the signature strip: 737'] | ['the digits by the signature strip: [REDACTED SECURITY CODE]'] |  |
@@ -103,9 +103,9 @@ Every failure, then every case.
 | pass | mask | r2-r3 tuning | ['expiry December 2029 and the code 737'] | ['expiry [REDACTED EXPIRY] and the code [REDACTED SECURITY CODE]'] |  |
 | pass | mask | r2-r3 tuning | ['I copied this from my phone note: 5555 5555 5555 4444 / exp 12-2029 / CVV 737 / ZIP 10011'] | ['I copied this from my phone note: [REDACTED CARD NUMBER] / exp [REDACTED EXPIRY] / CVV [REDACTED SECURITY CODE] / ZIP 10011'] |  |
 | pass | mask | r2-r3 tuning | ['exp 12 - 29, ZIP 10011'] | ['exp [REDACTED EXPIRY], ZIP 10011'] |  |
-| pass | mask | r2-r3 tuning | ['Marco again: 5555 5555 5555 4444 / Dec 2029 / 737 / 10011. Save for next time, please.'] | ['Marco again: [REDACTED CARD NUMBER] / 10011. Save for next time, please.'] |  |
-| pass | mask | r2-r3 tuning | ['try this format: 5555 5555 5555 4444 / Dec 2029 / 737-can that go on my profile?'] | ['try this format: [REDACTED CARD NUMBER]-can that go on my profile?'] |  |
-| pass | mask | r2-r3 tuning | ['my card 5555555555554444, valid Dec 2029, back says 737, zip 10011'] | ['my card [REDACTED CARD NUMBER], zip 10011'] |  |
+| pass | mask | r2-r3 tuning | ['Marco again: 5555 5555 5555 4444 / Dec 2029 / 737 / 10011. Save for next time, please.'] | ['Marco again: [REDACTED CARD NUMBER] / [REDACTED EXPIRY] / [REDACTED SECURITY CODE] / 10011. Save for next time, please.'] |  |
+| pass | mask | r2-r3 tuning | ['try this format: 5555 5555 5555 4444 / Dec 2029 / 737-can that go on my profile?'] | ['try this format: [REDACTED CARD NUMBER] / [REDACTED EXPIRY] / [REDACTED SECURITY CODE]-can that go on my profile?'] |  |
+| pass | mask | r2-r3 tuning | ['my card 5555555555554444, valid Dec 2029, back says 737, zip 10011'] | ['my card [REDACTED CARD NUMBER], valid [REDACTED EXPIRY], back says [REDACTED SECURITY CODE], zip 10011'] |  |
 | pass | keep | r2-r3 tuning | ['delivery took 10-12 days and the refund 3-5 days'] | ['delivery took 10-12 days and the refund 3-5 days'] |  |
 | pass | keep | r2-r3 tuning | ['order 3391-221 arrived damaged in December 2026'] | ['order 3391-221 arrived damaged in December 2026'] |  |
 | pass | keep | r2-r3 tuning | ['I have had this card since March 2019'] | ['I have had this card since March 2019'] |  |
@@ -146,7 +146,7 @@ Every failure, then every case.
 | pass | mask | opening half | ['first part 4111 1111 1111', 'and 1111'] | ['first part [REDACTED CARD DIGITS]', 'and [REDACTED CARD DIGITS]'] |  |
 | pass | mask | amex code no cue | ['3782 822463 10005 4321'] | ['[REDACTED CARD NUMBER] [REDACTED SECURITY CODE]'] |  |
 | pass | mask | amex code next message | ['3782 822463 10005', '4321'] | ['[REDACTED CARD NUMBER]', '[REDACTED SECURITY CODE]'] |  |
-| pass | mask | bundle no cues | ['card 4111 1111 1111 1111, 12/29, 737'] | ['card [REDACTED CARD NUMBER]'] |  |
+| pass | mask | bundle no cues | ['card 4111 1111 1111 1111, 12/29, 737'] | ['card [REDACTED CARD NUMBER], [REDACTED EXPIRY], [REDACTED SECURITY CODE]'] |  |
 | pass | keep | verify cue | ['For verification: my last four are 6610 and my zip is 73301. I want my money back, please dispute it.'] | ['For verification: my last four are 6610 and my zip is 73301. I want my money back, please dispute it.'] |  |
 | pass | keep | verify cue | ['Security check: card ending 6610, zip 73301'] | ['Security check: card ending 6610, zip 73301'] |  |
 | pass | keep | verify cue | ['For security, my last 4 digits are 4427 and the billing ZIP is 94107'] | ['For security, my last 4 digits are 4427 and the billing ZIP is 94107'] |  |

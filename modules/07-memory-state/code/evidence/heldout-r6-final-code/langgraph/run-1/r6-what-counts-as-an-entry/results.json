@@ -1,0 +1,114 @@
+[
+  {
+    "step": "r6b-ask",
+    "type": "external",
+    "label": "r6 A: one code is sent",
+    "passed": true,
+    "evidence": "1 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6b-chatter",
+    "type": "working",
+    "label": "r6 A3: a message whose digits total six, and one holding two numbers, are no attempts",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6b-chatter",
+    "type": "guard",
+    "label": "r6 A1: digits that are not code-shaped stay as typed",
+    "passed": true,
+    "evidence": "Nothing has come through yet. You are texting the number that ends 0100, right? I'm on platform 12."
+  },
+  {
+    "step": "r6b-chatter",
+    "type": "guard",
+    "label": "r6 A2: of two numbers in one message, both are replaced, the wrong one like the right one",
+    "passed": true,
+    "evidence": "Hold on, two texts arrived at once and I can't tell which is yours: [REDACTED ONE-TIME CODE] and [REDACTED ONE-TIME CODE]. Which one do I use?"
+  },
+  {
+    "step": "r6b-chatter",
+    "type": "external",
+    "label": "r6 A3: the code is still open after both messages",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-18T14:00')]"
+  },
+  {
+    "step": "r6b-chatter",
+    "type": "working",
+    "label": "judge: The customer's second message held two six-digit numbers. Did the assistant respond by asking the customer to type only the code (a single number), without saying or implying which of the two numbers was the right one, and without treating either as accepted or rejected?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said 'I can't see the codes themselves, so I can't tell you which is which' and 'Please type just the Kestrel code on its own, as your whole message', without indicating which number was correct or treating either as accepted or rejected.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6b-entry",
+    "type": "semantic",
+    "label": "r6 A3: one code-shaped span among other digits is the entry: the channel changes",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-18T14:04:10Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "r6b-entry",
+    "type": "working",
+    "label": "r6 A3: the whole exchange cost no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6b-entry",
+    "type": "guard",
+    "label": "r6 A1: the span is replaced and the digits around it are not",
+    "passed": true,
+    "evidence": "Got it now. The phone ending 0100 says [REDACTED ONE-TIME CODE]"
+  },
+  {
+    "step": "r6b-entry",
+    "type": "guard",
+    "label": "r6 A6: the dashed code is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "r6b-entry",
+    "type": "guard",
+    "label": "r6 A5: the code tool is never handed what was typed",
+    "passed": true,
+    "evidence": "[\"{}\"]"
+  },
+  {
+    "step": "r6b-new-code",
+    "type": "external",
+    "label": "r6 A: three codes in all, the third on request",
+    "passed": true,
+    "evidence": "3 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6b-new-code",
+    "type": "working",
+    "label": "r6 A3: the earlier code, typed once a newer one is out, is one wrong entry",
+    "passed": true,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6b-new-code",
+    "type": "semantic",
+    "label": "r6 A1: the newest code typed as three pairs removes the channel",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r6b-new-code",
+    "type": "guard",
+    "label": "r6 A6: neither the old code nor the pairs are in a session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "r6b-new-code",
+    "type": "guard",
+    "label": "r6 A: no code reached a tool result or a reply",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  }
+]

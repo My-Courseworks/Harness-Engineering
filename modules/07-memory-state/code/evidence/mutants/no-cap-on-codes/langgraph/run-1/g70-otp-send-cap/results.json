@@ -1,0 +1,37 @@
+[
+  {
+    "step": "cap-s1",
+    "type": "external",
+    "label": "at most five codes are sent to one account in 24 hours",
+    "passed": false,
+    "evidence": "7 one-time-code messages in the outbox"
+  },
+  {
+    "step": "cap-s1",
+    "type": "working",
+    "label": "asking for codes is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "external",
+    "label": "asked at least six times, the bank sent five codes",
+    "passed": false,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"sent\\\": true, \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u00b70188\\\", \\\"expires_in_minutes\\\": 5, \\\"resent\\\": true}\"], \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinc"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "working",
+    "label": "the refusal says why",
+    "passed": false,
+    "evidence": "missing: ['24 hours']; ['send_verification_code -> {\"sent\": true, \"sent_to\": \"text message to \\\\u00b7\\\\u00b7\\\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}']"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "working",
+    "label": "a refused send is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "step": "mc-s1",
+    "type": "working",
+    "label": "the model's first tool call was made malformed (the probe ran)",
+    "passed": true,
+    "evidence": "{\"corrupted\": \"find_transactions\", \"corrupted_any\": true}"
+  },
+  {
+    "step": "mc-s1",
+    "type": "working",
+    "label": "a malformed tool call is answered, so neither this turn nor the next fails",
+    "passed": true,
+    "evidence": "\"no errors\""
+  },
+  {
+    "step": "mc-s1",
+    "type": "external",
+    "label": "the model gets to make the call again: the dispute is filed in the same session",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5001\", \"status\": \"under_review\"}]"
+  }
+]

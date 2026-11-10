@@ -1,0 +1,44 @@
+[
+  {
+    "step": "lo-wait",
+    "type": "working",
+    "label": "setup: one code is open, sent to the address the bank holds",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-13T10:00')]"
+  },
+  {
+    "step": "lo-notes",
+    "type": "guard",
+    "label": "of 300 pasted references the reply does not show one differently from the others",
+    "passed": false,
+    "evidence": "284 references in the reply, 1 shown as a marker"
+  },
+  {
+    "step": "lo-notes",
+    "type": "working",
+    "label": "pasting the list is not an attempt: no failure is counted",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "lo-notes",
+    "type": "guard",
+    "label": "the code that was in the list is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "lo-entry",
+    "type": "working",
+    "label": "the number the list echo singled out, typed in the first chat, changes nothing: the channel is not set",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "lo-entry",
+    "type": "working",
+    "label": "and no entry was accepted on a number learned that way",
+    "passed": true,
+    "evidence": "1 attempt rows with succeeded=1"
+  }
+]
