@@ -533,6 +533,9 @@ def check_r5_small(tmp: Path) -> list[tuple[str, bool, str]]:
             ("r5 nb3 the scanner reads a number stored as a number (a code passed as a msgpack integer)",
              '"number": 517391' in store_audit.store_text(path).split("\n"), ""),
             _row("r5 the scanner takes no stored count for a security code or an expiry (token counts of 123, 12 and 29)", counts_are_not_card_data),
+            _row("r6 the scanner takes no checkpoint timestamp for a security code ('…T17:43:21.497049+00:00' and the code 4321), and still finds one typed beside it",
+                 lambda: (store_audit.secrets_left('ts 2026-11-10T17:43:21.497049+00:00 v 4', {"pans": [], "codes": ["4321"], "expiries": []}) == []
+                          and store_audit.secrets_left('ts 2026-11-10T17:43:21.497049+00:00 cvv 4321', {"pans": [], "codes": ["4321"], "expiries": []}) != [], "")),
             ("r5 nb7 the reflection reads the wait for the code as a wait, not as an error", "requires confirmation" not in rendered
              and "waiting for the customer" in rendered, rendered[-200:]),
             ("r5 nb14 a second reminder for the same local day is refused and the refusal names the existing one",

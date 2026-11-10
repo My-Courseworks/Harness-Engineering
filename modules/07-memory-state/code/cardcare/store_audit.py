@@ -106,6 +106,9 @@ def auditor_text(data: bytes | str) -> str:
     # a UUID (a LangGraph message or checkpoint id) is never card data; its digit groups ("…-a296-4321-…") are not codes
     # (also back to back), replaced by filler of the same length so the distance between other digits does not shrink
     text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", lambda m: "#" * len(m.group()), text)
+    # nor is an ISO date-time: LangGraph stamps every checkpoint with the wall clock, and "2026-11-10T17:43:21.497049+00:00"
+    # holds "43:21", which read as the security code 4321 in a round-6 tuning run that happened to cross that second
+    text = re.sub(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?", lambda m: "#" * len(m.group()), text)
     return "".join(str(unicodedata.decimal(ch)) if ch.isdecimal() and not ch.isascii() else ch for ch in text)
 
 

@@ -67,8 +67,10 @@ def a_role_keeps_its_group() -> None:
 
 
 def list_numerals_are_card_digits() -> None:
+    """Neither rule for a list's own numerals: not the count (bare numerals), not the list-marker role ("3. …")."""
     from cardcare import masking
     masking._counts_up = lambda tokens: False
+    masking._classify_list_markers = lambda tokens, text: None
 
 
 MUTANTS = {fn.__name__.replace("_", "-"): fn for fn in (door_lets_lists_through, a_code_is_six_contiguous_digits,
