@@ -140,7 +140,9 @@ _OTP_SENTINEL = re.compile(r"\{otp(?::([a-z_]+))?\}")
 _OTP_CANDIDATES = re.compile(r"\{otp_candidates:(\d+)\}")
 # how a phone shows a code, and how people type what it shows
 _OTP_FORMS = {"spaced": lambda c: f"{c[:3]} {c[3:]}", "dashed": lambda c: f"{c[:3]}-{c[3:]}", "dotted": lambda c: f"{c[:3]}.{c[3:]}",
-              "pairs": lambda c: f"{c[:2]} {c[2:4]} {c[4:]}", "digits": lambda c: " ".join(c)}
+              "pairs": lambda c: f"{c[:2]} {c[2:4]} {c[4:]}", "digits": lambda c: " ".join(c),
+              # forms the bank does not take as an entry: a thousands comma, four digits and two
+              "comma": lambda c: f"{c[:3]},{c[3:]}", "four_two": lambda c: f"{c[:4]} {c[4:]}"}
 # the list-echo oracle of the round-5 review: what the customer pasted last, per (store directory, customer)
 _PASTED_CANDIDATES: dict[tuple[str, str], list[str]] = {}
 _LAST_REPLY: dict[tuple[str, str], str] = {}  # the last reply each customer read, per store directory
@@ -199,7 +201,8 @@ def _sent_codes(h, user: str) -> list[str]:
 
 def expand_sentinels(h, user: str, text: str, last_reply: str = "") -> str:
     """{otp}: the latest code sent to this customer; {otp:spaced|dashed|dotted|pairs|digits}: the same code typed the
-    way a phone shows it ("123 456", "123-456", "123.456", "12 34 56", "1 2 3 4 5 6"); {otp:<user>}: another customer's
+    way a phone shows it ("123 456", "123-456", "123.456", "12 34 56", "1 2 3 4 5 6"); {otp:comma|four_two}: the same code
+    in a form the bank does not take ("123,456", "1234 56"); {otp:<user>}: another customer's
     latest code; {otp:previous}: the code before the latest; {otp:wrong}, {otp:wrong_spaced}: six digits that are not the
     latest. With no code sent: '(no code arrived)'. {otp_candidates:N}: N lines "PL-NNNNNN", the customer's current code
     among them. {otp:derived}: the candidate that the previous reply singled out from that list, as the reviewer's
@@ -233,6 +236,23 @@ _CLOCK_OR_ID = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+
                           r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 
+def stores_holding_a_code(paths: list[Path], codes: list[str]) -> list[str]:
+    """The store files in which any of `codes` can be read: its digits in order with up to two non-alphanumeric
+    characters between any two of them, the same in number words, or as a stored number."""
+    if not codes:
+        return []
+    forms = [r"(?<![0-9A-Za-z])" + r"[^0-9A-Za-z]{0,2}".join(code) + r"(?![0-9A-Za-z])" for code in codes]
+    # a code that starts with a zero loses it when it is stored as a number (store_text writes one as `"number": 12345`)
+    forms += [rf'"number": {int(code)}(?![0-9])' for code in codes if code.startswith("0")]
+    pattern = re.compile("|".join(forms))
+    held = []
+    for path in paths:
+        text = _CLOCK_OR_ID.sub(lambda m: "#" * len(m.group()), store_text(path))
+        if pattern.search(text) or pattern.search(spoken_to_digits(text)):
+            held.append(path.name)
+    return held
+
+
 def _otp_leaks(h, step: dict, turns: list[dict]) -> dict:
     """Where a sent code turned up: in the model's context (tool results or replies, the customer's own entry aside),
     and in the session stores after the step (the typed code must have been redacted once used)."""
@@ -253,14 +273,8 @@ def _otp_leaks(h, step: dict, turns: list[dict]) -> dict:
     # "10:02:00" is not read as a code.
     everyone = sorted({m.group(1) for row in world.outbound_messages(h.bank_db) if row.get("purpose") == "one_time_code"
                        for m in [re.search(r"\b(\d{6})\b", row["body"])] if m})
-    stores = []
-    if everyone:
-        pattern = re.compile("|".join(r"(?<![0-9A-Za-z])" + r"[^0-9A-Za-z]{0,2}".join(code) + r"(?![0-9A-Za-z])" for code in everyone))
-        for path in _store_files(h):
-            if path.name.startswith(("adk_sessions", "lg_checkpoints", "adk_episodes", "lg_store")):
-                text = _CLOCK_OR_ID.sub(lambda m: "#" * len(m.group()), store_text(path))
-                if pattern.search(text) or pattern.search(spoken_to_digits(text)):
-                    stores.append(path.name)
+    stores = stores_holding_a_code([path for path in _store_files(h) if path.name.startswith(("adk_sessions", "lg_checkpoints", "adk_episodes", "lg_store"))],
+                                   everyone)
     return {"model_context": seen, "transcripts": stores}
 
 
@@ -524,15 +538,33 @@ async def run_forced_calls(framework: str, fw, h, step: dict) -> dict:
             await _inject_adk(fw, h, user, session_id, [tuple(c) for c in step["calls"]], session_state, now, record, lines)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
+    # A forced response ends the way a turn ends: with the harness's end-of-turn pass over what the model wrote (run_turn
+    # calls it after every turn; the injection above goes around run_turn).
+    end_of_turn = getattr(fw, "without_one_time_codes", None)
+    if end_of_turn:
+        blank = {"customer": "", "tool_calls": [], "reply": ""}
+        extra = (now,) if "now" in inspect.signature(end_of_turn).parameters else ()
+        clock = fw.CLOCK.set(now) if hasattr(fw, "CLOCK") else None
+        try:
+            await resolved(end_of_turn(h, user, session_id, "", blank, *extra))
+        except Exception as exc:
+            error = error or f"end of turn: {type(exc).__name__}: {exc}"
+        finally:
+            if clock is not None:
+                fw.CLOCK.reset(clock)
     rows = _attempt_rows(h.bank_db, user)
     cases = [c for c in world.all_cases(h.bank_db) if c["user_id"] == user]
     snapshot = await resolved(fw.snapshot(h, USERS))
     if framework == "langgraph":
-        verified_at = fw._thread_state(h, user, session_id).get("identity_verified_at")
+        state = fw._thread_state(h, user, session_id)
+        verified_at, transcript = state.get("identity_verified_at"), fw._transcript_turns(state.get("messages", []))
     else:
         session = await h.session_service.get_session(app_name=fw.APP_NAME, user_id=user, session_id=session_id)
         verified_at = session.state.get("identity_verified_at") if session else None
+        transcript = fw._transcript_turns(session.events) if session else []
     probe = {"error": error, "attempts_in_batch": len(rows) - before, "failed_attempts": world.failed_verifications(h.bank_db, user, now),
+             # what the forced calls returned, as the conversation's own record holds them ("<tool> -> <result>")
+             "tool_results": [t["text"] for t in transcript if t["role"] == "tool" and " -> " in t["text"]],
              "lock_respected": _lock_respected(rows), "verified": bool(verified_at) and not setup.get("verified"),
              "cases_total": len(cases), "distinct_case_ids": len({c["case_id"] for c in cases}),
              "case_followups": sum(f["user_id"] == user and f["action"] == "case_status_followup" for f in snapshot["followups"]),
@@ -869,7 +901,8 @@ async def run_group(framework: str, suite: str, group: str, run: int, var_dir: P
     # what ties this record to a pass: the hash of the code it ran on (the same one a declared-final pass records before
     # it starts) and the wall-clock time; the round-5 review found that nothing in a run's files did
     run_meta = {"code_sha256": hashlib.sha256("\n".join(code_hash.file_lines()).encode()).hexdigest(),
-                "recorded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                "recorded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                **({"mutant": os.environ["CARDCARE_MUTANT"]} if os.environ.get("CARDCARE_MUTANT") else {})}
     recorded = []
     for step in SUITES[suite][group]:
         print(f"[{framework} {suite} run {run} {group}] {step['id']}", flush=True)
@@ -905,6 +938,9 @@ def score_group(out_dir: Path) -> list[dict]:
     title = meta["framework"] + " · " + meta["suite"] + f" · run {meta['run']}" + ("" if meta["suite"] == "scripted" else f" · {meta['group']}")
     transcript = [f"# {title}", "", "Live run against DeepSeek: every customer line below went to the real agent "
                   "(simulated-customer lines were written live by the model playing the persona). Tool results are clipped.", ""]
+    if meta.get("mutant"):
+        transcript += [f"**This is not a run of the product.** The mutant `{meta['mutant']}` (probes/mutants/mutants.py) put one defect back "
+                       "before the run, to show the check written for it failing.", ""]
     results = []
     for step in SUITES[meta["suite"]][meta["group"]]:
         entry = recorded[step["id"]]
@@ -961,7 +997,15 @@ def main() -> None:
     parser.add_argument("--evidence-suite-name", help="write under evidence/<this> instead of evidence/<suite> (e.g. a baseline)")
     parser.add_argument("--summarize", action="store_true", help="rewrite evidence/<suite>/summary.md from recorded runs")
     parser.add_argument("--rescore", action="store_true", help="re-score every recorded run from its steps.json")
+    parser.add_argument("--mutant", help="apply one defect from probes/mutants/mutants.py first, to show a check failing (evidence/mutants/)")
     args = parser.parse_args()
+    if args.mutant:  # in this process, and in every child process (the shipped CLI and tick) through probes/mutants/sitecustomize.py
+        mutant_dir = CODE_DIR / "probes" / "mutants"
+        sys.path.insert(0, str(mutant_dir))
+        from mutants import MUTANTS
+        MUTANTS[args.mutant]()
+        os.environ["CARDCARE_MUTANT"] = args.mutant
+        os.environ["PYTHONPATH"] = os.pathsep.join([str(mutant_dir), str(CODE_DIR), os.environ.get("PYTHONPATH", "")]).rstrip(os.pathsep)
     if args.rescore:
         for meta in sorted(args.evidence_root.rglob("meta.json")):
             if json.loads(meta.read_text()).get("frozen"):
@@ -970,7 +1014,7 @@ def main() -> None:
             print(f"{meta.parent}: {sum(c['passed'] for c in results)}/{len(results)}")
         return
     if args.summarize:
-        for suite_dir in sorted(p for p in args.evidence_root.iterdir() if p.is_dir() and any(p.rglob("meta.json"))):
+        for suite_dir in sorted(p for p in args.evidence_root.iterdir() if p.is_dir() and p.name != "mutants" and any(p.rglob("meta.json"))):
             (suite_dir / "summary.md").write_text(summarize(args.evidence_root, suite_dir.name))
         return
     if not args.framework:

@@ -535,7 +535,8 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
         return marked in (0, len(items)), f"{len(items)} references in the reply, {marked} shown as a marker"
     if kind == "codes_sent_count":
         sent = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and m.get("purpose") == "one_time_code"]
-        return len(sent) == spec["count"], f"{len(sent)} one-time-code messages in the outbox"
+        within = len(sent) <= spec["at_most"] if "at_most" in spec else len(sent) == spec["count"]
+        return within, f"{len(sent)} one-time-code messages in the outbox"
     if kind == "meta_has_code_hash":
         meta = result.get("run_meta") or {}
         return bool(re.fullmatch(r"[0-9a-f]{64}", meta.get("code_sha256", ""))) and bool(meta.get("recorded_at")), json.dumps(meta)

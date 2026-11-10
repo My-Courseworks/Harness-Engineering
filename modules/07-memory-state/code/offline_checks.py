@@ -264,6 +264,7 @@ R5_CARD_LEAKS = [
     ["my card is 5555 5555 5555", "CVV 737 4444"],
     ["5555 5555 5555 737", "4444"],
     ["order 12345, 5555 5555", "5555 4444"],
+    ["card ending 4444 zip 94107", "5555 5555", "5555"],
     ["ticket 1042, 4111 1111 1111 1111 is the card"],
     ["Booking 2291: 4242 4242 4242 4242"],
     ["receipt 4821 3782 822463 10005"],
@@ -357,13 +358,71 @@ def check_r5_code_door(tmp: Path) -> list[tuple[str, bool, str]]:
         taken = world.take_code_entry(bank, "marco", "m", "my order number is 482913", NOW, MAX_VERIFICATION_ATTEMPTS)
         return taken["text"] == "my order number is 482913" and taken["entry"] is None, json.dumps(taken)
 
+    def after_the_code_expired():
+        # eli's code was sent and never typed: ten minutes later it is still marked open, and cannot be entered
+        from cardcare.clock import add_minutes
+        world.issue_code(bank, "eli", "e1", NOW, MAX_VERIFICATION_ATTEMPTS)
+        expired = re.search(r"\b(\d{6})\b", world.outbound_messages(bank)[-1]["body"]).group(1)
+        other = "482913" if expired != "482913" else "482914"
+        later = add_minutes(NOW, 10)
+        taken = world.take_code_entry(bank, "eli", "e2", f"my order number is {other}, and that old code was {expired}", later, MAX_VERIFICATION_ATTEMPTS)
+        return other in taken["text"] and expired not in taken["text"] and taken["entry"] is None, json.dumps(taken).replace(expired, "<the expired code>")
+
+    def a_form_the_bank_does_not_take():
+        # marco's code written with a comma, then a new one as four digits and two in another chat: neither is an entry,
+        # neither is kept, each costs that code and no attempt
+        from cardcare.clock import add_minutes
+        results = []
+        for minute, session, form in ((0, "m1", lambda c: f"{c[:3]},{c[3:]}"), (2, "m-notes", lambda c: f"it says {c[:4]} {c[4:]}")):
+            world.issue_code(bank, "marco", "m1", add_minutes(NOW, minute), MAX_VERIFICATION_ATTEMPTS)
+            sent = re.search(r"\b(\d{6})\b", world.outbound_messages(bank)[-1]["body"]).group(1)
+            taken = world.take_code_entry(bank, "marco", session, form(sent), add_minutes(NOW, minute + 1), MAX_VERIFICATION_ATTEMPTS)
+            results.append(not re.search(r"\d", taken["text"]) and (taken["entry"] or {}).get("outcome") == "written_unusably")
+        statuses = [c["status"] for c in world.list_challenges(bank) if c["user_id"] == "marco"]
+        return all(results) and statuses == ["cancelled", "cancelled"] and world.failed_verifications(bank, "marco", NOW) == 0, json.dumps(
+            {"removed and reported": results, "codes": statuses, "failures": world.failed_verifications(bank, "marco", NOW)})
+
+    def other_numbers_are_not_codes():
+        text = "I paid $1,234.56 on 2026-11-13 at 10:02:00 and I have 123,456 points"
+        world.issue_code(bank, "priya", "p1", NOW, MAX_VERIFICATION_ATTEMPTS)
+        taken = world.take_code_entry(bank, "priya", "p1", text, NOW, MAX_VERIFICATION_ATTEMPTS)
+        still_open = sum(c["user_id"] == "priya" and c["status"] == "open" for c in world.list_challenges(bank))
+        return taken["text"] == text and (taken["entry"] or {}).get("outcome") == "no_code_entered" and still_open == 1, json.dumps(taken)
+
+    def no_code_starts_with_zero():
+        from cardcare.clock import add_days
+        firsts = set()
+        for day in range(40):  # five a day is the cap: forty days of sends for one account
+            for send in range(5):
+                at = add_days(NOW, day + 2)[:11] + f"{10 + send}:00:00Z"
+                world.issue_code(bank, "eli", f"z{day}", at, MAX_VERIFICATION_ATTEMPTS)
+                firsts.add(re.search(r"\b(\d{6})\b", world.outbound_messages(bank)[-1]["body"]).group(1)[0])
+        return "0" not in firsts and len(firsts) > 5, json.dumps(sorted(firsts))
+
+    def waits_only_for_a_code_not_yet_answered():
+        from cardcare.clock import add_minutes
+        world.issue_code(bank, "dana", "w1", add_minutes(NOW, 30), MAX_VERIFICATION_ATTEMPTS)
+        waits = lambda entry, at: world.waits_for_an_entry(bank, "dana", "w1", entry, at)
+        facts = {"sent this turn, the message was read before it": waits({"outcome": "mismatch"}, add_minutes(NOW, 30)),
+                 "sent earlier, the message held no code": waits({"outcome": "no_code_entered"}, add_minutes(NOW, 31)),
+                 "sent earlier, the message was a wrong entry": waits({"outcome": "mismatch"}, add_minutes(NOW, 31)),
+                 "another conversation": world.waits_for_an_entry(bank, "dana", "w2", None, add_minutes(NOW, 31))}
+        return list(facts.values()) == [True, True, False, False], json.dumps(facts)
+
     rows = [_row("r5 2.1 300 references pasted in another chat all read the same afterwards; no attempt is counted; the code stays open", pasted_elsewhere),
             _row("r5 2.1 many numbers in the chat that waits: nothing is compared, nothing counted", pasted_in_the_waiting_chat),
             _row("r5 nb5 a message whose digits total six is not a guess", not_an_entry),
             _row("r5 a single wrong entry is one failed attempt, and its digits are not kept", one_wrong_entry),
             _row("r5 2.2 the code typed as a phone shows it ('ok it says NNN-NNN') is accepted and nothing of it is kept", as_the_phone_shows_it),
             _row("r5 a code typed again after it was used is removed too (the customer's own dead code)", typed_again_when_dead),
-            _row("r5 with no code open, six digits are just six digits", no_code_open)]
+            _row("r5 with no code open, six digits are just six digits", no_code_open),
+            _row("r5 ten minutes after a code was sent and never typed, an order number in another chat is kept; the expired code itself is not",
+                 after_the_code_expired),
+            _row("r6 a code written with a comma, or as four digits and two, is not an entry and not kept: it is removed and that code cancelled",
+                 a_form_the_bank_does_not_take),
+            _row("r6 an amount, a date, a clock time and a points balance are not codes: kept as typed, the code stays open", other_numbers_are_not_codes),
+            _row("r6 the wait is for a code this turn's message did not answer", waits_only_for_a_code_not_yet_answered),
+            _row("r6 no code starts with a zero (200 sends)", no_code_starts_with_zero)]
     for form in ("123456", "123 456", "123-456", "123.456", "12 34 56", "1 2 3 4 5 6", "one two three four five six"):
         rows.append(_row(f"r5 2.2 the entry grammar reads {form!r} as one code",
                          lambda form=form: ([d for _, _, d in world.code_spans(f"ok it says {form} now")] == ["123456"], json.dumps(world.code_spans(f"ok it says {form} now")))))
@@ -409,7 +468,32 @@ def check_r5_small(tmp: Path) -> list[tuple[str, bool, str]]:
     first = desk.schedule_customer_reminder(sched, "eli", "call FitPulse", "2026-11-25", "09:00", "America/Chicago", NOW)
     second = desk.schedule_customer_reminder(sched, "eli", "call CloudNest", "2026-11-25", "18:00", "America/Chicago", NOW)
     rendered = episodes.format_transcript(waiting)
-    return [("r5 nb3 the scanner reads a number stored as a number (a code passed as a msgpack integer)", "517391" in store_audit.store_text(path).split("\n"), ""),
+    def code_search(stored_value, code: str):
+        import run_scenario
+        store = tmp / f"lg_code_{code}.db"
+        with sqlite3.connect(store) as conn:
+            conn.execute("CREATE TABLE writes (channel TEXT, value BLOB)")
+            conn.execute("INSERT INTO writes VALUES ('__resume__', ?)", (ormsgpack.packb(stored_value),))
+        held = run_scenario.stores_holding_a_code([store], [code])
+        return bool(held), json.dumps(held)
+
+    def counts_are_not_card_data():
+        store = tmp / "lg_counts.db"
+        with sqlite3.connect(store) as conn:
+            conn.execute("CREATE TABLE writes (channel TEXT, value BLOB)")
+            conn.execute("INSERT INTO writes VALUES ('messages', ?)", (ormsgpack.packb({"usage_metadata": {"output_tokens": 123, "cached": 12, "reasoning": 29}}),))
+        left = store_audit.secrets_left(store_audit.store_text(store), {"pans": [], "codes": ["123"], "expiries": ["12/29"]})
+        return left == [], json.dumps(left)
+
+    return [_row("r5 2.2 the stored-code search finds a code kept with a space ('481 975')", lambda: code_search("481 975", "481975")),
+            _row("r5 2.2 the stored-code search finds a code kept in a sentence with a dash", lambda: code_search("ok it says 447-526", "447526")),
+            _row("r5 nb3 the stored-code search finds a code kept as a number", lambda: code_search({"args": {"entered": 517391}}, "517391")),
+            _row("r5 the stored-code search does not take a clock time for a code", lambda: (not code_search("sent at 2026-11-13T10:02:00Z", "100200")[0], "")),
+            _row("r5 nb3 the stored-code search finds a code that lost its leading zero when kept as a number",
+                 lambda: code_search({"args": {"entered": 48213}}, "048213")),
+            ("r5 nb3 the scanner reads a number stored as a number (a code passed as a msgpack integer)",
+             '"number": 517391' in store_audit.store_text(path).split("\n"), ""),
+            _row("r5 the scanner takes no stored count for a security code or an expiry (token counts of 123, 12 and 29)", counts_are_not_card_data),
             ("r5 nb7 the reflection reads the wait for the code as a wait, not as an error", "requires confirmation" not in rendered
              and "waiting for the customer" in rendered, rendered[-200:]),
             ("r5 nb14 a second reminder for the same local day is refused and the refusal names the existing one",

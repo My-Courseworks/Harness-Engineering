@@ -54,6 +54,29 @@ R6_GROUPS = {
          "checks": [check("guard", "after the sessions ended and maintenance ran, still none of the three codes is stored", "transcript_omits_codes", user="eli"),
                     check("guard", "every run record names the code it ran on and when", "meta_has_code_hash")]},
     ],
+    # ------------------------------------------------------------------ found by this round's own tuning: a code in a form the bank does not take
+    # The stored-code search reported a code in LangGraph's checkpoint: it began with a zero, a forced model response
+    # carried it as a number (39074), and nothing recognised five digits as a code. The bank no longer issues a code that
+    # starts with zero. The same question asked of the customer: "481,975" and "4819 75" are not entries. Are they kept?
+    "g80-otp-code-in-a-form-the-bank-does-not-take": [
+        {"kind": "session", "id": "odd-comma", "user": "priya", "at": "2026-11-09T10:00:00Z",
+         "turns": ["Priya here, card ending 4427, ZIP 94107. Switch my contact channel to email.", "{otp:comma}"],
+         "checks": [check("working", "a code typed with a comma is no failed attempt", "attempt_rows", user="priya", succeeded=0, count=0),
+                    check("guard", "written into the conversation in a form the bank does not take, the code is in no session store", "transcript_omits_codes", user="priya"),
+                    check("working", "and that code can no longer be used: it is cancelled", "challenge_count", user="priya", status="cancelled", count=1)]},
+        {"kind": "session", "id": "odd-four-two", "user": "marco", "at": "2026-11-12T10:00:00Z",
+         "turns": ["Marco, card ending 8830, ZIP 10011. Change my contact channel to email.", "it says {otp:four_two}",
+                   "Sorry. Send me a new code please.", "{otp}"],
+         "checks": [check("guard", "a code typed as four digits and two is in no session store", "transcript_omits_codes", user="marco"),
+                    check("working", "no failed attempt in the whole conversation", "attempt_rows", user="marco", succeeded=0, count=0),
+                    check("semantic", "a new code, typed as six digits, is accepted: the channel is email", "fact_equals", user="marco", key="contact_channel", field="value", value="email")]},
+        {"kind": "session", "id": "odd-other-numbers", "user": "eli", "at": "2026-11-24T10:00:00Z",
+         "turns": ["Eli, card ending 6610, ZIP 73301. Change my contact channel to email.",
+                   "Before I type it: I paid $1,234.56 on 2026-11-13 and I have 123,456 points, right?", "{otp}"],
+         "checks": [check("working", "amounts, a date and a points balance are not codes: no failed attempt", "attempt_rows", user="eli", succeeded=0, count=0),
+                    check("working", "and they are stored as typed", "customer_text_contains", turn=1, text="$1,234.56 on 2026-11-13 and I have 123,456 points"),
+                    check("semantic", "and the code typed after them is accepted", "fact_equals", user="eli", key="contact_channel", field="value", value="email")]},
+    ],
     # ------------------------------------------------------------------ nb 5: what counts as an entry
     "g69-otp-what-is-an-entry": [
         {"kind": "session", "id": "en-s1", "user": "priya", "at": "2026-11-09T10:00:00Z",
@@ -80,9 +103,20 @@ R6_GROUPS = {
          "turns": ["Eli, card ending 6610, ZIP 73301. Change my contact channel to email.",
                    "I didn't get it. Send me a new code.", "Still nothing. Send another one.", "Nope. Again please.",
                    "Send it again.", "One more time, send a new code.", "And again, please send a new code."],
-         "checks": [check("external", "at most five codes are sent to one account in 24 hours", "codes_sent_count", user="eli", count=5),
-                    check("working", "asking for codes is not a failed attempt", "attempt_rows", user="eli", succeeded=0, count=0),
-                    check("working", "the refusal says why", "tool_result_contains", tool="send_verification_code", text="24 hours", turn=None)]},
+         "checks": [check("external", "at most five codes are sent to one account in 24 hours", "codes_sent_count", user="eli", at_most=5),
+                    check("working", "asking for codes is not a failed attempt", "attempt_rows", user="eli", succeeded=0, count=0)]},
+        # The agent is told the limit and may stop asking the bank before the bank refuses (LangGraph declined the sixth
+        # request without calling the tool), so the session above cannot show the bank's own limit. It is asked for
+        # directly: six more sends, two minutes apart, each a model response that only calls the tool. However many the
+        # session sent, the bank has then been asked at least six times.
+        *[{"kind": "forced_calls", "id": f"cap-forced-{n}", "user": "eli", "at": f"2026-11-24T10:{28 + 2 * n}:00Z",
+           "setup": {"verified": True, "customer_lines": ["Eli here again. Send me a new code."]},
+           "calls": [["send_verification_code", {}]],
+           "checks": [] if n < 6 else [
+               check("external", "asked at least six times, the bank sent five codes", "probe_value", key="otp_messages", value=5),
+               check("working", "the refusal says why", "probe_text_contains_all", key="tool_results", all_of=["24 hours"]),
+               check("working", "a refused send is not a failed attempt", "attempt_rows", user="eli", succeeded=0, count=0)]}
+          for n in range(1, 7)],
     ],
     # ------------------------------------------------------------------ nb 4: the third wrong code says the account is locked
     "g71-otp-third-wrong-says-locked": [

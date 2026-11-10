@@ -3,10 +3,12 @@
     python eval_redaction.py tuning            # the cases the masker was developed against (rounds 2-4)
     python eval_redaction.py heldout           # round 3's held-out corpus (spent: run blind once in round 3)
     python eval_redaction.py heldout-r4        # round 4's held-out corpus, written by a separate agent before the fixes
+    python eval_redaction.py heldout-r6        # round 6's held-out corpus, written by a separate agent, run once on the final code
     python eval_redaction.py fuzz              # round 3's seeded fuzzer (one card number, single-line separators)
     python eval_redaction.py fuzz-v2           # round 4's seeded fuzzer: every family the round-3 review found, many cards
     python eval_redaction.py fuzz-v2-fresh     # the same grammar, three seeds fixed before the final pass and run only then
     python eval_redaction.py fuzz-v2-fresh3    # round 5: three more seeds, fixed before its second final pass and run only after
+    python eval_redaction.py fuzz-v2-fresh4    # round 6: three more seeds, fixed before its final pass and run only after
     python eval_redaction.py fuzz-independent  # a fuzzer written by a separate agent from its own grammar (round 4)
 
 No model calls. A case is one customer's consecutive messages, scored as the conversation would be STORED: each
@@ -465,6 +467,26 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
                            f"MC-{rng.randint(1000, 9999)} is my membership number at the gym"])
         cases.append({"messages": [text], "expect": "keep", "note": "the roles at their ordinary job: dates, identifiers, amounts, phones", "pans": [], "codes": [],
                       "expiries": []})
+    for _ in range(per_family):  # a label and the number it precedes (the round-5 review's non-blocking 15, measured)
+        pan = _random_pan(rng)
+        label = rng.choice(["ticket", "Booking", "receipt", "order", "ref", "invoice"])
+        text = f"{label} {rng.randint(1000, 9999)}{rng.choice([',', ':', ';'])} {number(pan)}{rng.choice([' is the card', '', ' was declined'])}"
+        cases.append({"messages": [text], "expect": "mask", "note": "a four-digit label, punctuation, then the number", "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # the same with spaces only: twenty digits in fours read as one reference (the listed miss, with its number)
+        pan = rng.choice([p for p in _TEST_PANS if len(p) == 16])
+        text = f"{rng.choice(['order', 'ticket', 'booking', 'receipt'])} {rng.randint(1000, 9999)} " + " ".join(pan[i:i + 4] for i in range(0, 16, 4))
+        cases.append({"messages": [text], "expect": "mask", "note": "a four-digit label joined by spaces to a number in fours (listed miss)", "pans": [pan],
+                      "codes": [], "expiries": []})
+    for _ in range(per_family):  # the last four first, then the other twelve digits in one or two more messages (nb 11's fourth line)
+        pan = _random_pan(rng)
+        while len(pan) != 16:
+            pan = _random_pan(rng)
+        rest, glue = [pan[i:i + 4] for i in range(0, 12, 4)], rng.choice([" ", "-", ""])
+        pieces = rng.choice([[glue.join(rest[:2]), rest[2]], [rest[0], glue.join(rest[1:])], [glue.join(rest)]])
+        first = rng.choice(["card ending {}", "the one ending {}", "last four {}", "card ending {}, zip %05d" % rng.randint(10000, 99999)]).format(pan[12:])
+        messages = [first] + [rng.choice(["", "then ", "and ", "the rest: "]) + piece for piece in pieces]
+        cases.append({"messages": messages, "expect": "mask", "note": "the last four first, then the other twelve over one or two messages", "pans": [pan],
+                      "codes": [], "expiries": []})
     return cases
 
 
@@ -478,10 +500,18 @@ def _heldout_r4() -> list[dict]:
     return REDACTION_HELDOUT_R4
 
 
+def _heldout_r6() -> list[dict]:
+    from cardcare.heldout_r6 import REDACTION_HELDOUT_R6
+    return REDACTION_HELDOUT_R6
+
+
 CORPORA = {
     "tuning": lambda: [_as_case(c, "r2-r3 tuning") for c in REDACTION_TUNING] + REDACTION_TUNING_R4,
     "heldout": lambda: [_as_case(c, "r3 held-out") for c in REDACTION_HELDOUT],
     "heldout-r4": _heldout_r4,
+    # round 6: written by a separate agent for the surfaces of the round-5 review, committed unread (7e51ce1); run once, on
+    # the final code. Its author scored it once by mistake against an unfinished masker fix and did not change it after.
+    "heldout-r6": _heldout_r6,
     "fuzz": fuzz_corpus,
     "fuzz-v2": fuzz_v2,
     # seeds fixed before the round-4 final pass and never run before it: the round-4 grammar on inputs not tuned against
@@ -492,6 +522,9 @@ CORPORA = {
     # were tuned on seed 11 and checked on the two sets above, so those are no longer fresh for them. Run only after the
     # second pass is declared.
     "fuzz-v2-fresh3": lambda: [case for seed in (9001, 9002, 9003) for case in fuzz_v2(seed=seed, per_family=100)],
+    # declared before round 6's final pass and run only after it: the families added in round 6 (a role that takes a group,
+    # labels, a last four given first) were tuned on seed 11 and checked on every set above
+    "fuzz-v2-fresh4": lambda: [case for seed in (10001, 10002, 10003) for case in fuzz_v2(seed=seed, per_family=100)],
     "fuzz-independent-fresh": lambda: [case for seed in (41, 42, 43) for case in __import__("cardcare.heldout_fuzz_r4", fromlist=["generate"]).generate(seed=seed)],
     "fuzz-independent": _independent,
 }

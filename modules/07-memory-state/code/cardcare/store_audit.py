@@ -81,7 +81,10 @@ def _blob_strings(blob: bytes) -> list[str]:
         if isinstance(value, str):
             return [value]
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return [str(value)]  # a code or a card number a model passed as a number is stored as one (round-5 review, nb 3)
+            # A code or a card number a model passed as a number is stored as one (round-5 review, nb 3). It is written
+            # the way JSON writes a number value, so that the two frameworks read alike: a token count of 123 is not a
+            # security code in either (code_present), and two counts on neighbouring lines are not an expiry.
+            return [f'"number": {value}']
         if isinstance(value, (bytes, bytearray)):
             return _blob_strings(bytes(value)) if value else []
         if isinstance(value, dict):
