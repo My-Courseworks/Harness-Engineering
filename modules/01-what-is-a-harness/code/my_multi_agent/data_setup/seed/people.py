@@ -7,6 +7,8 @@ from dataclasses import astuple, dataclass
 from datetime import timedelta
 from typing import ClassVar
 
+from models import Employee, SalaryBand
+
 from .base import Seeder, SeedContext
 from .common import iso_date, round_to
 
@@ -29,7 +31,7 @@ class _Employee:
 
 class PeopleSeeder(Seeder):
     name = "people"
-    tables = ("salary_bands", "employees")
+    tables = (SalaryBand, Employee)
     requires = ("city_ids", "city_state", "city_index", "company_ids")
 
     # profession -> (min_salary, max_salary, hiring weight)
@@ -73,8 +75,8 @@ class PeopleSeeder(Seeder):
         employees = self._build_employees(ctx)
         ambiguous_ids = self._apply_edge_cases(ctx, employees)
 
-        ctx.db.insert_many(
-            "employees",
+        ctx.add_rows(
+            Employee,
             (
                 "emp_id", "emp_name", "salary", "state_id", "city_id",
                 "profession", "company_id", "status", "start_date", "end_date",
@@ -93,7 +95,7 @@ class PeopleSeeder(Seeder):
 
     def _seed_salary_bands(self, ctx: SeedContext) -> None:
         rows = [(prof, low, high) for prof, (low, high, _) in self._BANDS.items()]
-        ctx.db.insert_many("salary_bands", ("profession", "min_salary", "max_salary"), rows)
+        ctx.add_rows(SalaryBand, ("profession", "min_salary", "max_salary"), rows)
 
     def _build_employees(self, ctx: SeedContext) -> list[_Employee]:
         rng, cfg = ctx.rng, ctx.config

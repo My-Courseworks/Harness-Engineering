@@ -27,9 +27,11 @@ from chat.replay import replay_session
 from chat.runtime import build_runtime
 from chat.sessions import get_session_service, choose_session
 from chat.turn import get_async_agent_response
-from chat.users import choose_user, User
+from chat.users import choose_user
 from commons.config import load_config
 from commons.create_model import create_model
+from commons.db import require_current_schema
+from models import User
 
 
 async def main():
@@ -39,6 +41,9 @@ async def main():
 
     # bad YAML fails main agentic loop.
     config = load_config()
+
+    # refuse to run against a database whose schema is not the one this code expects.
+    require_current_schema()
 
     session_service: DatabaseSessionService = get_session_service()
     

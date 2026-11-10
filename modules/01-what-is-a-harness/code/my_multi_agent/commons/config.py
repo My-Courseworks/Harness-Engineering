@@ -39,6 +39,11 @@ class Display:
     width: int = 0                      # use default terminal width
 
 @dataclass(frozen=True)
+class Database:
+    path: str = "data/ops.db"
+    sessions_path: str = "data/session.db"
+
+@dataclass(frozen=True)
 class Features:
     masking: bool = True                    # security feature: a missing key means on
     masked_role_instruction: bool = True
@@ -49,6 +54,7 @@ class Config:
     labels: Labels
     displays: dict[str, Display]       # keyed by role == "user" or "admin"
     features: Features = Features()
+    database: Database = Database()
 
 def load_config(path: Path = CONFIG_FILE) -> Config:
     """
@@ -62,4 +68,5 @@ def load_config(path: Path = CONFIG_FILE) -> Config:
         displays={role: Display(**d)
                   for role, d in raw.get("display", {}).items()},
         features=Features(**raw.get("features", {})),
+        database=Database(**raw.get("database", {})),
     )

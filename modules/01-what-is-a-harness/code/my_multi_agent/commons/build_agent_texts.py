@@ -5,7 +5,7 @@ while creating their instance.
 
 from pathlib import Path
 
-from commons.database_ops import now_local
+from utils.time_fmt import now_local
 from utils.file_ops import read_file_if_exists
 
 

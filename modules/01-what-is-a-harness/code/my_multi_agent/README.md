@@ -595,51 +595,60 @@ Only one idea still needs something this README does not specify.
 
 ## Data setup layout
 
-All data creation lives under `data_setup/` and nothing else does:
+The models are the single source of truth for the schema. Nothing is written as SQL by hand:
 
 ```
 my_multi_agent/
-├── agent.py
-├── README.md
-└── data_setup/
-    ├── build_db.py              # CLI entry point
-    ├── builder.py               # DatabaseBuilder: schema, then seeders, then integrity check
-    ├── config.py                # SeedConfig: seed, "today", row counts (immutable)
-    ├── database.py              # Database: connection, pragmas, bulk insert, row counts
-    ├── schema_loader.py         # SchemaLoader: applies schema/*.sql in filename order
-    ├── schema/                  # DDL only, numbered so foreign keys resolve in order
-    │   ├── 01_reference.sql     #   states, cities, companies
-    │   ├── 02_people.sql        #   employees, salary_bands
-    │   ├── 03_scheduling.sql    #   leave_balances, leave_requests, rooms, room_bookings
-    │   ├── 04_it.sql            #   asset_categories, assets, it_tickets
-    │   ├── 05_finance.sql       #   expense_limits, expense_claims, claim_checks
-    │   ├── 06_orchestrator.sql  #   notifications
-    │   └── 07_users.sql         #   users (terminal operators and their role)
-    ├── seed/
-    │   ├── base.py              #   Seeder (abstract) and SeedContext
-    │   ├── common.py            #   pure date and rounding helpers
-    │   ├── reference.py         #   ReferenceSeeder
-    │   ├── people.py            #   PeopleSeeder (also owns the name pools)
-    │   ├── scheduling.py        #   SchedulingSeeder
-    │   ├── it.py                #   ITSeeder
-    │   ├── finance.py           #   FinanceSeeder
-    │   ├── users.py             #   UsersSeeder (fixed list: 3 admins, 3 users)
-    │   └── __init__.py          #   default_seeders(): the ordered registry
-    └── generated/
-        └── ops.db               # build output; gitignored
+├── config.yml                   # database.path (data/ops.db) and database.sessions_path
+├── alembic.ini                  # Alembic settings; the database URL comes from commons/db.py
+├── models/                      # SQLAlchemy 2.0 models, one module per domain
+│   ├── base.py                  #   Base, constraint naming convention, UTC timestamp default
+│   ├── reference.py             #   State, City, Company
+│   ├── people.py                #   Employee, SalaryBand
+│   ├── scheduling.py            #   LeaveBalance, LeaveRequest, Room, RoomBooking
+│   ├── it.py                    #   AssetCategory, Asset, ITTicket
+│   ├── finance.py               #   ExpenseLimit, ExpenseClaim, ClaimCheck
+│   ├── orchestrator.py          #   Notification
+│   └── users.py                 #   User (terminal operators and their role)
+├── migrations/                  # Alembic: the recorded history of the schema
+│   ├── env.py                   #   compares the models with the database
+│   └── versions/                #   one reviewed revision per schema change
+├── commons/db.py                # engine, session_scope(), schema-version check
+├── data_access/                 # the only layer that queries the database, one module per domain
+│   ├── people.py
+│   ├── orchestrator.py
+│   └── users.py
+├── data_setup/
+│   ├── __main__.py              # CLI: upgrade, seed, reset
+│   ├── seeding.py               # seed_database(): every seeder in one transaction
+│   ├── config.py                # SeedConfig: seed, "today", row counts (immutable)
+│   └── seed/
+│       ├── base.py              #   Seeder (abstract) and SeedContext
+│       ├── common.py            #   pure date and rounding helpers
+│       ├── reference.py         #   ReferenceSeeder
+│       ├── people.py            #   PeopleSeeder (also owns the name pools)
+│       ├── scheduling.py        #   SchedulingSeeder
+│       ├── it.py                #   ITSeeder
+│       ├── finance.py           #   FinanceSeeder
+│       ├── users.py             #   UsersSeeder (fixed list: 3 admins, 3 users)
+│       └── __init__.py          #   default_seeders(): the ordered registry
+└── data/                        # runtime state; gitignored
+    ├── ops.db                   #   the operations database
+    ├── session.db               #   ADK's own session store
+    └── backups/                 #   timestamped copies taken before every upgrade and reset
 ```
 
-**Build it** (from the `my_multi_agent` directory): `python -m data_setup.build_db`, with optional `--seed`, `--employees` and `--db`.
-
 **Design**
-- **One responsibility per class:** `Database` owns the connection, `SchemaLoader` applies DDL, each `Seeder` fills one cluster, `DatabaseBuilder` orchestrates, `SeedConfig` holds the knobs.
-- **Open for extension:** a new cluster is a new `Seeder` subclass, registered in `seed/__init__.py`; no existing class changes. Subclasses are interchangeable behind the `Seeder` interface.
+- **One source of truth:** a table exists because a model class declares it. Alembic compares the models with the database and generates the migration; the seeders and the data access layer use the same classes.
+- **The schema changes only through revisions:** edit a model, run `alembic revision --autogenerate -m "..."`, read the generated script, commit it, then `python -m data_setup upgrade`. The database records its own revision, and the app refuses to start against a database that is behind.
+- **The database is durable:** it is upgraded in place and never deleted to change its shape. Only `reset` deletes, and only when asked explicitly.
+- **Tools never touch the engine:** a tool validates its arguments, calls one function in `data_access/`, and shapes the result for the model. Each data access function is one transaction.
+- **Open for extension:** a new cluster is a new `Seeder` subclass, registered in `seed/__init__.py`; no existing class changes.
 - **Template method:** `Seeder.run` checks that the ids it needs were published, calls the subclass's `seed`, then verifies its tables are non-empty.
-- **Dependency injection:** the builder receives its loader, seeders and config instead of constructing them, and seeders share ids through `SeedContext` rather than globals.
 
 **Data guarantees**
 - **Deterministic:** the same seed and config give a byte-identical database.
-- **Foreign keys on:** every connection runs `PRAGMA foreign_keys = ON`, and the build fails on any violation.
+- **Foreign keys on:** every connection runs `PRAGMA foreign_keys = ON`, and seeding fails on any violation.
 - **Deliberate edge cases:**
   - an ambiguous name (two employees called Priya Shah in different cities) and a city shared by two states (Springfield);
   - salaries exactly on a band edge;
@@ -666,54 +675,54 @@ How to create the database after cloning or moving this folder to another locati
 
 **Prerequisites**
 - Python 3.10 or newer (built and tested on 3.13).
-- Nothing to install for the database itself: `data_setup/` uses only the standard library (`sqlite3`, `argparse`, `dataclasses`). The ADK packages are needed only by `agent.py`, not by the setup.
+- The packages in `requirements.txt`. The database layer needs `sqlalchemy` and `alembic`.
 
 **Steps**
 1. Get the folder onto the machine (clone the repo, or copy `my_multi_agent/`).
-2. Open a terminal **inside `my_multi_agent/`**, the folder that contains `data_setup/`.
-   - This matters: `data_setup` is imported as a package, so the command only resolves from this directory.
-   - Running it from the parent folder does not work. The route through `my_multi_agent.data_setup...` would also load `my_multi_agent/__init__.py`, which imports `agent.py` and pulls in ADK and `.env`.
-3. Activate whichever Python environment you use (conda, venv, or the system Python).
-4. Run:
+2. Open a terminal **inside `my_multi_agent/`**. The commands are run as a package from this directory.
+3. Activate the Python environment and install the requirements.
+4. Create the schema, then load the sample data:
 
    ```
-   python -m data_setup.build_db
+   python -m data_setup upgrade
+   python -m data_setup seed
    ```
 
-5. Check the output: a line `Built <path>/data_setup/generated/ops.db`, the list of schema files applied, and a row count per table. The counts for a default build are:
+5. Check the output of `seed`: a row count per table. The counts for a default build are:
    - `employees` 200, `cities` 15, `rooms` 12, `expense_claims` 83, `users` 6;
    - `notifications` 0, because it starts empty by design.
 
-**Options**
+**Commands**
 
-| Flag | Default | Meaning |
-|---|---|---|
-| `--db PATH` | `data_setup/generated/ops.db` | where to write the database; parent folders are created if missing |
-| `--seed N` | `42` | random seed; the same seed always gives the identical database |
-| `--employees N` | `200` | number of employees |
+| Command | What it does |
+|---|---|
+| `python -m data_setup upgrade` | Brings the database to the latest schema revision. Creates it if missing. Backs up an existing database to `data/backups/` first. |
+| `python -m data_setup seed` | Loads the sample data. Refuses if the schema is not current or if any table already has rows. Options: `--seed N` (default `42`), `--employees N` (default `200`). |
+| `python -m data_setup reset --yes` | Backs up, then deletes the database. The only command that deletes. Without `--yes` it only explains what it would do. |
 
-Examples:
+**Where the database lives**
+- `database.path` in `config.yml`, `data/ops.db` by default. Relative paths are resolved against the project root, never the working directory.
+- The environment variable `OPS_DESK_DB` overrides it, for example to try something against a scratch file.
 
-```
-python -m data_setup.build_db --db /some/other/place/ops.db
-python -m data_setup.build_db --seed 7 --employees 500
-```
+**Changing the schema**
+1. Edit the model in `models/`.
+2. `alembic revision --autogenerate -m "what changed"`.
+3. Read the generated file in `migrations/versions/`. Autogenerate is a draft: it sees a rename as a drop plus an add, and a revision that moves data must also work on empty tables.
+4. Commit the revision, then `python -m data_setup upgrade`.
 
 **Behavior to know about**
-- **Always a rebuild:** the target file is deleted first, then recreated from the schema and seeders. Running it again is safe and gives a fresh database. Data written by the agents (notifications, new bookings and so on) is lost on a rebuild.
-- **Ids always start at 1:** because the file is recreated, every primary key restarts from 1 on each build. Stop anything that has `ops.db` open (such as a running agent) before rebuilding. ADK's own `session.db` is a separate file and is not touched.
-- **Reproducible:** with the same seed and settings, two machines produce byte-identical databases. The "today" date used for relative data is fixed in `data_setup/config.py` (`SeedConfig.today`); change it there if you want the data to centre on a different date.
-- **Not committed:** `data_setup/generated/` is in `.gitignore`, so a fresh clone has no database until you run the command.
-- **Failing loudly:** the build raises an error if any foreign key is violated or a seeder leaves one of its tables empty.
+- **Upgraded in place:** data written by the agents (notifications, new bookings and so on) survives a schema change.
+- **Recoverable from nothing:** if `data/ops.db` is lost, `upgrade` then `seed` rebuilds the schema and the sample data. Only rows created at run time are gone, which is what the backups are for.
+- **Reproducible:** with the same seed and settings, `seed` produces identical rows on any machine. The "today" date used for relative data is fixed in `data_setup/config.py` (`SeedConfig.today`).
+- **Not committed:** `data/` is in `.gitignore`, so a fresh clone has no database until you run the two commands.
+- **Failing loudly:** seeding raises if any foreign key is violated or a seeder leaves one of its tables empty, and then writes nothing.
+- **Stale schema is refused:** the app checks the database's revision at startup and stops with the command to run if it is behind.
 
 **Quick sanity check** (needs the `sqlite3` command-line tool, or any SQLite viewer):
 
 ```
-sqlite3 data_setup/generated/ops.db "SELECT COUNT(*) FROM employees;"
+sqlite3 data/ops.db "SELECT COUNT(*) FROM employees;"
 ```
-
-**When the agents start using it**
-- The default path is defined once, as `DEFAULT_DB_PATH` in `data_setup/build_db.py`. When the agent tools open the database, point them at the same location (or the path you passed to `--db`) from a single shared place, not a path copied into each tool.
 
 ## Closed decisions
 

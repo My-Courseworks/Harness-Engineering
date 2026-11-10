@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from models import User
+
 from .base import Seeder, SeedContext
 
 
 class UsersSeeder(Seeder):
     name = "users"
-    tables = ("users",)
+    tables = (User,)
 
     # (user_id, user_name, role). ``akshay`` keeps the id the app used before users existed,
     # so sessions recorded under it stay reachable.
@@ -27,5 +29,5 @@ class UsersSeeder(Seeder):
     )
 
     def seed(self, ctx: SeedContext) -> None:
-        ctx.db.insert_many("users", ("user_id", "user_name", "role"), self._USERS)
+        ctx.add_rows(User, ("user_id", "user_name", "role"), self._USERS)
         ctx.publish("user_ids", [user_id for user_id, _, _ in self._USERS])

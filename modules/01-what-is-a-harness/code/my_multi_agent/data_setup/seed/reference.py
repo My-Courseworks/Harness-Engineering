@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from models import City, Company, State
+
 from .base import Seeder, SeedContext
 
 
 class ReferenceSeeder(Seeder):
     name = "reference"
-    tables = ("states", "cities", "companies")
+    tables = (State, City, Company)
 
     # (city, cost_of_living_index). "Springfield" exists in two states on purpose,
     # so name resolution has a real ambiguity to deal with.
@@ -54,11 +56,11 @@ class ReferenceSeeder(Seeder):
             for company_id, (name, industry) in enumerate(self._COMPANIES, start=1)
         ]
 
-        ctx.db.insert_many("states", ("state_id", "state_name"), state_rows)
-        ctx.db.insert_many(
-            "cities", ("city_id", "city_name", "state_id", "cost_of_living_index"), city_rows
+        ctx.add_rows(State, ("state_id", "state_name"), state_rows)
+        ctx.add_rows(
+            City, ("city_id", "city_name", "state_id", "cost_of_living_index"), city_rows
         )
-        ctx.db.insert_many("companies", ("company_id", "company_name", "industry"), company_rows)
+        ctx.add_rows(Company, ("company_id", "company_name", "industry"), company_rows)
 
         ctx.publish("city_ids", [row[0] for row in city_rows])
         ctx.publish("city_state", city_state)

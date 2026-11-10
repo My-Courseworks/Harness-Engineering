@@ -4,6 +4,12 @@ features:
   masked_role_instruction: true   # also tell the model not to narrate internals (prevention).
                                   # Turn off to see how the holdback performs on its own.
 
+# Where runtime state lives. Paths are relative to the project root unless absolute.
+# The whole data/ folder is gitignored. OPS_DESK_DB overrides database.path.
+database:
+  path: data/ops.db                # the operations database (schema managed by Alembic)
+  sessions_path: data/session.db   # ADK's own session store
+
 # Terminal Look - fonts styles and colors for different message kinds in terminal UI for ops desk chatbot
 styles:
   thinking: "grey62 italic"

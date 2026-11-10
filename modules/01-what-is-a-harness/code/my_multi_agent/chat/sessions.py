@@ -7,15 +7,19 @@ import questionary
 
 from google.adk.sessions import DatabaseSessionService
 
-from chat.users import User
+from commons.db import sessions_path
+from models import User
 
 NEW_SESSION_CHOICE = "Create a new Session ➕"
 
 
 def get_session_service() -> DatabaseSessionService:
     """
+    ADK's own session store. Its location comes from config, never from the working directory.
     """
-    return DatabaseSessionService(db_url = "sqlite+aiosqlite:///./session.db")
+    path = sessions_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return DatabaseSessionService(db_url=f"sqlite+aiosqlite:///{path}")
 
 async def list_sessions_for_user(
     session_service: DatabaseSessionService,

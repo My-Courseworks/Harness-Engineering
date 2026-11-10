@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import ClassVar
 
+from models import ExpenseClaim, ExpenseLimit
+
 from .base import Seeder, SeedContext
 from .common import at_hour, iso_datetime
 
@@ -42,7 +44,7 @@ class _ExampleRule:
 
 class FinanceSeeder(Seeder):
     name = "finance"
-    tables = ("expense_limits", "expense_claims")
+    tables = (ExpenseLimit, ExpenseClaim)
     requires = ("active_employee_ids", "asset_categories", "asset_holdings", "asset_assignments")
 
     _LIMITS: ClassVar[dict[str, float]] = {
@@ -85,8 +87,8 @@ class FinanceSeeder(Seeder):
     _REPAIRABLE: ClassVar[frozenset[str]] = frozenset({"laptop", "monitor", "phone", "keyboard"})
 
     def seed(self, ctx: SeedContext) -> None:
-        ctx.db.insert_many(
-            "expense_limits", ("category", "max_amount"), list(self._LIMITS.items())
+        ctx.add_rows(
+            ExpenseLimit, ("category", "max_amount"), list(self._LIMITS.items())
         )
         self._seed_claims(ctx)
 
@@ -143,8 +145,8 @@ class FinanceSeeder(Seeder):
                 )
             )
         rows += self._existing_asset_claims(ctx, len(rows) + 1, active, catalogue)
-        ctx.db.insert_many(
-            "expense_claims",
+        ctx.add_rows(
+            ExpenseClaim,
             (
                 "claim_id", "emp_id", "amount", "category", "asset_category_id", "asset_id",
                 "description", "status", "submitted_at",

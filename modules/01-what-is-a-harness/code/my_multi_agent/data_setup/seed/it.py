@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import ClassVar
 
+from models import Asset, AssetCategory, ITTicket
+
 from .base import Seeder, SeedContext
 from .common import at_hour, iso_datetime
 
@@ -28,7 +30,7 @@ class _CategorySpec:
 
 class ITSeeder(Seeder):
     name = "it"
-    tables = ("asset_categories", "assets", "it_tickets")
+    tables = (AssetCategory, Asset, ITTicket)
     requires = ("active_employee_ids", "terminated_employee_ids")
 
     _CATEGORIES: ClassVar[tuple[_CategorySpec, ...]] = (
@@ -82,8 +84,8 @@ class ITSeeder(Seeder):
 
     def _seed_categories(self, ctx: SeedContext) -> dict[str, int]:
         ids = {spec.name: number for number, spec in enumerate(self._CATEGORIES, start=1)}
-        ctx.db.insert_many(
-            "asset_categories",
+        ctx.add_rows(
+            AssetCategory,
             ("category_id", "category_name", "max_per_employee"),
             [(ids[spec.name], spec.name, spec.max_per_employee) for spec in self._CATEGORIES],
         )
@@ -147,8 +149,8 @@ class ITSeeder(Seeder):
                     )
                 )
 
-        ctx.db.insert_many(
-            "assets",
+        ctx.add_rows(
+            Asset,
             ("asset_id", "category_id", "model", "serial_no", "assigned_emp_id", "status"),
             rows,
         )
@@ -202,8 +204,8 @@ class ITSeeder(Seeder):
                 row[1], row[6] = emp_id, asset_id
                 row[3] = self._HARDWARE_ISSUES[category_names[category_id]]
 
-        ctx.db.insert_many(
-            "it_tickets",
+        ctx.add_rows(
+            ITTicket,
             ("ticket_id", "emp_id", "category", "description", "status", "created_at", "asset_id"),
             rows,
         )

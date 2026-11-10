@@ -4,7 +4,8 @@ Contains all tools needed for the orchestrator agent
 
 from google.adk.agents.llm_agent import ToolUnion
 
-from commons.database_ops import notify_db
+from data_access.orchestrator import record_notification
+from tools.arguments import as_int
 
 def _notify(emp_id: str, message: str) -> dict:
     """
@@ -16,7 +17,8 @@ def _notify(emp_id: str, message: str) -> dict:
 
     # an exception will be carried upstream and trigger the "reflect and retry plugin"
     # configured with the ADK App
-    is_emp_found = notify_db(emp_id=emp_id, message=message)
+    employee_id = as_int(emp_id)
+    is_emp_found = employee_id is not None and record_notification(emp_id=employee_id, message=message)
     return {
         "status": "ok" if is_emp_found else "fail",
         "emp_id": emp_id,

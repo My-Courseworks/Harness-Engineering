@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Type | Feature |
-| Component | chat harness (`main.py`, `chat/render_chat.py`, `commons/config.py`, `commons/database_ops.py`) |
+| Component | chat harness (`main.py`, `chat/render_chat.py`, `commons/config.py`, `data_access/`) |
 | Priority | Low (not scheduled) |
 | Status | Backlog |
 | Reporter | Akshay |
@@ -67,13 +67,12 @@ and logged, never applied.
 ### Persistence (decision pending, see Open questions)
 
 Option A — ADK `user:`-prefixed session state (`user:display.show_thinking`).
-Already persisted in `session.db`, scoped per user across all their sessions,
+Already persisted in `data/session.db`, scoped per user across all their sessions,
 no new table. Cost: state is model-adjacent (a tool or instruction template
 could read/write it). Harmless for a display preference.
 
-Option B — `user_preferences(user_id, key, value)` table in `ops.db` via
-`database_ops.py`. Explicit, queryable, not visible to the model. Costs a
-schema file, a seeder no-op, and two functions.
+Option B — `user_preferences(user_id, key, value)` table in `ops.db`: a model, an Alembic revision and two functions in
+`data_access/`. Explicit, queryable, not visible to the model.
 
 Recommendation: start with A, move to B only if a reason appears.
 

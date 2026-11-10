@@ -6,13 +6,15 @@ import random
 from datetime import timedelta
 from typing import ClassVar
 
+from models import LeaveBalance, LeaveRequest, Room, RoomBooking
+
 from .base import Seeder, SeedContext
 from .common import at_hour, iso_date, iso_datetime, next_workdays, round_to
 
 
 class SchedulingSeeder(Seeder):
     name = "scheduling"
-    tables = ("leave_balances", "leave_requests", "rooms", "room_bookings")
+    tables = (LeaveBalance, LeaveRequest, Room, RoomBooking)
     requires = ("active_employee_ids", "ambiguous_employee_ids")
 
     _LEAVE_TYPES: ClassVar[tuple[str, ...]] = ("annual", "sick", "personal")
@@ -49,7 +51,7 @@ class SchedulingSeeder(Seeder):
                 else:
                     days_left = round_to(rng.uniform(0, self._LEAVE_MAX_DAYS[leave_type]), 0.5)
                 rows.append((emp_id, leave_type, days_left))
-        ctx.db.insert_many("leave_balances", ("emp_id", "leave_type", "days_left"), rows)
+        ctx.add_rows(LeaveBalance, ("emp_id", "leave_type", "days_left"), rows)
         return out_of_leave
 
     def _seed_leave_requests(self, ctx: SeedContext, active: list[int]) -> None:
@@ -70,8 +72,8 @@ class SchedulingSeeder(Seeder):
                 (request_id, rng.choice(active), leave_type,
                  iso_date(start), iso_date(end), float(length), status)
             )
-        ctx.db.insert_many(
-            "leave_requests",
+        ctx.add_rows(
+            LeaveRequest,
             ("request_id", "emp_id", "leave_type", "start_date", "end_date", "days", "status"),
             rows,
         )
@@ -114,8 +116,8 @@ class SchedulingSeeder(Seeder):
         # Someone with no annual leave left asking for annual leave: approval must fail on balance.
         add(min(out_of_leave), "annual", 28, 3)
 
-        ctx.db.insert_many(
-            "leave_requests",
+        ctx.add_rows(
+            LeaveRequest,
             ("request_id", "emp_id", "leave_type", "start_date", "end_date", "days", "status"),
             rows,
         )
@@ -125,7 +127,7 @@ class SchedulingSeeder(Seeder):
             (room_id, name, capacity, floor)
             for room_id, (name, capacity, floor) in enumerate(self._ROOMS, start=1)
         ]
-        ctx.db.insert_many("rooms", ("room_id", "room_name", "capacity", "floor"), rows)
+        ctx.add_rows(Room, ("room_id", "room_name", "capacity", "floor"), rows)
         return [row[0] for row in rows]
 
     def _seed_room_bookings(
@@ -173,8 +175,8 @@ class SchedulingSeeder(Seeder):
                 add(room_id, day, hour, 1, "cancelled")
                 cancelled += 1
 
-        ctx.db.insert_many(
-            "room_bookings",
+        ctx.add_rows(
+            RoomBooking,
             ("booking_id", "room_id", "booked_by", "start_time", "end_time", "status"),
             rows,
         )
