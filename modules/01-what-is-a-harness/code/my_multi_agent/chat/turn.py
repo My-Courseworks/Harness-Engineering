@@ -9,6 +9,7 @@ from google.genai import types
 
 from rich.console import Console
 
+from chat.masking import DISPLAY_TEXT_KEY
 from chat.render_chat import (
     AnswerStream, View,
     open_answer, append_answer, close_answer,
@@ -28,7 +29,7 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
     def close_current(final_text: str | None = None) -> None:
         nonlocal open_kind, answer
         if open_kind == "answer" and answer is not None:
-            close_answer(answer, final_text)
+            close_answer(answer, view, final_text)
             answer = None
         elif open_kind == "thinking":
             console.print()
@@ -50,7 +51,10 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
 
                 if part.function_call and not event.partial:
                     # tool call
-                    # non partial even whose part is a function call
+                    # non partial even whose part is a function call.
+                    # A tool call ends whatever segment was open: otherwise the tool lines
+                    # get drawn above a still-running answer Live and the order scrambles.
+                    close_current()
                     fc = part.function_call
                     print_tool_call(console=console, view=view, author=author, name=fc.name, args=fc.args)
                 elif part.function_response:
@@ -74,7 +78,7 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                         print_thinking_delta(console=console, view=view, delta = part.text)
                     else:
                         # append to answer stream with this part's text
-                        append_answer(stream = answer, delta = part.text)
+                        append_answer(stream=answer, view=view, delta=part.text)
                 elif part.text and not part.thought:
                     # non-partial event not containing thinking tokens: aggregated final message from agent (LLM), authoritative
                     if open_kind != "answer":
@@ -84,8 +88,12 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                         open_kind = "answer"
                     # add text from final message into stream and close it.
                     # here the open_kind has to be "answer", hence we know which branch of
-                    #  close_current() will be chosen
-                    close_current(final_text=part.text)
+                    #  close_current() will be chosen.
+                    # If the masking callback rewrote this answer for a non-admin, the
+                    # name-free version sits in custom_metadata; prefer it. Admin events
+                    # never carry the key, so they fall through to the raw text.
+                    masked_text: str | None = (event.custom_metadata or {}).get(DISPLAY_TEXT_KEY)
+                    close_current(final_text=masked_text or part.text)
     finally:
         # after turn completion, no stream needed to be open.
         close_current()

@@ -5,6 +5,7 @@ from rich.console import Console
 
 from google.adk.sessions import DatabaseSessionService
 
+from chat.masking import DISPLAY_TEXT_KEY
 from chat.render_chat import (
     View,
     print_user, 
@@ -54,7 +55,15 @@ async def replay_session(
                         print_thinking_delta(console=console, view=view, delta=part.text)
                         console.print()
                     elif part.text:
-                        print_answer(console=console, view=view, author=author, text=part.text)
+                        # If the masking callback rewrote this answer for a non-admin, the
+                        # name-free version was persisted with the event; prefer it.
+                        # Admin events never carry the key, so they fall through to raw text.
+                        masked_text: str | None = (event.custom_metadata or {}).get(DISPLAY_TEXT_KEY)
+                        print_answer(console=console, view=view, author=author, text=masked_text or part.text)
                     
-    except Exception as _:
-        console.print_exception()
+    except Exception:
+        # Tracebacks name modules and tools; only roles configured for it see them.
+        if view.display.show_error_details:
+            console.print_exception()
+        else:
+            console.print("\nCould not load earlier messages of this session.", style=view.styles.agent)

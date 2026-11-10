@@ -1,3 +1,7 @@
+# Features
+features:
+  masking: true
+
 # Terminal Look - fonts styles and colors for different message kinds in terminal UI for ops desk chatbot
 styles:
   thinking: "grey62 italic"
@@ -9,16 +13,32 @@ styles:
 labels:
   user: "[user]:"
   thinking_prefix: "thinking"
-  tool_call_glyph: "⚙️"
+  tool_call_glyph: "⚙"
   tool_response_glyph: "↪"
 
 display:
   user:
     show_thinking: false
+    show_tool_call: false
+    show_tool_response: false
+    show_agent_name: false
+    show_error_details: false
+    show_subagent_answers: false
     code_theme: "monokai"
     width: 0                      # use default terminal width
+    # masking:
+    #   kinds: [agent, tool]
+    #   rewrite_answers: true
   admin:
     show_thinking: true
+    show_tool_call: true
+    show_tool_response: true
+    show_agent_name: true
+    show_error_details: true
+    show_subagent_answers: true
     tool_response_max_chars: 300
     code_theme: "monokai"
     width: 0                      # use default terminal width
+    # masking:
+    #   kinds: []
+    #   rewrite_answers: false

@@ -29,6 +29,11 @@ class Labels:
 @dataclass(frozen=True)
 class Display:
     show_thinking: bool = False
+    show_tool_call: bool = False
+    show_tool_response: bool = False
+    show_agent_name: bool = False
+    show_error_details: bool = False     # tracebacks carry module and tool names
+    show_subagent_answers: bool = False  # sub-agents narrate process; only the root agent answers the user
     tool_response_max_chars: int = 300
     code_theme: str = "monokai"
     width: int = 0                      # use default terminal width
