@@ -37,9 +37,24 @@ Transcript:
 {transcript}"""
 
 
+CODE_WAIT = ("confirm_verification_code: waiting for the customer to type the one-time code (the conversation pauses here by design; "
+             "this is how the step-up works, not an error and not a mistake)")
+
+
 def format_transcript(turns: list[dict]) -> str:
-    """turns: [{"role": "customer" | "assistant" | "tool", "text": str}] in order."""
-    return "\n".join(f"{turn['role']}: {turn['text']}" for turn in turns if turn["text"].strip())
+    """turns: [{"role": "customer" | "assistant" | "tool", "text": str}] in order. The wait for a one-time code is
+    written as what it is. Raw, it reads as the tool being called "without the code" and, in ADK, answered with "This
+    tool call requires confirmation": harness plumbing that reflections took for an agent mistake and wrote 180-day
+    lessons against (the round-5 review's non-blocking 7)."""
+    lines = []
+    for turn in turns:
+        text = turn["text"]
+        if turn["role"] == "tool" and text.startswith(("called confirm_verification_code(", "confirm_verification_code ->")) \
+                and (text.startswith("called") or "requires confirmation" in text or text.rstrip().endswith(("-> null", "-> None"))):
+            text = CODE_WAIT
+        if text.strip() and not (text == CODE_WAIT and lines and lines[-1].endswith(CODE_WAIT)):
+            lines.append(f"{turn['role']}: {text}")
+    return "\n".join(lines)
 
 
 def group_by_customer_turn(turns: list[dict]) -> list[list[dict]]:

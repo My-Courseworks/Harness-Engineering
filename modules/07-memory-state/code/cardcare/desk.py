@@ -119,8 +119,16 @@ def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remi
     record = scheduler.schedule_followup(scheduler_db, user_id, "customer_reminder", trigger_at, {"note": mask_customer_text(note)}, "none",
                                          now, generation=generation, local_day=actual.date().isoformat())
     if record is None:
-        return {"error": f"a reminder is already scheduled for {actual.date().isoformat()} ({timezone}); one reminder per day, so put "
-                         "everything for that day in that one"}
+        day = actual.date().isoformat()
+        existing = next((f for f in scheduler.list_followups(scheduler_db) if f["user_id"] == user_id and f["action"] == "customer_reminder"
+                         and f.get("local_day") == day and f["status"] not in ("done", "cancelled", "failed")), None)
+        named = ""
+        if existing:
+            at = parse_instant(existing["trigger_at"]).astimezone(zone)
+            named = f": {existing['followup_id']} at {at.strftime('%H:%M')} {at.tzname()}"
+        return {"error": f"a reminder is already scheduled for {day} ({timezone}){named}; one reminder per day, so put everything for that "
+                         "day in that one (cancel_reminder it first to replace it)",
+                **({"existing_followup_id": existing["followup_id"]} if existing else {})}
     return {"followup_id": record["followup_id"], "due_utc": trigger_at,
             "local_time": f"{actual.strftime('%A %Y-%m-%d %H:%M')} {actual.tzname()} ({timezone})",
             "sent_on": f"{scheduler.channel_description(channel, channel_chosen)}, the contact channel on file when it is sent"}
