@@ -6,9 +6,9 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 **Customer:** Just chatting: my dog's name is Biscuit. Nothing else today.
 
-**Assistant:** Nice to meet you both - noted, Biscuit. Nothing needed from my side today; just message here whenever something comes up with your card.
+**Assistant:** Got it - Biscuit! 🐕 Nothing else needed today. If you ever need help with a transaction, a dispute, a travel notice or a reminder, just say the word.
 
-_Episode written:_ Conversation on 2026-11-09: The customer said their dog’s name is Biscuit (not verified) and stated nothing else was needed today. No card issue was raised, and no case ID, transaction ID, promise, or preference was involved. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: The customer said their dog’s name is Biscuit (not verified) and stated nothing else was needed today. No case or transaction IDs, promises, or preferences were discussed. Case outcomes: no case touched. Lesson: none
 
 ## ee-s2  ·  session  ·  eli  ·  2027-05-20T10:00:00Z
 
@@ -16,12 +16,11 @@ _Episode written:_ Conversation on 2026-11-09: The customer said their dog’s n
 
 - `load_memory({"query": "dog's name"})` → `{"memories": []}`
 
-**Assistant:** I'll check.
-I have no record of a dog's name - nothing relevant came back from my memory of earlier conversations. If you'd like, tell me here and I can help with whatever card matter you need.
+**Assistant:** I checked, and I have no record of that - nothing about a dog's name from earlier conversations. I only keep the contact channel and travel notice on file, so a pet's name wouldn't be among them. Sorry I can't help with that one! Anything card-related I can look into?
 
-_Episode written:_ Conversation on 2027-05-20: Customer asked whether the assistant remembered their dog’s name from earlier chats and requested a memory check. Assistant ran load_memory; it returned no relevant memories. Assistant said no record and invited the customer to share the name. The customer said earlier chats had the dog’s name (not verified). No case/transaction IDs, promises, or preferences stated. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2027-05-20: The customer said they had earlier chats where their dog's name was discussed (not verified) and asked the assistant to check memory. load_memory returned no memories; the assistant said no record was found. No case/transaction IDs, promises, or preferences were mentioned. Case outcomes: no case touched. Lesson: When a memory search returns no results, state that no matching memory was found rather than making broader claims about what data is stored.
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | episodic | an episode past its 180 days is never recalled, maintenance or not | `{"memories": []}` |
-| PASS | episodic | and its content is not in the reply | `I'll check. I have no record of a dog's name - nothing relevant came back from my memory of earlier conversations. If you'd like, tell me here and I can help with whatever card matter you need.` |
+| PASS | episodic | and its content is not in the reply | `I checked, and I have no record of that - nothing about a dog's name from earlier conversations. I only keep the contact channel and travel notice on file, so a pet's name wouldn't be among them. Sorry I can't help with  …` |

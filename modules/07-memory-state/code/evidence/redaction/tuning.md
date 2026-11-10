@@ -96,12 +96,12 @@ Every failure, then every case.
 | pass | mask | r2-r3 tuning | ['the number is 5555 5555 5555 4444', 'card again: 5555/5555/5555/4444'] | ['the number is [REDACTED CARD NUMBER]', 'card again: [REDACTED CARD NUMBER]'] |  |
 | pass | mask | r2-r3 tuning | ['my card 5555-5555-5555-4444', '5555 5555 5555 4444 is it, I think'] | ['my card [REDACTED CARD NUMBER]', '[REDACTED CARD NUMBER] is it, I think'] |  |
 | pass | mask | r2-r3 tuning | ['the card is 5555555555554444, or', 'maybe 5555.5555.5555.4444 instead'] | ['the card is [REDACTED CARD NUMBER], or', 'maybe [REDACTED CARD NUMBER] instead'] |  |
-| pass | mask | r2-r3 tuning | ['5555 5555 5555 4444, exp Dec 2029, security code 737, ZIP 10011, card ending 8830.'] | ['[REDACTED CARD NUMBER], ZIP 10011, card ending 8830.'] |  |
+| pass | mask | r2-r3 tuning | ['5555 5555 5555 4444, exp Dec 2029, security code 737, ZIP 10011, card ending 8830.'] | ['[REDACTED CARD NUMBER], exp [REDACTED EXPIRY], security code [REDACTED SECURITY CODE], ZIP 10011, card ending 8830.'] |  |
 | pass | mask | r2-r3 tuning | ['valid until 12/29, CVV 7 3 7, billing ZIP 10011, card ends 8830'] | ['valid until [REDACTED EXPIRY], CVV [REDACTED SECURITY CODE], billing ZIP 10011, card ends 8830'] |  |
 | pass | mask | r2-r3 tuning | ['Fine, try it split-first half: 5555/5555, expiry 12/29, code 737.'] | ['Fine, try it split-first half: [REDACTED CARD DIGITS], expiry [REDACTED EXPIRY], code [REDACTED SECURITY CODE].'] |  |
 | pass | mask | r2-r3 tuning | ['Fine, try it split-first half: 5555/5555, expiry 12/29, code 737.', 'and the second half is 5555-4444'] | ['Fine, try it split-first half: [REDACTED CARD DIGITS], expiry [REDACTED EXPIRY], code [REDACTED SECURITY CODE].', 'and the second half is [REDACTED CARD DIGITS]'] |  |
 | pass | mask | r2-r3 tuning | ['expiry December 2029 and the code 737'] | ['expiry [REDACTED EXPIRY] and the code [REDACTED SECURITY CODE]'] |  |
-| pass | mask | r2-r3 tuning | ['I copied this from my phone note: 5555 5555 5555 4444 / exp 12-2029 / CVV 737 / ZIP 10011'] | ['I copied this from my phone note: [REDACTED CARD NUMBER] / ZIP 10011'] |  |
+| pass | mask | r2-r3 tuning | ['I copied this from my phone note: 5555 5555 5555 4444 / exp 12-2029 / CVV 737 / ZIP 10011'] | ['I copied this from my phone note: [REDACTED CARD NUMBER] / exp [REDACTED EXPIRY] / CVV [REDACTED SECURITY CODE] / ZIP 10011'] |  |
 | pass | mask | r2-r3 tuning | ['exp 12 - 29, ZIP 10011'] | ['exp [REDACTED EXPIRY], ZIP 10011'] |  |
 | pass | mask | r2-r3 tuning | ['Marco again: 5555 5555 5555 4444 / Dec 2029 / 737 / 10011. Save for next time, please.'] | ['Marco again: [REDACTED CARD NUMBER] / 10011. Save for next time, please.'] |  |
 | pass | mask | r2-r3 tuning | ['try this format: 5555 5555 5555 4444 / Dec 2029 / 737-can that go on my profile?'] | ['try this format: [REDACTED CARD NUMBER]-can that go on my profile?'] |  |
@@ -164,7 +164,7 @@ Every failure, then every case.
 | pass | keep | phone | ['call me on +44 20 7946 0958 or (415) 555-0100'] | ['call me on +44 20 7946 0958 or (415) 555-0100'] |  |
 | pass | keep | reference | ['booking ref QX7-88123, refund of 1,299.00 due 2026-12-01'] | ['booking ref QX7-88123, refund of 1,299.00 due 2026-12-01'] |  |
 | pass | keep | subscription expiry | ['The subscription expires 12/31 and renews every year'] | ['The subscription expires 12/31 and renews every year'] |  |
-| pass | mask | amex in fives | ['Amex:\n34343\n43434\n34343'] | ['Amex:\n[REDACTED CARD NUMBER]'] |  |
+| pass | mask | amex in fives | (uses a randomly generated card number, not printed; regenerate it locally from the seed) | (uses a randomly generated card number, not printed; regenerate it locally from the seed) |  |
 | pass | mask | amex in fives | ['it reads 37828 then 22463 then 10005 on the card'] | ['it reads [REDACTED CARD NUMBER] on the card'] |  |
 | pass | mask | code by signature | ['the code next to the signature is 604'] | ['the code next to the signature is [REDACTED SECURITY CODE]'] |  |
 | pass | mask | correction over messages | ['4111\n1111\n1121\n1111', "sorry typo, it's 4111 1111 1111 1111"] | ['[REDACTED CARD NUMBER]', "sorry typo, it's [REDACTED CARD NUMBER]"] |  |

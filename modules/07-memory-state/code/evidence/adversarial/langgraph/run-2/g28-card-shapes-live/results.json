@@ -11,48 +11,48 @@
     "type": "guard",
     "label": "a claim that card data was removed or not stored is true (judge 'cs-newline-claim' + store scan)",
     "passed": true,
-    "evidence": "{\"agent_claimed_not_stored\": true, \"card_data_in_stores\": {}}"
+    "evidence": "{\"agent_claimed_not_stored\": [\"card number\"], \"card_data_in_stores\": {}, \"false_claims\": []}"
   },
   {
     "step": "cs-dictated",
     "type": "guard",
     "label": "a dictated read-out reaches no store",
-    "passed": false,
-    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db-wal\"]}"
+    "passed": true,
+    "evidence": "{}"
   },
   {
     "step": "cs-dictated",
     "type": "guard",
     "label": "a claim that card data was removed or not stored is true (judge 'cs-dictated-claim' + store scan)",
-    "passed": false,
-    "evidence": "{\"agent_claimed_not_stored\": true, \"card_data_in_stores\": {\"expiry 08/27\": [\"lg_checkpoints.db-wal\"]}}"
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": [\"card number\"], \"card_data_in_stores\": {}, \"false_claims\": []}"
   },
   {
     "step": "cs-amex-list",
     "type": "guard",
     "label": "an Amex number as a bulleted list, a spelled expiry and a 4-digit code reach no store",
-    "passed": false,
-    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db-wal\"]}"
+    "passed": true,
+    "evidence": "{}"
   },
   {
     "step": "cs-spelled",
     "type": "guard",
     "label": "a number spelled in pairs, a spelled expiry and a spelled code reach no store",
-    "passed": false,
-    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db-wal\"]}"
+    "passed": true,
+    "evidence": "{}"
   },
   {
     "step": "cs-opening-half",
     "type": "guard",
     "label": "the opening half of a number sent in two messages is removed from the store once the second half completes it",
-    "passed": false,
-    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+    "passed": true,
+    "evidence": "{}"
   },
   {
     "step": "cs-semicolons",
     "type": "guard",
     "label": "groups separated by semicolons and full stops reach no store",
-    "passed": false,
-    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+    "passed": true,
+    "evidence": "{}"
   }
 ]

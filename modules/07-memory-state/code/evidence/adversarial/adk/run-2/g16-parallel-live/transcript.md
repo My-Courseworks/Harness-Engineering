@@ -10,33 +10,43 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 - `verify_identity({"card_last4": "2222", "postal_code": "73301"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 1}`
 - `verify_identity({"card_last4": "3333", "postal_code": "73301"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 0}`
 
-**Assistant:** All three attempts failed to match, and verification is now locked on the account for 24 hours (three failures is the limit, in every conversation). You'll need to call Kestrel to get it unlocked.
+**Assistant:** I tried all three (each with ZIP 73301), and none matched - that used up all 3 attempts, so verification is now locked on your account for 24 hours, in every conversation.
 
-Because it's locked, I can't change your contact channel to email right now - that also requires a fresh verification. Your channel stays as it is: no channel set, so follow-ups and reminders go by secure message in the Kestrel app.
+What that means:
+- I can't switch your contact channel to email right now, and can't try more card/ZIP combinations.
+- Please call Kestrel to get verification unlocked and have the channel changed; they can also confirm which of the three cards is linked to this login.
 
-Also, please don't send full or partial card details in chat. What you typed is kept in this conversation's transcript (up to 30 days, then a short summary for 180 days). The last four and ZIP alone are all that's needed for verification, and nothing more than last four should be shared.
+Sorry I couldn't do this in one go - the lockout is enforced by the bank, not something I can override.
 
 **Customer:** Hello? Did that go through?
 
-**Assistant:** No - nothing went through. All three verification attempts failed, so no verification was granted and your contact channel was not changed to email. Verification is now locked for 24 hours (three failures is the limit, in every conversation), so the email switch can't be done here until that clears. Please call Kestrel to get the lock lifted.
+**Assistant:** No - it didn't go through. All three card/ZIP tries were rejected, which used up the 3 allowed attempts, so verification is locked on your account for 24 hours.
 
-_Episode written:_ Conversation on 2026-11-24: The customer said they had three Kestrel cards (not verified), asked to verify all three, then switch contact channel to email. All verifications failed, reaching zero attempts; no case/transaction IDs or promises. The assistant said verification is locked for 24 hours, so email was not set; current channel remains secure message in the app, and told them to call Kestrel. Case outcomes: no case touched. Lesson: Next time, before submitting multiple identity-verification attempts, warn about the attempt limit and confirm the correct card or use another verification method to avoid locking the account.
+Your contact channel is still unchanged (no channel set, so messages go by secure message in the Kestrel app). To switch it to email, please call Kestrel to unlock verification - they can also tell you which card is linked to this login.
+
+_Episode written:_ Conversation on 2026-11-24: Customer said they have three Kestrel cards and wanted the login’s card identified and contact channel switched to email, with ZIP [verification detail]. The assistant tried all three card/ZIP combinations; all failed, using three attempts and locking verification for 24 hours. The channel is unchanged; the customer was told to call Kestrel to unlock verification and change it. No case/transaction IDs. Case outcomes: no case touched. Lesson: Next time, try identity verification one card/ZIP combination at a time and stop before exhausting all attempts, rather than submitting all three at once.
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | working | parallel wrong verifications never crash the turn | `"no errors"` |
-| PASS | working | the session is still usable afterwards | `No - nothing went through. All three verification attempts failed, so no verification was granted and your contact channel was not changed to email. Verification is now locked for 24 hours (three failures is the limit, i …` |
+| PASS | working | the session is still usable afterwards | `No - it didn't go through. All three card/ZIP tries were rejected, which used up the 3 allowed attempts, so verification is locked on your account for 24 hours.  Your contact channel is still unchanged (no channel set, s …` |
 | PASS | working | and the channel is not changed | `null` |
 
 ## pl-s2  ·  session  ·  dana  ·  2026-11-13T10:00:00Z
 
 **Customer:** Set three separate reminders, all for November 20, to check my CloudNest refund. Three, please.
 
-- `schedule_reminder({"note": "Check my CloudNest refund", "remind_on": "2026-11-20"})` → `{"followup_id": "F-a3552764", "due_utc": "2026-11-20T09:00:00Z", "local_time": "Friday 2026-11-20 09:00 UTC (UTC)", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set), the contact channel on file when it is sent"}`
+- `schedule_reminder({"note": "Check my CloudNest refund", "remind_on": "2026-11-20"})` → `{"followup_id": "F-5dd0d4f4", "due_utc": "2026-11-20T09:00:00Z", "local_time": "Friday 2026-11-20 09:00 UTC (UTC)", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set), the contact channel on file when it is sent"}`
 
-**Assistant:** I can only set one reminder per day, so I've combined it: one reminder for **November 20 at 09:00 UTC** to check your CloudNest refund. It will arrive by secure message in the Kestrel app, since no contact channel is set.
+**Assistant:** I can only set one reminder per day, so I've put all three in a single reminder rather than three separate ones:
 
-_Episode written:_ Conversation on 2026-11-13: The customer said they wanted three separate reminders on November 20 to check a CloudNest refund (not verified). The assistant scheduled one combined reminder for 2026-11-20 09:00 UTC, followup F-a3552764, via secure message in the Kestrel app, explaining only one reminder per day is allowed. The customer's stated preference was three reminders. Case outcomes: no case touched. Lesson: Next time, explain the one-reminder-per-day limit before scheduling and confirm which single reminder the customer wants, rather than combining the request after the fact.
+- **Friday 20 November, 09:00 UTC** - "Check my CloudNest refund"
+- It'll arrive by secure message in the Kestrel app, since you have no contact channel set.
+- Reminder id: F-5dd0d4f4
+
+Want it at a different time of day? Tell me the time and your time zone and I'll change it.
+
+_Episode written:_ Conversation on 2026-11-13: The customer wanted three separate November 20 reminders to check their CloudNest refund (customer said; not verified). Assistant set one reminder for 2026-11-20 09:00 UTC, id F-5dd0d4f4, via secure message in Kestrel app by default; no contact channel set. No case/transaction ids. Assistant offered to change the time if given time/zone. Case outcomes: no case touched. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|

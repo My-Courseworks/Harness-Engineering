@@ -9,29 +9,27 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 - `report_malformed_tool_call({})` → `{"error": "your last call's arguments were not valid JSON, so it did not run; make the call again with valid JSON arguments"}`
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "StreamMax"})` → `{"transactions": [{"transaction_id": "T-1001", "posted_on": "2026-09-28", "merchant": "StreamMax", "description": "StreamMax Premium monthly", "amount": "$15.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-1002", "posted_on": "2026-10-28", "merchant": "StreamMax", "description": "StreamMax Premium monthly", "amount": "$15.99", "currency": "USD", "category": "subscription …`
-- `file_dispute({"transaction_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled by phone before the charge."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-db2f2f21", "due": "2026-11-19", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled by phone before the October 28 charge."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-460c7627", "due": "2026-11-19", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Verified - thanks, Priya.
+**Assistant:** Your identity is verified, and I've filed the dispute.
 
-I filed the dispute for the **28 October StreamMax Premium charge, $15.99** (transaction T-1002).
+- **Case:** C-5001 - StreamMax Premium, $15.99, posted Oct 28, 2026
+- **Status:** Under review (disputes are currently reviewed in about 10 days)
+- **Reason:** Subscription cancelled before the charge
+- **Follow-up:** due Nov 19, 2026, and it will reach you by secure message in the Kestrel app, since no contact channel is set. If you set one before then, it will go there instead.
 
-- **Case ID:** C-5001 - under review
-- **Follow-up:** due **19 November 2026**
-- **Where it will reach you:** secure message in the Kestrel app, since no contact channel is set. If you set one (email or SMS) before then, the follow-up goes there instead.
-
-If you get a cancellation reference from StreamMax, send it to me and I'll attach it to the case.
+If you have a phone-cancellation reference or anything else from StreamMax, I can attach it to the case as evidence.
 
 **Customer:** Thanks. What is the case number, and when will I hear back?
 
-- `get_case_status({"case_id": "C-5001"})` → `{"cases": [{"case_id": "C-5001", "user_id": "priya", "txn_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled by phone before the charge.", "status": "under_review", "opened_at": "2026-11-09T10:00:00Z", "resolution_code": null, "resolution_note": null, "resolved_at": null, "decision_id": null}]}`
-- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-db2f2f21", "action": "case_status_followup", "due": "2026-11-19T10:00:00Z", "status": "pending", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set): the contact channel on file when it is sent", "case_id": "C-5001"}]}`
+- `get_case_status({"case_id": "C-5001"})` → `{"cases": [{"case_id": "C-5001", "user_id": "priya", "txn_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled by phone before the October 28 charge.", "status": "under_review", "opened_at": "2026-11-09T10:00:00Z", "resolution_code": null, "resolution_note": null, "resolved_at": null, "decision_id": null}]}`
+- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-460c7627", "action": "case_status_followup", "due": "2026-11-19T10:00:00Z", "status": "pending", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set): the contact channel on file when it is sent", "case_id": "C-5001"}]}`
 
-**Assistant:** - **Case number:** C-5001 (still under review)
-- **When you'll hear back:** a status follow-up is scheduled for **19 November 2026**, sent by secure message in the Kestrel app - or to your email/SMS instead if you set a contact channel before then.
+**Assistant:** Your case number is **C-5001**. It's currently under review.
 
-Disputes are currently taking about 10 days to be reviewed.
+You'll hear back on **November 19, 2026**, by secure message in the Kestrel app - that's the default since no contact channel is set. If you set one before then, the follow-up will go to that instead.
 
-_Episode written:_ Conversation on 2026-11-09: Priya asked to dispute the 28 October StreamMax Premium charge, saying she cancelled by phone beforehand (not verified). Identity was verified; dispute C-5001 for transaction T-1002 is under review. Follow-up F-db2f2f21 is due 19 November 2026 via Kestrel app secure message, or a newly set contact channel. Assistant offered to attach a StreamMax cancellation reference if provided. Case outcomes: C-5001 under_review. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: Customer wanted the October 28 StreamMax Premium charge (transaction T-1002) disputed, saying they cancelled by phone before it (not verified). Identity was verified and dispute filed as case C-5001, status under_review. Follow-up F-460c7627 is due 2026-11-19 via secure message in the Kestrel app, the default because no contact channel is set; if changed, it uses the new channel. Case outcomes: C-5001 under_review. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|

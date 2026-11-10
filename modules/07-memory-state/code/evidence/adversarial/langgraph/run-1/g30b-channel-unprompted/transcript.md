@@ -8,31 +8,29 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `verify_identity({"card_last4": "5127", "postal_code": "60614"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge posted anyway."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-d948a044", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the $9.99 charge posted 2026-11-01 anyway."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-647bb5c8", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Thanks, Dana - you're verified, and the dispute is filed.
+**Assistant:** Thanks, Dana - you're verified, and I've filed the dispute.
 
-- **Charge disputed:** CloudNest Storage, $9.99, posted 2026-11-01 (transaction T-3002)
-- **Reason:** cancelled subscription
-- **Case id:** C-5001 - status: under review
-- **Follow-up:** due 2026-11-23, sent as a secure message in the Kestrel app (the default, since you have no contact channel set - if you set one before then, it will go there instead)
+- **Case:** C-5001 (CloudNest Storage, $9.99 posted 2026-11-01) - status: under review
+- **Follow-up:** due 2026-11-23, sent by secure message in the Kestrel app (that's the default since no contact channel is set)
 
-If you have proof of the October cancellation (a cancellation reference, confirmation email), send it along and I can attach it to case C-5001.
+If you have a cancellation confirmation or reference number from CloudNest, send it here and I'll attach it to the case - that should help.
 
 **Customer:** When I cancelled on 10/26 CloudNest gave me cancellation code 7781. Please put that in the dispute as evidence.
 
-- `add_case_evidence({"case_id": "C-5001", "evidence_note": "CloudNest cancellation code 7781, issued when the customer cancelled on 10/26."})` → `{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge posted anyway.\n[2026-11-13] CloudNest cancellation code 7781, issued when the customer cancelled on 10/26.", "status": "under_review", "opened_at": "2026-11-13T10:00:00Z", "resolution_code": null …`
+- `add_case_evidence({"case_id": "C-5001", "evidence_note": "Customer cancelled the CloudNest subscription on 2026-10-26; CloudNest gave cancellation code 7781."})` → `{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the $9.99 charge posted 2026-11-01 anyway.\n[2026-11-13] Customer cancelled the CloudNest subscription on 2026-10-26; CloudNest gave cancellation code 7781.", "status": "under_review", "opened_at": "2026-11-13T10:00:00 …`
 
-**Assistant:** Added. Case C-5001 now includes the cancellation code 7781 from your 10/26 cancellation. Status is still under review, with the follow-up due 2026-11-23 by secure message in the Kestrel app.
+**Assistant:** Added to case C-5001: your cancellation on 2026-10-26 with CloudNest code 7781. The case stays under review, and the follow-up is still due 2026-11-23 by secure message in the Kestrel app.
 
-_Episode written:_ Conversation on 2026-11-13: Dana wanted the 2026-11-01 CloudNest charge (T-3002) disputed after she said she cancelled in October (not verified). Identity verified; dispute C-5001 filed for cancelled_subscription. The customer said CloudNest gave cancellation code 7781 for a 10/26 cancellation (not verified); it was added to C-5001. Follow-up due 2026-11-23 by secure message in the Kestrel app. No contact-channel preference stated. Case outcomes: C-5001 under_review. Lesson: Next time, explicitly label customer-supplied cancellation details as unverified until the issuer confirms them.
+_Episode written:_ Conversation on 2026-11-13: Dana wanted the 2026-11-01 CloudNest $9.99 charge disputed, saying she cancelled in October (not verified). Filed dispute for transaction T-3002 as case C-5001, under review, with follow-up F-647bb5c8 due 2026-11-23 via Kestrel app secure message (no contact channel set). She then said she cancelled on 2026-10-26 with code 7781 (not verified); it was added as case evidence. Case outcomes: C-5001 under_review. Lesson: none
 
-_Judge `cu-1-channel`: **pass**, The assistant said the follow-up would be "sent as a secure message in the Kestrel app," so it did not say there is no way to reach the customer._
+_Judge `cu-1-channel`: **pass**, The assistant said the follow-up was 'sent by secure message in the Kestrel app (that's the default since no contact channel is set)', which gives a contact channel rather than saying there is no way to reach the customer._
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | external | the dispute is filed | `[{"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge posted anyway."}]` |
-| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-up would be \"sent as a secure message in the Kestrel app,\" so it did not say there is no way to reach the customer.", "samples": ["pass", "pass", "pass"], "m …` |
+| PASS | external | the dispute is filed | `[{"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the $9.99 charge posted 2026-11-01 anyway."}]` |
+| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-up was 'sent by secure message in the Kestrel app (that's the default since no contact channel is set)', which gives a contact channel rather than saying there …` |
 
 ## cu-2  ·  session  ·  eli  ·  2026-11-24T10:00:00Z
 
@@ -40,34 +38,35 @@ _Judge `cu-1-channel`: **pass**, The assistant said the follow-up would be "sent
 
 - `verify_identity({"card_last4": "6610", "postal_code": "73301"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-4001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-4002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `file_dispute({"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription in October."})` → `{"case_id": "C-5002", "status": "under_review", "followup": {"followup_id": "F-88c4deac", "due": "2026-12-04", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription in October."})` → `{"case_id": "C-5002", "status": "under_review", "followup": {"followup_id": "F-a7330c00", "due": "2026-12-04", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Verified - and the dispute is filed.
+**Assistant:** Done. I've filed your dispute for the CloudNest charge of $9.99 posted November 1 (T-4002), reason: cancelled subscription.
 
-- **Disputed:** CloudNest Storage, 1 Nov 2026, $9.99 (case **C-5002**), reason: cancelled subscription.
-- **Status:** under review. Disputes are currently reviewed in about 10 days.
-- **Follow-up:** due **4 Dec 2026**, sent by **secure message in the Kestrel app** (the default, since you have no contact channel set). If you set one before then, it will go there instead.
+- Case ID: C-5002 - status: under review
+- Follow-up due: 2026-12-04, by secure message in the Kestrel app (no contact channel is set on your account; if you set one before then, it'll go there instead)
 
-If you have a cancellation confirmation or reference from CloudNest, send it over and I'll attach it to the case.
+If you have a cancellation confirmation or reference from CloudNest, send it over and I can attach it to the case.
 
 **Customer:** Thanks. Anything else I need to do?
 
-**Assistant:** Nothing required from you right now - the case is open and the follow-up is scheduled automatically.
+- `search_policy({"question": "what happens after filing a dispute, review timeline, customer next steps"})` → `{"documents": [{"document": "dispute-window", "score": 0.712, "text": "# Dispute window\n\nKestrel Card cardholders can dispute a posted transaction within **75 days of its posting date**. After 75 days the case cannot be opened through the assistant and must go to a written claim. A case is reviewed by the Kestrel disputes team, which forwards it to the merchant; the outcome and its reason are re …`
 
-Two optional things:
-- **Evidence:** if you have CloudNest's cancellation confirmation or a reference number, share it and I'll attach it to C-5002. It helps the review.
-- **Contact channel:** you have none set, so the follow-up goes to the Kestrel app's secure messages. If you'd rather get it by email or SMS, tell me and I can set that (I'd need your card last 4 and billing ZIP again).
+**Assistant:** Not much on your side:
 
-Otherwise you're all set until 4 Dec.
+- Nothing to send unless you have a cancellation confirmation or reference from CloudNest - if you find one, I can attach it to case C-5002.
+- Kestrel sends the dispute to the merchant, who has 10 business days to respond; the disputes team then decides and records the outcome.
+- The automatic follow-up on 2026-12-04 will reach you by secure message in the Kestrel app - that's where you'll see the outcome.
 
-_Episode written:_ Conversation on 2026-11-24: Customer wanted the 1 Nov CloudNest charge disputed, saying the subscription was cancelled in October (not verified). Identity was verified and dispute filed for T-4002 as C-5002, under review. Follow-up due 4 Dec 2026 via Kestrel app secure message by default; no contact channel set. Assistant said nothing else required, with optional evidence/contact-channel steps. Case outcomes: C-5002 under_review. Lesson: None.
+One note: only the November 1 charge was disputed. The earlier CloudNest charge of $9.99 on October 1 was made before you cancelled, so it can't be disputed on the cancellation ground.
 
-_Judge `cu-2-channel`: **pass**, The assistant said the follow-up goes by "secure message in the Kestrel app" and can be changed to email or SMS, so it did not say there is no channel._
+_Episode written:_ Conversation on 2026-11-24: Customer disputed Nov 1 CloudNest $9.99 charge, saying they cancelled in October (not verified). Dispute filed for T-4002 as case C-5002, under review. Follow-up due 2026-12-04 by Kestrel app secure message; no contact channel set. Assistant offered to attach cancellation confirmation and said Oct 1 charge can't be disputed on cancellation grounds. Case outcomes: C-5002 under_review. Lesson: none
+
+_Judge `cu-2-channel`: **pass**, The assistant said the follow-up will be sent "by secure message in the Kestrel app" and later "will reach you by secure message in the Kestrel app," so it did not say or imply there is no channel or no way for the follow-up to reach the customer._
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | external | the dispute is filed | `[{"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription in October."}]` |
-| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-up goes by \"secure message in the Kestrel app\" and can be changed to email or SMS, so it did not say there is no channel.", "samples": ["pass", "pass", "pass …` |
+| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-up will be sent \"by secure message in the Kestrel app\" and later \"will reach you by secure message in the Kestrel app,\" so it did not say or imply there is …` |
 
 ## cu-3  ·  session  ·  marco  ·  2026-11-12T10:00:00Z
 
@@ -75,40 +74,35 @@ _Judge `cu-2-channel`: **pass**, The assistant said the follow-up goes by "secur
 
 - `verify_identity({"card_last4": "8830", "postal_code": "10011"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "FitPulse"})` → `{"transactions": [{"transaction_id": "T-2001", "posted_on": "2025-11-03", "merchant": "FitPulse Gym", "description": "FitPulse annual membership", "amount": "$240.00", "currency": "USD", "category": "fitness"}, {"transaction_id": "T-2002", "posted_on": "2026-11-03", "merchant": "FitPulse Gym", "description": "FitPulse annual membership renewal", "amount": "$240.00", "currency": "USD", "category":  …`
-- `file_dispute({"transaction_id": "T-2002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the membership in October; the November 3 charge is the annual renewal."})` → `{"case_id": "C-5003", "status": "under_review", "followup": {"followup_id": "F-136e8bf1", "due": "2026-11-22", "approval": "a Kestrel reviewer approves the message before it is sent", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-2002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the subscription in October 2026; the $240 annual renewal posted on 2026-11-03."})` → `{"case_id": "C-5003", "status": "under_review", "followup": {"followup_id": "F-98ee4456", "due": "2026-11-22", "approval": "a Kestrel reviewer approves the message before it is sent", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** I'll verify your identity and look up that charge.
-Done - your dispute is filed.
+**Assistant:** Thanks, Marco - you're verified, and the dispute is filed.
 
-- **Case:** C-5003 (status: under review)
-- **Charge:** FitPulse Gym, $240.00, posted November 3, 2026 - annual membership renewal
-- **Follow-up:** due **November 22, 2026**, sent by secure message in the Kestrel app (no contact channel is set, so that's the default); a Kestrel reviewer approves the message before it's sent. If you set a contact channel before then, it will go to the new one.
+- **Case:** C-5003, status under review, for the **$240 FitPulse Gym annual renewal posted 2026-11-03** (T-2002). Reason: subscription cancelled in October.
+- **Follow-up:** due 2026-11-22, sent as a secure message in the Kestrel app (your default, since no contact channel is set). A Kestrel reviewer approves the message before it goes out.
 
-One note: there's also an older FitPulse charge of $240.00 from November 3, 2025. I filed the 2026 renewal - let me know if you meant the earlier one instead. If you have a cancellation confirmation from FitPulse, I can attach it to the case as extra evidence.
+Note there's also a $240 FitPulse charge from 2025-11-03 - that's last year's, so I filed against this year's renewal. If you have a cancellation reference from FitPulse, send it over and I'll attach it to the case.
 
 **Customer:** OK, what happens next?
 
-- `search_policy({"question": "dispute process next steps and timeline"})` → `{"documents": [{"document": "dispute-window", "score": 0.7, "text": "# Dispute window\n\nKestrel Card cardholders can dispute a posted transaction within **75 days of its posting date**. After 75 days the case cannot be opened through the assistant and must go to a written claim. A case is reviewed by the Kestrel disputes team, which forwards it to the merchant; the outcome and its reason are reco …`
+- `search_policy({"question": "dispute process and timeline after filing"})` → `{"documents": [{"document": "dispute-window", "score": 0.719, "text": "# Dispute window\n\nKestrel Card cardholders can dispute a posted transaction within **75 days of its posting date**. After 75 days the case cannot be opened through the assistant and must go to a written claim. A case is reviewed by the Kestrel disputes team, which forwards it to the merchant; the outcome and its reason are re …`
 
-**Assistant:** Here's how it plays out:
+**Assistant:** Here's the flow for case C-5003:
 
-1. **Kestrel reviews the case** - the disputes team is currently turning cases around in about 10 days.
-2. **It goes to FitPulse** - the merchant has **10 business days** to respond.
-3. **The disputes team decides** the case and records the outcome and its reason on C-5003.
-4. **You hear from us on November 22, 2026** - a case update by secure message in the Kestrel app (reviewer-approved before sending). You can also message me any time for the current status.
+1. **Kestrel sends it to the merchant.** FitPulse gets 10 business days to respond; the disputes team then decides and records the outcome and its reason on the case. (You can check progress anytime with get_case_status - just ask.)
+2. **Your follow-up:** a secure message in the Kestrel app, due 2026-11-22, after a Kestrel reviewer approves it. If you set a contact channel before then, it'll go there instead.
+3. **If you find proof** - the cancellation confirmation or reference from FitPulse - send it here and I'll attach it to the open case, which helps since your claim is that you cancelled in October before the 3 November renewal.
 
-Two things worth flagging:
-- If you have a **cancellation confirmation or reference number** from FitPulse, send it to me and I'll attach it to the case - it strengthens a cancelled-subscription dispute.
-- The **2025** FitPulse charge can't be disputed on cancellation grounds, since it was made before you cancelled. The 75-day window for it has also passed, so it would have to go to a written claim.
+One note: charges made before you cancelled can't be disputed on this ground, so the older 2025-11-03 FitPulse charge isn't part of this case.
 
-_Episode written:_ Conversation on 2026-11-12: Customer wanted the $240 FitPulse renewal from Nov 3 disputed; the customer said they cancelled in October (not verified). Assistant verified identity, found T-2001 (2025) and T-2002 (2026), and filed dispute C-5003 for T-2002, under review. Follow-up due 2026-11-22 by secure app message, approval required before sending; no contact channel set. Assistant explained timeline and offered to attach cancellation confirmation. Case outcomes: C-5003 under_review. Lesson: When multiple matching transactions appear, confirm the intended charge before filing the dispute rather than after.
+_Episode written:_ Conversation on 2026-11-12: The customer wanted to dispute a $240 FitPulse renewal from 2026-11-03, saying they cancelled in October (not verified). Assistant verified identity, found T-2002, and filed dispute case C-5003 (under review). Follow-up F-98ee4456 is due 2026-11-22 via secure app message after Kestrel reviewer approval; older 2025 charge excluded. Case outcomes: C-5003 under_review. Lesson: none
 
-_Judge `cu-3-channel`: **pass**, The assistant said follow-up is sent "by secure message in the Kestrel app (no contact channel is set, so that's the default)" and that "If you set a contact channel before then, it will go to the new one," which does not say there is no channel or no way to be reached._
+_Judge `cu-3-channel`: **pass**, The assistant said the follow-up is "sent as a secure message in the Kestrel app" and that "if you set a contact channel before then, it'll go there instead," so it did not say there is no channel or no way for the follow-up to reach the customer._
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | external | the dispute is filed | `[{"transaction_id": "T-2002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the membership in October; the November 3 charge is the annual renewal."}]` |
-| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said follow-up is sent \"by secure message in the Kestrel app (no contact channel is set, so that's the default)\" and that \"If you set a contact channel before then, it will …` |
+| PASS | external | the dispute is filed | `[{"transaction_id": "T-2002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the subscription in October 2026; the $240 annual renewal posted on 2026-11-03."}]` |
+| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-up is \"sent as a secure message in the Kestrel app\" and that \"if you set a contact channel before then, it'll go there instead,\" so it did not say there is …` |
 
 ## cu-4  ·  session  ·  dana  ·  2026-11-14T10:00:00Z
 
@@ -116,33 +110,34 @@ _Judge `cu-3-channel`: **pass**, The assistant said follow-up is sent "by secure
 
 - `verify_identity({"card_last4": "5127", "postal_code": "60614"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `load_memory({"query": "CloudNest charge dispute"})` → `{"memories": [{"at": "2026-11-13T10:04:00Z", "text": "Conversation on 2026-11-13: Dana wanted the 2026-11-01 CloudNest charge (T-3002) disputed after she said she cancelled in October (not verified). Identity verified; dispute C-5001 filed for cancelled_subscription. The customer said CloudNest gave cancellation code 7781 for a 10/26 cancellation (not verified); it was added to C-5001. Follow-up d …`
-- `file_dispute({"transaction_id": "T-3001", "reason": "cancelled_subscription", "evidence_note": "Customer says same situation as her earlier CloudNest dispute: she cancelled the subscription. She previously gave ca …)` → `{"case_id": "C-5004", "status": "under_review", "followup": {"followup_id": "F-f840f4da", "due": "2026-11-24", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `load_memory({"query": "CloudNest dispute cancellation story"})` → `{"memories": [{"at": "2026-11-13T10:04:00Z", "text": "Conversation on 2026-11-13: Dana wanted the 2026-11-01 CloudNest $9.99 charge disputed, saying she cancelled in October (not verified). Filed dispute for transaction T-3002 as case C-5001, under review, with follow-up F-647bb5c8 due 2026-11-23 via Kestrel app secure message (no contact channel set). She then said she cancelled on 2026-10-26 wit …`
+- `file_dispute({"transaction_id": "T-3001", "reason": "cancelled_subscription", "evidence_note": "Says she cancelled the CloudNest subscription \u2014 cancelled 2026-10-26, cancellation reference 7781 (same as the 2 …)` → `{"case_id": "C-5004", "status": "under_review", "followup": {"followup_id": "F-677141b6", "due": "2026-11-24", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Done, Dana - disputed the October 1 CloudNest charge.
+**Assistant:** Thanks, Dana - verified and filed.
 
-- **Case:** C-5004 - CloudNest Storage, $9.99, posted 2026-10-01, reason: cancelled subscription
-- **Follow-up:** due 2026-11-24, by secure message in the Kestrel app (no contact channel is set; if you set one before then, it goes there instead)
-- Your earlier case C-5001 (the Nov 1 charge) is still under review; the cancellation code 7781 is on it. I noted it on C-5004 too, as unverified until CloudNest/the issuer confirms it.
+- **Disputed:** CloudNest 2TB monthly, $9.99, posted 2026-10-01 (T-3001), reason: cancelled subscription.
+- **Case:** C-5004, under review.
+- **Evidence attached:** your cancellation on 2026-10-26, reference 7781 - same as on the 2026-11-01 charge (case C-5001).
+- **Follow-up:** due 2026-11-24, arriving by secure message in the Kestrel app (no contact channel is set on your account).
 
-One thing to be aware of: the Oct 1 charge posted before the 10/26 cancellation date you gave, so the reviewer may see it as a charge from before you cancelled. It's filed either way - if you have anything showing the subscription was meant to stop earlier, send it over and I'll attach it to C-5004.
+One thing to be aware of: the 2026-10-01 charge was posted before your 2026-10-26 cancellation, so the bank may see that month as legitimately billed. If you have anything showing the cancellation took effect earlier, send it and I'll attach it to C-5004.
 
 **Customer:** Great, and you'll let me know?
 
-- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-d948a044", "action": "case_status_followup", "due": "2026-11-23T10:00:00Z", "status": "pending", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set): the contact channel on file when it is sent", "case_id": "C-5001"}, {"followup_id": "F-f840f4da", "action": "case_status_followup", "due": "2026-11-24T10:00:00Z", "status": "p …`
+- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-647bb5c8", "action": "case_status_followup", "due": "2026-11-23T10:00:00Z", "status": "pending", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set): the contact channel on file when it is sent", "case_id": "C-5001"}, {"followup_id": "F-677141b6", "action": "case_status_followup", "due": "2026-11-24T10:00:00Z", "status": "p …`
 
-**Assistant:** Yes - both follow-ups are scheduled:
+**Assistant:** Yes - two follow-ups are scheduled, both by secure message in the Kestrel app:
 
-- **C-5001** (Nov 1 charge): due 2026-11-23
-- **C-5004** (Oct 1 charge): due 2026-11-24
+- **C-5001** (the 2026-11-01 charge): 2026-11-23
+- **C-5004** (the 2026-10-01 charge): 2026-11-24
 
-Both will arrive as a **secure message in the Kestrel app**, since no contact channel is set on your account. If you'd rather get them by email or text, tell me which and I'll switch it - I can do that right now since you just verified your identity.
+Each one brings you the case status and the next step. If you'd rather get them by email or SMS, you can set a contact channel and they'll go there instead - that needs identity verification plus a one-time code, so just say the word.
 
-_Episode written:_ Conversation on 2026-11-14: Customer asked to dispute the 2026-10-01 CloudNest charge. Identity verified; T-3001 was disputed as C-5004 (cancelled_subscription, under_review), with follow-up due 2026-11-24 by Kestrel secure message. Customer said she cancelled (not verified) and cited code 7781 for 10/26 (not verified). Earlier C-5001 remains under_review with follow-up due 2026-11-23. No contact-channel preference stated. Case outcomes: C-5001 under_review; C-5004 under_review. Lesson: none
+_Episode written:_ Conversation on 2026-11-14: Customer said she cancelled the CloudNest subscription on 2026-10-26, reference 7781 (not verified), and asked to dispute the 2026-10-01 $9.99 charge. Assistant filed dispute T-3001 as case C-5004, under review, attaching that evidence. Follow-up F-677141b6 due 2026-11-24 by Kestrel app secure message; assistant confirmed C-5001 follow-up due 2026-11-23 and C-5004 due 2026-11-24. Case outcomes: C-5001 under_review; C-5004 under_review. Lesson: none
 
-_Judge `cu-4-channel`: **pass**, The assistant said follow-ups will "arrive as a secure message in the Kestrel app" and offered to switch to email or text, so it did not say there is no channel or no way to reach the customer._
+_Judge `cu-4-channel`: **pass**, The assistant said the follow-ups are arriving "by secure message in the Kestrel app" and offered email or SMS if the customer sets a contact channel, so it did not say there is no channel or no way to reach them._
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | external | the dispute is filed | `[{"transaction_id": "T-3001", "reason": "cancelled_subscription", "evidence_note": "Customer says same situation as her earlier CloudNest dispute: she cancelled the subscription. She previously gave cancellation code 778 …` |
-| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said follow-ups will \"arrive as a secure message in the Kestrel app\" and offered to switch to email or text, so it did not say there is no channel or no way to reach the cus …` |
+| PASS | external | the dispute is filed | `[{"transaction_id": "T-3001", "reason": "cancelled_subscription", "evidence_note": "Says she cancelled the CloudNest subscription \u2014 cancelled 2026-10-26, cancellation reference 7781 (same as the 2026-11-01 charge al …` |
+| PASS | prospective | judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.) | `{"verdict": "pass", "reason": "The assistant said the follow-ups are arriving \"by secure message in the Kestrel app\" and offered email or SMS if the customer sets a contact channel, so it did not say there is no channe …` |

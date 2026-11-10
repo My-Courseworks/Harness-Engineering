@@ -8,13 +8,15 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `remember_customer_fact({"key": "travel_notice", "value": "Oslo", "valid_until": "2026-11-20"})` → `{"stored": {"travel_notice": {"value": "Oslo", "as_of": "2026-11-14T10:00:00Z", "valid_until": "2026-11-20", "expires_at": "2026-11-21T00:00:00Z"}}, "replaced": null}`
 
-**Assistant:** Travel notice set: Oslo through November 20, 2026 - it expires at the start of November 21. Anything else I can help with?
+**Assistant:** Travel notice set: Oslo, through November 20, 2026. It's active now and expires the day after your return date.
 
-_Episode written:_ Conversation on 2026-11-14: Customer wanted a travel notice for Oslo until November 20. Assistant stored travel notice: Oslo, valid until 2026-11-20, expiring 2026-11-21; no case or transaction IDs were provided. Customer said they are in Oslo until November 20 (not verified). No additional preferences or promises. Case outcomes: no case touched. Lesson: none
+Anything else I can help with - transactions, a dispute, or a reminder?
+
+_Episode written:_ Conversation on 2026-11-14: The customer said they are in Oslo until November 20, 2026 (not verified), and asked for a travel notice. The assistant stored travel_notice for Oslo valid_until 2026-11-20, active now and expiring 2026-11-21; no case or transaction ID was provided. Case outcomes: no case touched. Lesson: none
 
 ## ef-maint  ·  maintenance  ·  2026-12-01T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": ["eli:travel_notice"], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": ["eli:travel_notice"], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": [], "case_followups_repaired": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

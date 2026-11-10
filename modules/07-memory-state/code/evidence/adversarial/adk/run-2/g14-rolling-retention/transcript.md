@@ -6,17 +6,22 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 **Customer:** Hi, Marco here. My cat Pixel chewed my old card, so I just wanted to note that. Nothing else for now.
 
-**Assistant:** Got it, Marco - thanks for letting me know. I'm sorry about the card (and Pixel's appetite).
+- `search_policy({"question": "damaged card replacement"})` → `{"documents": [{"document": "card-replacement", "score": 0.751, "text": "# Lost, stolen, or damaged cards\n\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within 5 business days at no charge. Recurring merchants must be given the new card number by you; Kestrel does not forward it.\n"}, {"document": "dispute-window", "score": 0.632, "text": "# Dispute window\n …`
 
-I can't issue a replacement card from here - for that, use the Kestrel app or call Kestrel directly. If any charges show up that you don't recognise after this, tell me and I can look at them with you.
+**Assistant:** Hi Marco - sorry about the card (and Pixel).
 
-Anything else, just say.
+Two things:
 
-_Episode written:_ Conversation on 2026-11-09: Marco said his cat Pixel chewed his old card (not verified) and he only wanted to note it. The assistant acknowledged, said it could not issue a replacement from that channel, and advised using the Kestrel app or calling Kestrel directly; it offered help with unrecognized charges. No case or transaction IDs, promises, or preferences were stated. Case outcomes: no case touched. Lesson: none
+- I can't add a note like that to your account here. The only things I can record are your contact channel and a travel notice. For a damaged card, report it through the Kestrel app or by calling Kestrel so they can block the old card and ship a replacement - that's free, and a replacement ships within 5 business days.
+- One thing to plan for: recurring merchants won't get the new number automatically, so you'll need to update your subscriptions/card-on-file details yourself once the new card arrives.
+
+Anything else I can help with?
+
+_Episode written:_ Conversation on 2026-11-09: Marco said his cat Pixel chewed his old card (not verified) and wanted to note it; nothing else. Assistant could not add such a note and advised reporting via Kestrel app/phone to block the old card and get a free replacement within 5 business days; recurring merchants need manual updates. No case/transaction IDs; no extra promises. Case outcomes: no case touched. Lesson: none
 
 ## roll-tick-29  ·  maintenance  ·  2026-12-08T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": [], "case_followups_repaired": []}`
 
 ## roll-29  ·  session  ·  marco  ·  2026-12-08T10:00:00Z
 
@@ -24,25 +29,21 @@ _Resumes session `roll`._
 
 **Customer:** Hi again, just checking in. Anything I should know about my account?
 
-- `load_memory({"query": "last conversation summary account"})` → `{"result": "memories=[MemoryEntry(content=Content(\n  parts=[\n    Part(\n      text='Conversation on 2026-11-09: Marco said his cat Pixel chewed his old card (not verified) and he only wanted to note it. The assistant acknowledged, said it could not issue a replacement from that channel, and advised using the Kestrel app or calling Kestrel directly; it offered help with unrecognized charges. No c …`
 - `list_my_followups({})` → `{"scheduled": []}`
 - `get_case_status({})` → `{"cases": []}`
 
-**Assistant:** Hi Marco - nothing needing your attention right now:
+**Assistant:** Checked - there's nothing open on your account right now:
 
-- **No open dispute cases.**
-- **Nothing scheduled** - no reminders or case follow-ups pending.
-- **Contact channel:** none set, so anything Kestrel sends you arrives as a secure message in the app.
+- No dispute cases.
+- Nothing scheduled (no reminders or case follow-ups).
 
-Last time (Nov 9) you mentioned your cat chewed your card - nothing was filed for that, so if the card is still damaged you'd want to request a replacement in the Kestrel app or by calling Kestrel directly. I can't issue one from here.
+One setting worth knowing: you have no contact channel set, so anything from Kestrel reaches you by secure message in the app. If you'd like follow-ups to go by email or SMS instead, I can set that up - it needs a quick identity check (card's last 4 digits and billing ZIP) plus a one-time code.
 
-Want me to check a particular charge, or set anything up?
-
-_Episode written:_ Conversation on 2026-12-08: Marco checked in for anything on his account. The assistant found no open dispute cases, no scheduled follow-ups, and no contact channel. It noted the customer said his cat chewed his old card (not verified), which he had only wanted to note; no replacement was filed. No case or transaction IDs, promises, or preferences were stated. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-12-08: Customer asked for an account update. Assistant checked list_my_followups and get_case_status: no scheduled follow-ups and no cases, so no case or transaction IDs. Assistant said there are no open dispute cases or reminders, noted no contact channel is set (Kestrel uses secure in-app messages), and offered email/SMS follow-ups after identity verification. No customer preference stated. Case outcomes: no case touched. Lesson: none
 
 ## roll-tick-58  ·  maintenance  ·  2027-01-06T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": ["roll"]}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": ["roll"], "case_followups_repaired": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|
@@ -50,7 +51,7 @@ _maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessi
 
 ## roll-tick-232  ·  maintenance  ·  2027-06-29T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": ["E-roll-1-7064ee", "E-roll-2-9c120b"], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": ["E-roll-1-4ef536", "E-roll-2-5363aa"], "deleted_transcripts": [], "case_followups_repaired": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

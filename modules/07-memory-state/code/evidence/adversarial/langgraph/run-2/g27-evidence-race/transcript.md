@@ -6,4 +6,4 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | external | six parallel evidence notes: none is lost | `[2026-11-13] evidence item 1 [2026-11-13] evidence item 6 [2026-11-13] evidence item 2 [2026-11-13] evidence item 3 [2026-11-13] evidence item 4 [2026-11-13] evidence item 5` |
+| PASS | external | six parallel evidence notes: none is lost | `[2026-11-13] evidence item 4 [2026-11-13] evidence item 3 [2026-11-13] evidence item 1 [2026-11-13] evidence item 6 [2026-11-13] evidence item 2 [2026-11-13] evidence item 5` |

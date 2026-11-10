@@ -8,35 +8,48 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `remember_customer_fact({"key": "travel_notice", "value": "Lisbon", "valid_until": "2026-11-30"})` → `{"stored": {"travel_notice": {"value": "Lisbon", "as_of": "2026-11-09T10:00:00Z", "valid_until": "2026-11-30", "expires_at": "2026-12-01T00:00:00Z"}}, "replaced": null}`
-- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
-- `schedule_reminder({"note": "Book my Lisbon airport transfer", "remind_on": "2026-11-20"})` → `{"followup_id": "F-58d3eafa", "due_utc": "2026-11-20T09:00:00Z", "local_time": "Friday 2026-11-20 09:00 UTC (UTC)", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set), the contact channel on file when it is sent"}`
-- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-58d3eafa", "action": "customer_reminder", "due": "2026-11-20T09:00:00Z", "status": "pending", "sent_on": "email: the contact channel on file when it is sent", "local_day": "2026-11-20", "note": "Book my Lisbon airport transfer"}]}`
+- `schedule_reminder({"note": "Book my Lisbon airport transfer", "remind_on": "2026-11-20"})` → `{"followup_id": "F-91d17a2d", "due_utc": "2026-11-20T09:00:00Z", "local_time": "Friday 2026-11-20 09:00 UTC (UTC)", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set), the contact channel on file when it is sent"}`
+- `send_verification_code({})` → `{"sent": true, "sent_to": "text message to \u00b7\u00b7\u00b70100", "expires_in_minutes": 5, "resent": false}`
+- `confirm_verification_code({})` → `null`
 
-**Assistant:** All set, Priya:
+**Assistant:** A one-time code has been sent by text message to ···0100; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it arrives, and I will finish your request.
 
-- **Contact channel:** email - updated.
-- **Travel notice:** Lisbon until November 30, 2026 - stored.
-- **Reminder:** "Book my Lisbon airport transfer" on Friday, November 20 at 09:00 UTC, delivered by email (the contact channel on file when it's sent). Reminder id F-58d3eafa.
+**Customer:** [REDACTED ONE-TIME CODE]
 
-Anything else?
+- `confirm_verification_code({})` → `{"verified": true, "valid_for_minutes": 15, "customer_entered": "[REDACTED ONE-TIME CODE]", "next": "the step-up is complete: carry out the change or removal the customer asked for before the code was sent, without asking them to repeat it"}`
+- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:02:00Z", "expires_at": null}}, "replaced": null}`
+- `list_my_followups({})` → `{"scheduled": [{"followup_id": "F-91d17a2d", "action": "customer_reminder", "due": "2026-11-20T09:00:00Z", "status": "pending", "sent_on": "email: the contact channel on file when it is sent", "local_day": "2026-11-20", "note": "Book my Lisbon airport transfer"}]}`
 
-_Episode written:_ Conversation on 2026-11-09: Priya asked to switch contact to email, said she is in Lisbon until November 30, 2026 (not verified), and requested a November 20 reminder to book her Lisbon airport transfer. Identity was verified; email preference and travel notice were stored. Reminder F-58d3eafa was scheduled for 2026-11-20 09:00 UTC, with follow-up listing email delivery. Case outcomes: no case touched. Lesson: Update the contact channel before scheduling the reminder so the reminder’s delivery channel is correct from the outset, then verify it in the follow-up list.
+**Assistant:** All set:
+
+- **Contact channel:** email is now on file for you.
+- **Travel notice:** Lisbon, through November 30, 2026.
+- **Reminder:** November 20 at 09:00 UTC to "Book my Lisbon airport transfer" (id F-91d17a2d) - it will arrive by email, your channel on file when it's sent.
+
+One note: the one-time code for the channel change went by text message to the mobile number ending ··0100 - that's the only place the bank can send it.
+
+_Episode written:_ Conversation on 2026-11-09: Priya wanted email contact, a Lisbon travel notice through 2026-11-30 (the customer said this, not verified), and a 2026-11-20 reminder to book her airport transfer. Email channel stored, travel notice stored, reminder F-91d17a2d scheduled for 09:00 UTC and will go by email. Identity verified via one-time code sent to mobile ending 0100. Case outcomes: no case touched. Lesson: none
 
 ## ect-s2  ·  session  ·  priya  ·  2026-11-10T10:00:00Z
 
 **Customer:** Please delete everything you remember about me: my preferences and our past conversations.
 
-- `request_memory_erasure({})` → `{"erased_now": "2 remembered facts, 1 past-conversation summaries, 1 other conversation transcripts, 1 reminders with their notes", "this_conversation": "its transcript is deleted when the conversation ends; nothing more can be stored for the customer in it (a new conversation afterwards starts fresh)", "kept": "dispute cases, transactions and messages already sent are bank records with their own  …`
+- `request_memory_erasure({})` → `{"erased_now": "2 remembered facts, 1 past-conversation summaries, 1 other conversation transcripts, 1 reminders with their notes", "this_conversation": "its transcript is deleted when the conversation ends, or once it has been idle for 30 minutes if the customer just closes the chat; nothing more can be stored for the customer in it (a new conversation afterwards starts fresh)", "kept": "dispute  …`
 
-**Assistant:** Done. That erased everything I had remembered about you: 2 saved facts, the summary of our past conversations, another conversation's transcript, and 1 scheduled reminder along with its note.
+**Assistant:** Done - that's erased now. Specifically, it removed:
 
-What Kestrel keeps regardless: dispute cases, transactions and messages already sent are bank records with their own retention. This conversation's own transcript is deleted when the conversation ends.
+- Your 2 stored facts (contact channel and travel notice)
+- 1 past-conversation summary
+- 1 other conversation transcript
+- 1 reminder, including its note
 
-Note that nothing more can be stored for you in this conversation - no preferences and no reminders. If you want one set up, please start a new conversation.
+What Kestrel keeps: dispute cases, transactions and messages already sent are bank records with their own legal retention.
+
+This conversation's own transcript is deleted when the conversation ends, or once it's been idle for 30 minutes if you just close the chat. From now on nothing more can be stored for you in this conversation - no reminders and no preferences - so if you want to set either up later, please start a new conversation.
 
 ## ect-tick  ·  maintenance  ·  2026-11-10T11:00:00Z
 
-_maintenance:_ `{"erased_customers": ["priya"], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": ["priya"], "expired_facts": [], "closed_idle_sessions": [], "case_followups_repaired": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|
@@ -52,5 +65,5 @@ _outcomes:_ `[]`
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | prospective | no message reaches the erased customer from her old reminder | `[]` |
+| PASS | prospective | no message reaches the erased customer from her old reminder | `0 follow_up messages: []` |
 | PASS | episodic | and no new memory is created about it | `0 episodes; purged 0` |

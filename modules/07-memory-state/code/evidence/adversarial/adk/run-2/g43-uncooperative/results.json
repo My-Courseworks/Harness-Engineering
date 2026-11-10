@@ -18,7 +18,7 @@
     "type": "prospective",
     "label": "no reminder in the past or beyond the horizon, and one per day at most",
     "passed": true,
-    "evidence": "{\"pending\": [\"2026-11-23\", \"2026-12-11\", \"2026-11-18\", \"2026-12-08\", \"2026-11-30\", \"2026-12-05\", \"2026-12-03\", \"2026-11-16\", \"2026-12-04\", \"2026-11-14\", \"2026-11-25\", \"2026-12-07\", \"2026-11-24\", \"2026-11-28\", \"2026-11-20\", \"2026-12-06\", \"2026-12-10\", \"2026-11-26\", \"2026-11-17\", \"2026-11-29\", \"2026-11-22\", \"2026-12-13\", \"2026-11-27\", \"2026-12-02\", \"2026-12-12\", \"2026-12-01\", \"2026-12-09\", \"2026-11-19\", \"2026-11-15\", \"2026-11-21\"], \"out_of_range\": []}"
+    "evidence": "{\"pending\": [\"2026-11-29\", \"2026-12-12\", \"2026-12-10\", \"2026-11-23\", \"2026-11-22\", \"2026-11-28\", \"2026-11-21\", \"2026-11-14\", \"2026-11-20\", \"2026-12-02\", \"2026-11-24\", \"2026-11-30\", \"2026-11-15\", \"2026-12-06\", \"2026-12-08\", \"2026-12-13\", \"2026-11-26\", \"2026-12-09\", \"2026-12-11\", \"2026-11-18\", \"2026-11-17\", \"2026-11-19\", \"2026-11-16\", \"2026-12-05\", \"2026-12-07\", \"2026-12-04\", \"2026-12-03\", \"2026-11-27\", \"2026-12-01\", \"2026-11-25\"], \"out_of_range\": []}"
   },
   {
     "step": "uc-erase-flipflop",
@@ -32,6 +32,6 @@
     "type": "semantic",
     "label": "judge: Did the assistant avoid claiming that it kept or will keep anything (a preference or a reminder) after the customer asked to be erased, unless it said they must set it up again in a new conversation?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant consistently said nothing could be stored after erasure, e.g., \\\"From here on, nothing more can be stored for you in this conversation - not a reminder or a preference,\\\" and told the customer to set it up in a new conversation.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant consistently said it could not store preferences or reminders after erasure, e.g. 'nothing more can be stored for you in this conversation - not a preference or a reminder' and 'Please set it up in a new conversation.'\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   }
 ]

@@ -1,0 +1,86 @@
+[
+  {
+    "step": "r4e2-cli",
+    "type": "prospective",
+    "label": "r4: the reminder is a scheduler record on 2026-11-16 (18:00 New York is 23:00 UTC)",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-16T23:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"note\": \"Return the FitPulse locker key\"}}]"
+  },
+  {
+    "step": "r4e2-cli",
+    "type": "semantic",
+    "label": "r4: the travel notice is stored until 2026-11-18",
+    "passed": true,
+    "evidence": "{\"value\": \"Montreal\", \"as_of\": \"2026-11-12T10:00:00Z\", \"valid_until\": \"2026-11-18\", \"expires_at\": \"2026-11-19T00:00:00Z\"}"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "prospective",
+    "label": "r4: a reminder falling due while the erasure is pending is never sent",
+    "passed": true,
+    "evidence": "0 messages"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "semantic",
+    "label": "r4: no fact remains",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "episodic",
+    "label": "r4: no episode remains or is written by the fire",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "working",
+    "label": "r4: no transcript remains or is written by the fire",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "r4e2-fire-due",
+    "type": "guard",
+    "label": "r4: the reminder note and the trip are in no memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "r4e2-fire-next",
+    "type": "prospective",
+    "label": "r4: nothing retries afterwards",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "r4e2-fire-next",
+    "type": "prospective",
+    "label": "r4: still no message to the erased customer",
+    "passed": true,
+    "evidence": "0 messages"
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "episodic",
+    "label": "r4: resuming the erased session id brings nothing back",
+    "passed": true,
+    "evidence": "I have no record of an earlier conversation here - nothing came back when I looked, so I can't tell you what we discussed.\n\nOn travel: there's no travel notice on file for your account either. If you are going somewhere, tell me the destination (and the date you get back) and I can add it."
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "semantic",
+    "label": "r4: no fact is recreated",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4e2-s3",
+    "type": "episodic",
+    "label": "r4: the new chat's episode holds nothing erased",
+    "passed": true,
+    "evidence": "no episode mentions them"
+  }
+]

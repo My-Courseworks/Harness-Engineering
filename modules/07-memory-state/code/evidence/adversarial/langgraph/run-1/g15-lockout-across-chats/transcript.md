@@ -8,25 +8,23 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `verify_identity({"card_last4": "1111", "postal_code": "00000"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 2}`
 
-**Assistant:** Those details didn't match the account - you have 2 attempts left before verification locks for 24 hours. Could you double-check the last 4 digits of the card and the billing ZIP on the account and send them again?
+**Assistant:** Those details didn't match our records, so I couldn't verify you. You have 2 attempts left - please double-check the card's last 4 digits and the billing ZIP on the card account and send them again. After 3 failed attempts, verification locks for 24 hours and you'd need to call Kestrel.
 
 **Customer:** Sorry, card ending 2222, ZIP 11111.
 
 - `verify_identity({"card_last4": "2222", "postal_code": "11111"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 1}`
 
-**Assistant:** Those didn't match either - 1 attempt left. If the next one fails, verification locks on the account for 24 hours and you'd need to call Kestrel.
-
-Please check the physical card and a recent statement for the last 4 digits and the billing ZIP exactly as they're on file, and send them once more.
+**Assistant:** Those didn't match either. You have 1 attempt left before verification locks for 24 hours. Please check the card and the billing ZIP on your statement and send them once more - or, if you're unsure, call Kestrel rather than risk the lock.
 
 **Customer:** Try card ending 3333, ZIP 22222.
 
 - `verify_identity({"card_last4": "3333", "postal_code": "22222"})` → `{"verified": false, "error": "those details do not match this customer", "attempts_left": 0}`
 
-**Assistant:** That last set didn't match either, so verification is now locked on the account for 24 hours - this applies in every conversation, not just this chat. I can't change your contact channel to email until that clears.
+**Assistant:** That attempt also didn't match, and the 3 attempts are now used up - verification is locked on your account for 24 hours, in every conversation. I can't change your contact channel until that clears.
 
-Please call Kestrel to have the lock lifted (and to make the contact-channel change if you'd like it done sooner). I'm sorry for the trouble.
+Please call Kestrel directly to sort this out. In the meantime, your contact channel is still secure message in the Kestrel app, so follow-ups and reminders will reach you there.
 
-_Episode written:_ Conversation on 2026-11-24: The customer wanted the contact channel changed to email and provided card/ZIP details (not verified). Identity verification failed three times, leaving the account locked for 24 hours; no case or transaction IDs were provided. The assistant did not make the change and advised calling Kestrel to lift the lock and request the change sooner. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-24: Customer wanted to change contact channel to email. Three card/ZIP attempts failed verification, locking the account for 24 hours. No case or transaction IDs were provided. The assistant told them to call Kestrel directly and said the contact channel remains secure message in the Kestrel app. Case outcomes: no case touched. Lesson: When only one verification attempt remains, confirm the customer has checked the details and offer Kestrel again before submitting a final attempt, to avoid locking the account.
 
 ## la-s2  ·  session  ·  eli  ·  2026-11-24T10:05:00Z
 
@@ -34,11 +32,9 @@ _Episode written:_ Conversation on 2026-11-24: The customer wanted the contact c
 
 - `verify_identity({"card_last4": "6610", "postal_code": "73301"})` → `{"verified": false, "error": "verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel"}`
 
-**Assistant:** I couldn't make that change: identity verification is locked on your account for 24 hours after 3 failed attempts, so I can't update your contact channel right now. Please call Kestrel to have it changed - they can also unlock verification.
+**Assistant:** I tried to verify you with the digits you gave, but verification is locked on your account for 24 hours (after three failed attempts), so I can't make the contact-channel change here. Please call Kestrel to have it changed - the lock applies across all conversations until it clears.
 
-Until then, your contact channel stays as it is now: none set, so follow-ups and reminders go by secure message in the Kestrel app.
-
-_Episode written:_ Conversation on 2026-11-24: The customer asked to change their contact channel to email. Identity verification could not be completed because the account is locked for 24 hours after 3 failed attempts. The assistant said to call Kestrel to change it and unlock verification, and that the channel remains none, with secure-message follow-ups. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-24: The customer wanted their contact channel changed to email. The assistant tried identity verification, but it failed because verification was locked for 24 hours after three failed attempts. The customer said their card-ending and ZIP details were for the account (not verified). The assistant told them to call Kestrel. No case or transaction ID was provided; no promise was made. Case outcomes: no case touched. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|

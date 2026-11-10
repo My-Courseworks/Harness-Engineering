@@ -4,7 +4,7 @@ Pass counts per memory type, summed over every recorded live run.
 
 | memory type | adk (3 runs) | langgraph (3 runs) |
 |---|---|---|
-| working | 15/15 | 15/15 |
+| working | 18/18 | 18/18 |
 | semantic | 48/48 | 48/48 |
 | episodic | 33/33 | 33/33 |
 | procedural | 30/30 | 30/30 |
@@ -12,7 +12,7 @@ Pass counts per memory type, summed over every recorded live run.
 | parametric | 12/12 | 12/12 |
 | prospective | 39/39 | 39/39 |
 | guard | 9/9 | 9/9 |
-| **all** | **213/213** | **213/213** |
+| **all** | **216/216** | **216/216** |
 
 ## Every failed check
 

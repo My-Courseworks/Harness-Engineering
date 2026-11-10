@@ -6,13 +6,13 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | working | with two failures on the account, at most one more guess is evaluated | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": ""}` |
-| PASS | working | no guess is evaluated once the account holds three failures | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": ""}` |
-| PASS | working | parallel guesses do not crash | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": ""}` |
+| PASS | working | with two failures on the account, at most one more guess is evaluated | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": "", "otp_messages": 0, "open_challenges" …` |
+| PASS | working | no guess is evaluated once the account holds three failures | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": "", "otp_messages": 0, "open_challenges" …` |
+| PASS | working | parallel guesses do not crash | `{"error": null, "attempts_in_batch": 1, "failed_attempts": 3, "lock_respected": true, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": "", "otp_messages": 0, "open_challenges" …` |
 
 ## lr-none-prior  ·  forced_calls  ·  eli  ·  2026-11-25T11:00:00Z
 
 | | memory type | check | evidence |
 |---|---|---|---|
-| PASS | working | six parallel wrong guesses: exactly three are evaluated | `{"error": null, "attempts_in_batch": 3, "failed_attempts": 3, "lock_respected": false, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": ""}` |
-| PASS | working | and the account is locked | `{"error": null, "attempts_in_batch": 3, "failed_attempts": 3, "lock_respected": false, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": ""}` |
+| PASS | working | six parallel wrong guesses: exactly three are evaluated | `{"error": null, "attempts_in_batch": 3, "failed_attempts": 3, "lock_respected": false, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": "", "otp_messages": 0, "open_challenges …` |
+| PASS | working | and the account is locked | `{"error": null, "attempts_in_batch": 3, "failed_attempts": 3, "lock_respected": false, "verified": false, "cases_total": 0, "distinct_case_ids": 0, "case_followups": 0, "evidence": "", "otp_messages": 0, "open_challenges …` |

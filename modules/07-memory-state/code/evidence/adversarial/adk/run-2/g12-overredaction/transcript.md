@@ -8,50 +8,50 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `verify_identity({"card_last4": "5127", "postal_code": "60614"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 a …)` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-004500e3", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the canc …)` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-37fb8551", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Verified, and the dispute is filed.
+**Assistant:** Thanks, Dana - you're verified and the dispute is filed.
 
-- **Case id:** C-5001 (status: under review)
-- **Charge disputed:** CloudNest Storage, $9.99, posted 2026-11-01 (T-3002) - the earlier $9.99 charge from 2026-10-01 is untouched.
-- **Follow-up:** due 2026-11-23, by secure message in the Kestrel app (the default, since no contact channel is set). If you set a contact channel before then, it'll go there instead.
+- **Case id:** C-5001
+- **Charge:** CloudNest Storage, $9.99, posted November 1, 2026 (T-3002)
+- **Reason:** cancelled subscription
+- **Status:** under review
+- **Follow-up:** due November 23, 2026, sent by secure message in the Kestrel app (the default, since you have no contact channel set - if you set one before then, it will go there instead)
 
-Reviews are currently taking about 10 days. If you have a cancellation confirmation or reference from CloudNest, send it over and I'll attach it to C-5001 - that usually helps.
+If you have a cancellation confirmation or reference from CloudNest, send it over and I'll attach it to the case.
 
 **Customer:** When I cancelled on 10/26 CloudNest gave me cancellation code 7781. Please put that in the dispute as evidence.
 
-- `add_case_evidence({"case_id": "C-5001", "evidence_note": "Customer cancelled the CloudNest subscription on 2026-10-26 and was given cancellation code 7781."})` → `{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 anyway.\n[2026-11-13] Customer cancelled the CloudNest subscription on 2026-10-26 and was given cancellation code 7781.", "status": "under_review", "opened_at": "2026-11 …`
+- `add_case_evidence({"case_id": "C-5001", "evidence_note": "CloudNest cancellation code 7781, from a cancellation made on 10/26/2026."})` → `{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the cancellation.\n[2026-11-13] CloudNest cancellation code 7781, from a cancellation made on 10/26/2026.", "status": "under_review", "opened_at": "2026-11-13T10:00:00Z", "reso …`
 
-**Assistant:** Added to case C-5001: your cancellation date of 10/26 and code 7781 are now on the dispute record. Status is still under review, with the follow-up due 2026-11-23 by secure message in the Kestrel app.
+**Assistant:** Added to case C-5001: CloudNest cancellation code 7781 from your 10/26 cancellation. The case stays under review, with the follow-up due November 23 by secure message in the Kestrel app.
 
-_Episode written:_ Conversation on 2026-11-13: The customer said she cancelled CloudNest in October (not verified) and wanted the $9.99 2026-11-01 charge (T-3002) disputed. Dispute C-5001 was filed under review; follow-up due 2026-11-23 by Kestrel secure message (default; no contact channel set). Customer said cancellation was 10/26 with code 7781 (not verified); evidence added. Case outcomes: C-5001 under_review. Lesson: none
+_Episode written:_ Conversation on 2026-11-13: Customer Dana wanted a CloudNest November 1 $9.99 charge disputed after she said she cancelled in October; identity was verified and transactions found. Dispute C-5001 was filed for transaction T-3002 as cancelled subscription. Customer said her 10/26 cancellation reference was 7781 (not verified); it was added as evidence. Follow-up due November 23 by Kestrel app secure message unless contact channel changes. Case outcomes: C-5001 under_review. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | working | the last four, as typed, verify the customer | `{"verified": true, "valid_for_minutes": 15}` |
-| PASS | external | the dispute is filed | `[{"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 anyway."}]` |
-| PASS | external | the numeric cancellation code reaches the case as evidence | `[["C-5001", "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 anyway.\n[2026-11-13] Customer cancelled the CloudNest subscription on 2026-10-26 and was g …` |
+| PASS | external | the dispute is filed | `[{"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the cancellation."}]` |
+| PASS | external | the numeric cancellation code reaches the case as evidence | `[["C-5001", "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the cancellation.\n[2026-11-13] CloudNest cancellation code 7781, from a cancellation made on 10/2 …` |
 
 ## or-decide  ·  resolve_case  ·  2026-11-20T09:00:00Z
 
-_resolved:_ `[{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 anyway.\n[2026-11-13] Customer cancelled the CloudNest subscription on 2026-10-26 and was given cancellation code 7781.", "status": "rejected", "opened_at": "2026-11-13T10:00:00Z", "resolution_code": "NO_CANCELLATION_PROOF", "resolution_note": "Merchant has no cancellation on file; resolution code NO_CANCELLATION_PROOF.", "resolved_at": "2026-11-20T09:00:00Z", "deci …`
+_resolved:_ `[{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the cancellation.\n[2026-11-13] CloudNest cancellation code 7781, from a cancellation made on 10/26/2026.", "status": "rejected", "opened_at": "2026-11-13T10:00:00Z", "resolution_code": "NO_CANCELLATION_PROOF", "resolution_note": "Merchant has no cancellation on file; resolution code NO_CANCELLATION_PROOF.", "resolved_at": "2026-11-20T09:00:00Z", "decision_id": "D-or-1"}]`
 
 ## or-followup  ·  fire_followups  ·  2026-11-23T12:00:00Z
 
-### follow-up session `followup-F-004500e3-1`
+### follow-up session `followup-F-37fb8551-1`
 
-**Scheduler:** [scheduled follow-up F-004500e3] action=case_status_followup resume={"case_id": "C-5001"}. The customer is not in this conversation and cannot reply to the message you send. Carry out the action using your tools, then send the customer exactly one message with notify_customer.
+**Scheduler:** [scheduled follow-up F-37fb8551] action=case_status_followup resume={"case_id": "C-5001"}. The customer is not in this conversation and cannot reply to the message you send. Carry out the action using your tools, then send the customer exactly one message with notify_customer.
 
-- `get_case_status({"case_id": "C-5001"})` → `{"cases": [{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer cancelled the CloudNest subscription in October; a $9.99 CloudNest 2TB monthly charge posted on 2026-11-01 anyway.\n[2026-11-13] Customer cancelled the CloudNest subscription on 2026-10-26 and was given cancellation code 7781.", "status": "rejected", "opened_at": " …`
-- `search_policy({"question": "rejected dispute next steps appeal resubmit"})` → `{"documents": [{"document": "cancelled-subscriptions", "score": 0.63, "text": "# Charges after a cancelled subscription\n\nIf you cancelled a recurring subscription or membership and the merchant charged you again afterwards, dispute the charge with the reason **cancelled_subscription**. Kestrel sends the dispute to the merchant, who has 10 business days to respond. The disputes team then decides  …`
-- `notify_customer({"message": "Case C-5001 update: the CloudNest charge of $9.99 posted 2026-11-01 was reviewed and rejected \u2014 the merchant has no cancellation on file (resolution code NO_CANCELLATION_PROOF). Next …)` → `{"channel": "secure_message", "message_id": 1, "status": "sent"}`
+- `get_case_status({"case_id": "C-5001"})` → `{"cases": [{"case_id": "C-5001", "user_id": "dana", "txn_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says she cancelled the CloudNest subscription in October; the November 1 charge of $9.99 came after the cancellation.\n[2026-11-13] CloudNest cancellation code 7781, from a cancellation made on 10/26/2026.", "status": "rejected", "opened_at": "2026-11-13T10:00:00Z" …`
+- `notify_customer({"message": "Case C-5001 (CloudNest, $9.99 charge of Nov 1) has been decided and closed: it was rejected because the merchant has no cancellation on file (resolution code NO_CANCELLATION_PROOF). Nothi …)` → `{"channel": "secure_message", "message_id": 1, "status": "sent"}`
 
-**Assistant:** I'll check the case status, then send the customer one message.
-Follow-up handled: case C-5001 was rejected (NO_CANCELLATION_PROOF), and I sent the customer one secure message explaining the outcome and that they can add cancellation proof via the card-care chat.
+**Assistant:** Case C-5001 was decided and closed - rejected with resolution code NO_CANCELLATION_PROOF (the merchant has no cancellation on file). I sent the customer one secure message explaining the outcome and that, with new proof such as the merchant's cancellation confirmation, she can message the card-care chat to file a new dispute of the same charge.
 
-_Episode written:_ Scheduled follow-up on 2026-11-23 (customer not present): For case C-5001 (txn T-3002), the customer said they cancelled CloudNest on 2026-10-26 and got code 7781, yet a $9.99 charge posted 2026-11-01 (not verified). Assistant checked status: rejected, NO_CANCELLATION_PROOF. Sent secure message advising adding cancellation proof via card-care chat. Case outcomes: C-5001 rejected (NO_CANCELLATION_PROOF). Lesson: none
+_Episode written:_ Scheduled follow-up on 2026-11-23 (customer not present): The customer said she cancelled CloudNest in October (not verified) and sought a dispute for the $9.99 Nov 1 charge. Case C-5001/T-3002 was already rejected and closed for NO_CANCELLATION_PROOF; the assistant sent one secure message explaining the outcome and that she can file a new dispute with new proof via card-care chat. Case outcomes: C-5001 rejected (NO_CANCELLATION_PROOF). Lesson: none
 
-_outcomes:_ `[{"followup_id": "F-004500e3", "user_id": "dana", "outcome": "fired_done", "error": null}]`
+_outcomes:_ `[{"followup_id": "F-37fb8551", "user_id": "dana", "outcome": "fired_done", "error": null}]`
 
 | | memory type | check | evidence |
 |---|---|---|---|

@@ -8,18 +8,17 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `search_policy({"question": "damaged card replacement"})` → `{"documents": [{"document": "card-replacement", "score": 0.751, "text": "# Lost, stolen, or damaged cards\n\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within 5 business days at no charge. Recurring merchants must be given the new card number by you; Kestrel does not forward it.\n"}, {"document": "dispute-window", "score": 0.632, "text": "# Dispute window\n …`
 
-**Assistant:** Got it, Marco - noted that Pixel got to your card. Two things:
+**Assistant:** Thanks, Marco - noted. I can only save two things on your behalf: a contact channel and a travel notice, so a damaged card has to go to the card team rather than me. You can call Kestrel or use the Kestrel app to report it.
 
-- I don't have a way to log a damaged-card note or order a replacement from here. To get a new card, report it as damaged by calling the number on the back of your card or through the Kestrel app. Per policy, a replacement ships within 5 business days at no charge, and you'll need to update any recurring merchants yourself - the new number isn't forwarded.
-- Please don't type your card number, expiry or security code into this chat; I don't need them.
+Per Kestrel policy: a damaged card is blocked and a replacement ships within 5 business days at no charge. One thing to plan for - recurring merchants won't get the new number automatically, so you'll need to give it to them yourself.
 
-Anything else, just say.
+Anything else I can help with?
 
-_Episode written:_ Conversation on 2026-11-09: Marco said his cat Pixel chewed his old card (not verified) and wanted to note the damage; nothing else for now. The assistant searched policy, could not log a note or order a replacement, advised contacting Kestrel by phone/app, and stated replacements ship within 5 business days at no charge with recurring merchants needing updates. No IDs. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: Marco said (not verified) his cat chewed his old card and he wanted to note it; no other request. Assistant could not save damaged-card report, directed him to call Kestrel/use app, and relayed damaged cards are blocked and replacements ship within 5 business days free; recurring merchants need the new number. No case/transaction IDs. Case outcomes: no case touched. Lesson: Next time, avoid saying a damaged-card report is 'noted' unless a case is created, and explicitly confirm the customer will call Kestrel or use the app to start the replacement.
 
 ## roll-tick-29  ·  maintenance  ·  2026-12-08T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "case_followups_repaired": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 ## roll-29  ·  session  ·  marco  ·  2026-12-08T10:00:00Z
 
@@ -29,24 +28,24 @@ _Resumes session `roll`._
 
 - `get_case_status({})` → `{"cases": []}`
 - `list_my_followups({})` → `{"scheduled": []}`
-- `load_memory({"query": "previous conversation account check-in"})` → `{"memories": [{"at": "2026-11-09T10:02:00Z", "text": "Conversation on 2026-11-09: Marco said his cat Pixel chewed his old card (not verified) and wanted to note the damage; nothing else for now. The assistant searched policy, could not log a note or order a replacement, advised contacting Kestrel by phone/app, and stated replacements ship within 5 business days at no charge with recurring merchant …`
+- `find_transactions({})` → `{"transactions": [{"transaction_id": "T-2001", "posted_on": "2025-11-03", "merchant": "FitPulse Gym", "description": "FitPulse annual membership", "amount": "$240.00", "currency": "USD", "category": "fitness"}, {"transaction_id": "T-2002", "posted_on": "2026-11-03", "merchant": "FitPulse Gym", "description": "FitPulse annual membership renewal", "amount": "$240.00", "currency": "USD", "category":  …`
 
-**Assistant:** Hi Marco - here's where things stand:
+**Assistant:** Here's what's on your account right now:
 
-- **Dispute cases:** none open, none closed.
-- **Scheduled reminders/follow-ups:** nothing scheduled.
-- **Contact channel:** none set, so any follow-ups or reminders would go by secure message in the Kestrel app.
+- **Disputes:** none open, and nothing scheduled (no reminders or case follow-ups).
+- **Contact channel:** none set, so anything Kestrel sends you - reminders, case follow-ups - goes as a secure message in the Kestrel app by default.
 - **Travel notice:** none on file.
+- **Recent activity:**
+  - FitPulse Gym annual membership **renewed 3 Nov 2026, $240.00** - it was also charged $240.00 on 3 Nov 2025. Worth knowing since it's a recurring charge and your replacement card number won't be passed on to them.
+  - Corner Deli, 5 Nov 2026, $12.40.
 
-One thing from our last chat (Nov 9): you mentioned your cat Pixel chewed your card, but nothing was logged on the account for it - I don't have a tool to note damage or order a replacement. If the card is still damaged, call Kestrel or use the app to order a replacement.
+If that FitPulse renewal wasn't expected, say the word and I can look into disputing it - it's well within Kestrel's 75-day dispute window.
 
-Anything you'd like me to look at - a charge, a travel notice, or a reminder?
-
-_Episode written:_ Conversation on 2026-12-08: Marco checked in about his account. Tools showed no open/closed cases, no scheduled follow-ups, no contact channel, and no travel notice. The assistant recalled that Marco said his cat Pixel chewed his old card (not verified); nothing was logged, and no tool could note damage or order a replacement. No case or transaction IDs; nothing promised. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-12-08: The customer asked for any account updates. Assistant checked case status and follow-ups (none found) and reviewed transactions T-2001, T-2002, and T-2003, including FitPulse Gym charges and a Corner Deli purchase. Assistant offered to look into disputing the 2026 FitPulse renewal if unexpected, citing a 75-day window. No customer preference stated. Case outcomes: no case touched. Lesson: The assistant should avoid stating unverified account details such as contact channel, travel notice, or replacement-card behavior unless confirmed by a tool.
 
 ## roll-tick-58  ·  maintenance  ·  2027-01-06T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": ["roll"]}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "case_followups_repaired": [], "purged_episodes": [], "deleted_transcripts": ["roll"]}`
 
 | | memory type | check | evidence |
 |---|---|---|---|
@@ -54,7 +53,7 @@ _maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessi
 
 ## roll-tick-232  ·  maintenance  ·  2027-06-29T09:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": ["E-roll-1-83df3b", "E-roll-2-464b94"], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "case_followups_repaired": [], "purged_episodes": ["E-roll-1-0c95f8", "E-roll-2-cc32d5"], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

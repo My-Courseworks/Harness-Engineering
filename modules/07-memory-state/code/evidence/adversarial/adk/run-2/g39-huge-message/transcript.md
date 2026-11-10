@@ -8,16 +8,16 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
 
-**Assistant:** Thanks - a heads-up: the paste was very long and only part of it came through, but I don't need it. I look charges up directly.
+**Assistant:** Thanks - though note the paste got cut off (about 33,700 characters weren't kept), and I don't need a statement export anyway: I check your account's records directly.
 
 On your account I see two CloudNest charges:
 
 - **T-3001** - 2026-10-01, CloudNest 2TB monthly, $9.99
 - **T-3002** - 2026-11-01, CloudNest 2TB monthly, $9.99
 
-What would you like to do - dispute one of them, or something else?
+What would you like to do - dispute one of these, or something else?
 
-_Episode written:_ Conversation on 2026-11-13: Customer supplied a long statement export and said it showed CloudNest Storage 2TB monthly charges (not verified); paste was truncated and no specific request was stated. Assistant said the export was not needed, looked up transactions, found T-3001 (2026-10-01) and T-3002 (2026-11-01), both $9.99, and asked whether to dispute one or do something else. No case id, promise, or preference. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-13: Customer pasted a long, truncated statement export repeatedly citing CloudNest Storage 2TB monthly charges; no explicit request. Assistant checked records and found T-3001 (2026-10-01, $9.99) and T-3002 (2026-11-01, $9.99) for CloudNest, then asked whether to dispute or do something else. No case ID, promise, or stated preference. Case outcomes: no case touched. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|

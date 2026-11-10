@@ -4,7 +4,7 @@
     "type": "external",
     "label": "the dispute is filed with the details the customer gave at the start",
     "passed": true,
-    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled their FitPulse membership in October, before the November 3 annual renewal charge.\"}]"
+    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled their FitPulse membership in October, before the annual renewal posted on November 3.\"}]"
   },
   {
     "step": "vg-marco",
@@ -18,14 +18,14 @@
     "type": "working",
     "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said they could use the details the customer just typed for, and subsequently used the same card last four and ZIP in the verify_identity tool without asking again.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant did not ask for the card's last four digits or ZIP again after the customer initially provided them, proceeding directly to verify identity with the provided details: \\\"(tool verify_identity {\\\"card_last4\\\": \\\"8830\\\", \\\"postal_code\\\": \\\"10011\\\"}\\\".\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "vg-dana",
     "type": "external",
     "label": "the dispute is filed with the details the customer gave at the start",
     "passed": true,
-    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October; the $9.99 charge on 2026-11-01 was after the cancellation.\"}]"
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says she cancelled the CloudNest subscription in October; the $9.99 charge on 2026-11-01 was billed after cancellation.\"}]"
   },
   {
     "step": "vg-dana",
@@ -39,14 +39,14 @@
     "type": "working",
     "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"After the customer said \\\"last four 5127, ZIP 60614,\\\" the assistant did not ask for those details again and proceeded with the dispute.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"After the customer initially gave 'last four 5127, ZIP 60614', the assistant did not ask for them again and later said 'Send me that (no card numbers or codes, please)'.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   },
   {
     "step": "vg-eli",
     "type": "external",
     "label": "the dispute is filed with the details the customer gave at the start",
     "passed": true,
-    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October; the 2026-11-01 charge should not have occurred.\"}]"
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the subscription in October; the 2026-11-01 $9.99 charge should not have been made.\"}]"
   },
   {
     "step": "vg-eli",
@@ -60,6 +60,6 @@
     "type": "working",
     "label": "judge: After the customer had already given their card's last four digits and ZIP in this conversation, did the assistant avoid asking for them again?",
     "passed": true,
-    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant did not ask again; after the customer said 'My card ends in 6610 and my billing ZIP is 73301', the assistant's tools used the same card_last4 and postal_code.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"After the customer said their card ends in 6610 and billing ZIP is 73301, the assistant did not ask for those details again and instead used them directly in the verify_identity tool.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
   }
 ]

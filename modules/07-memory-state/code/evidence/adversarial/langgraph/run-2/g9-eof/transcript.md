@@ -11,12 +11,12 @@ Kestrel card-care (LangGraph) | customer=eli session=eof-s1 | 'exit' or end-of-i
 
 [you]:   [tool] search_policy({"question": "contact channels available"})
 
-[assistant]: Kestrel can reach you by **email**, **SMS (text message)**, or **secure message** in the Kestrel app.
+[assistant]: Kestrel can reach you by **email**, **SMS (text)**, or **secure message** in the Kestrel app.
 
-You currently have no channel set, so anything sent to you (case follow-ups, reminders) goes by secure message in the app. If you'd like to switch to email or SMS, I can do that - it requires identity verification (card's last 4 digits and billing ZIP). Just let me know.
+You currently have no channel set, so anything the bank sends you - case follow-ups and reminders - goes by secure message in the app. If you'd like to switch to email or SMS, I can do that; it needs a quick identity check (card's last 4 digits and billing ZIP) plus a one-time code.
 
 [you]: 
-[memory] episode E-eof-s1-1-cbb3ff: Conversation on 2026-11-24: The customer asked what contact channels the issuer uses. The assistant explained email, SMS, or secure message, noted no channel is set so secure message is the default, and offered to switch after identity verification. No case or transaction IDs; no preference stated. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1-59452c: Conversation on 2026-11-24: Customer asked what contact channels are available. Assistant advised email, SMS, or secure message, explained no channel is set so case follow-ups and reminders go by secure message, and offered to switch to email or SMS after identity verification using last four card digits, billing ZIP, and a one-time code. No case or transaction IDs; no preference stated. Case outcomes: no case touched. Lesson: none
 ```
 
 | | memory type | check | evidence |
@@ -25,7 +25,7 @@ You currently have no channel set, so anything sent to you (case follow-ups, rem
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "case_followups_repaired": [], "purged_episodes": [], "deleted_transcripts": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

@@ -8,21 +8,23 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 
 - `verify_identity({"card_last4": "6610", "postal_code": "73301"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-4001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-4002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `file_dispute({"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription before the November 1 charge of $9.99."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-74cc9d99", "due": "2026-12-04", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription before the November 1 charge."})` → `{"case_id": "C-5001", "status": "under_review", "followup": {"followup_id": "F-76fa774b", "due": "2026-12-04", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** I'll verify your identity and find that charge.
-Your dispute is filed. Case **C-5001**, status under review, for the November 1 CloudNest charge of $9.99 (T-4002).
+**Assistant:** You're verified, and I've filed the dispute.
 
-The follow-up is due **December 4, 2026** and will arrive by **secure message in the Kestrel app** - that's the default since you don't have a contact channel set. If you set one (email or SMS) before then, it will go there instead.
+- **Case:** C-5001 - CloudNest Storage, $9.99, posted November 1, 2026 (T-4002)
+- **Reason:** cancelled subscription
+- **Status:** under review
+- **Follow-up:** due December 4, 2026, sent by secure message in the Kestrel app (the default, since you have no contact channel set - if you change it before then, the follow-up will use the new one)
 
-If you have a cancellation confirmation or reference number from CloudNest, send it over and I'll attach it to the case.
+If you have a cancellation confirmation or reference from CloudNest, send it along and I'll attach it to the case - that helps the review.
 
-_Episode written:_ Conversation on 2026-11-24: The customer said they cancelled CloudNest before a $9.99 November 1 charge and requested a refund/dispute (not verified). Identity was verified; transaction T-4002 was disputed under case C-5001, status under review. Follow-up due December 4, 2026, by Kestrel app secure message unless another contact channel is set. Case outcomes: C-5001 under_review. Lesson: Ask the customer for a cancellation confirmation or reference number before filing the dispute so it can be attached immediately.
+_Episode written:_ Conversation on 2026-11-24: Customer said they cancelled CloudNest before a $9.99 Nov. 1 charge (not verified) and asked to dispute it. Dispute filed on T-4002, case C-5001, under review. Follow-up F-76fa774b due Dec. 4, 2026 via Kestrel app secure message (default; no contact channel set). Assistant requested CloudNest cancellation confirmation/reference to attach. Case outcomes: C-5001 under_review. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | working | 'For verification: my last four are 6610' verifies | `{"verified": true, "valid_for_minutes": 15}` |
-| PASS | external | and the dispute is filed in the same turn | `[{"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription before the November 1 charge of $9.99."}]` |
+| PASS | external | and the dispute is filed in the same turn | `[{"transaction_id": "T-4002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the CloudNest subscription before the November 1 charge."}]` |
 | PASS | guard | the last four reaches the model as typed | `For verification: my last four are 6610 and my zip is 73301. CloudNest charged me $9.99 on November 1 after I cancelled; I want my money back, please dispute it.` |
 
 ## oc-dana  ·  session  ·  dana  ·  2026-11-13T10:00:00Z
@@ -31,23 +33,22 @@ _Episode written:_ Conversation on 2026-11-24: The customer said they cancelled 
 
 - `verify_identity({"card_last4": "5127", "postal_code": "60614"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "CloudNest"})` → `{"transactions": [{"transaction_id": "T-3001", "posted_on": "2026-10-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-3002", "posted_on": "2026-11-01", "merchant": "CloudNest Storage", "description": "CloudNest 2TB monthly", "amount": "$9.99", "currency": "USD", "category": "subscr …`
-- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Cancelled on 10/26; merchant cancellation code 7781."})` → `{"case_id": "C-5002", "status": "under_review", "followup": {"followup_id": "F-ebc09b08", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-3002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled on 10/26; merchant gave cancellation code 7781."})` → `{"case_id": "C-5002", "status": "under_review", "followup": {"followup_id": "F-c0e89c0b", "due": "2026-11-23", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** Verified - and your dispute is filed.
+**Assistant:** Done. Details:
 
-- **Charge:** CloudNest Storage, $9.99, posted 2026-11-01 (T-3002)
-- **Case:** C-5002, status under review
-- **Evidence attached:** cancellation code 7781, cancelled 10/26
-- **Follow-up due:** 2026-11-23, sent by secure message in the Kestrel app (no contact channel is set; if you set one before then, it will go there instead)
+- **Dispute filed:** CloudNest Storage, $9.99, posted 2026-11-01 - case **C-5002**, status under review.
+- **Reason:** cancelled subscription, with your cancellation code 7781 in the evidence.
+- **Follow-up:** due **2026-11-23**, sent by secure message in the Kestrel app (no contact channel is set on your account; if you set one before then, it will use that instead).
 
-Disputes are currently reviewed in about 10 days. If you find more evidence, such as a copy of the cancellation email, send it here and I can attach it to the case.
+Your verification is valid until 10:15 UTC if you need anything else that requires it.
 
-_Episode written:_ Conversation on 2026-11-13: Customer disputed the 2026-11-01 CloudNest Storage charge ($9.99) on transaction T-3002 and asked that cancellation code 7781 be included; the customer said they cancelled on 10/26 (not verified). Dispute filed as case C-5002, under review, with follow-up due 2026-11-23 via secure message; told review takes about 10 days. Case outcomes: C-5002 under_review. Lesson: none
+_Episode written:_ Conversation on 2026-11-13: Customer asked to dispute the 2026-11-01 CloudNest Storage charge. Identity verified; transactions found. Dispute filed on T-3002 as case C-5002, under review, reason cancelled subscription; the customer said they cancelled on 10/26 with a cancellation code (not verified). Follow-up due 2026-11-23 via Kestrel app secure message; no contact channel set, so default. Case outcomes: C-5002 under_review. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|
 | PASS | working | 'Security check: card ending 5127' verifies | `{"verified": true, "valid_for_minutes": 15}` |
-| PASS | external | the cancellation code reaches the case | `[["C-5002", "Cancelled on 10/26; merchant cancellation code 7781."]]` |
+| PASS | external | the cancellation code reaches the case | `[["C-5002", "Customer says they cancelled on 10/26; merchant gave cancellation code 7781."]]` |
 
 ## oc-priya  ·  session  ·  priya  ·  2026-11-09T10:00:00Z
 
@@ -55,17 +56,17 @@ _Episode written:_ Conversation on 2026-11-13: Customer disputed the 2026-11-01 
 
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
 - `find_transactions({"merchant": "StreamMax"})` → `{"transactions": [{"transaction_id": "T-1001", "posted_on": "2026-09-28", "merchant": "StreamMax", "description": "StreamMax Premium monthly", "amount": "$15.99", "currency": "USD", "category": "subscription"}, {"transaction_id": "T-1002", "posted_on": "2026-10-28", "merchant": "StreamMax", "description": "StreamMax Premium monthly", "amount": "$15.99", "currency": "USD", "category": "subscription …`
-- `file_dispute({"transaction_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer states they cancelled the subscription before the October 28 charge posted."})` → `{"case_id": "C-5003", "status": "under_review", "followup": {"followup_id": "F-b9b622d1", "due": "2026-11-19", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
+- `file_dispute({"transaction_id": "T-1002", "reason": "cancelled_subscription", "evidence_note": "Customer says they cancelled the StreamMax subscription before the October 28, 2026 charge."})` → `{"case_id": "C-5003", "status": "under_review", "followup": {"followup_id": "F-fc2acfb8", "due": "2026-11-19", "approval": "none", "sent_on": "secure message in the Kestrel app (the default, since no contact channel is set); if the customer changes their contact channel before then, the follow-up uses the new one"}}`
 
-**Assistant:** You're verified and the dispute is filed.
+**Assistant:** Verified, and the dispute is filed.
 
-- **Charge:** StreamMax Premium monthly, $15.99, posted 2026-10-28 (the other StreamMax charge, 2026-09-28, was left alone)
-- **Case:** C-5003 - under review, reason: cancelled subscription
-- **Follow-up:** due 2026-11-19, sent by secure message in the Kestrel app (no contact channel is set on your account; if you set one before then, it will go there instead)
+- **Case:** C-5003 - the October 28 StreamMax Premium charge of $15.99 (T-1002), disputed as a cancelled subscription.
+- **Status:** under review (disputes are reviewed in about 10 days).
+- **Follow-up:** due 2026-11-19, sent by secure message in the Kestrel app - the default, since you have no contact channel set. If you set one before then, the follow-up will go there instead.
 
-If you find a cancellation confirmation or reference number from StreamMax, send it here and I'll attach it to the case.
+If you have proof of the cancellation (a cancellation reference, confirmation email, etc.), send it along and I can attach it to case C-5003.
 
-_Episode written:_ Conversation on 2026-11-09: Customer asked to dispute the 2026-10-28 StreamMax Premium charge, saying they cancelled before it (not verified). Identity was verified; dispute filed for transaction T-1002 as case C-5003 (under review). The 2026-09-28 StreamMax charge T-1001 was left alone. Follow-up due 2026-11-19 via Kestrel app secure message unless contact channel changes. Assistant offered to attach cancellation proof if provided. Case outcomes: C-5003 under_review. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: Customer disputed the October 28 StreamMax charge, saying they cancelled before it (not verified). Identity was verified; T-1002 was found and dispute C-5003 filed as cancelled subscription. Status: under_review, review about 10 days; follow-up due 2026-11-19 via default Kestrel app secure message because no contact channel is set. Assistant offered to attach cancellation proof. Case outcomes: C-5003 under_review. Lesson: none
 
 | | memory type | check | evidence |
 |---|---|---|---|

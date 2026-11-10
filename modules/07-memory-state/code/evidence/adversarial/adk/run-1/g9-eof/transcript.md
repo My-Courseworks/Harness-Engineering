@@ -9,15 +9,18 @@ _CLI exit code 0; stdout tail:_
 ```
 Kestrel card-care (ADK) | customer=eli session=eof-s1 | 'exit' or end-of-input ends the session
 
-[you]:   [tool] search_policy({"question": "contact channels available"})
+[you]:   [tool] search_policy({"question": "contact channels for follow-ups and reminders"})
 
-[assistant]: I'll check our policy on contact channels.
-There are three: **email**, **SMS (text message)**, and **secure message** - the inbox in the Kestrel app.
+[assistant]: Three options:
 
-You currently have no channel set, so anything we send (case follow-ups, reminders) goes by secure message in the app. You can switch to email or SMS any time; that requires a quick identity check (card's last 4 digits and billing ZIP).
+- **Email**
+- **SMS** (text message)
+- **Secure message** - the inbox in the Kestrel app
+
+You currently have no channel set, so anything Kestrel sends you (case follow-ups and reminders) goes by secure message in the app. I can change it to email or SMS if you like - that requires verifying your identity first (card's last 4 digits and billing ZIP).
 
 [you]: 
-[memory] episode E-eof-s1-1-3d8deb: Conversation on 2026-11-24: The customer asked what contact channels are available. The assistant checked the contact-preferences policy and explained that Kestrel can use email, SMS, or secure app message; with no channel chosen, secure message is the default. The assistant said switching channels requires identity verification. Case outcomes: no case touched. Lesson: none
+[memory] episode E-eof-s1-1-571928: Conversation on 2026-11-24: Customer asked which contact channels are available. Assistant explained email, SMS, and secure message; with no channel set, case follow-ups and reminders default to secure message. Assistant offered to change to email or SMS after identity verification. No case or transaction IDs, promises, or customer preferences were stated. Case outcomes: no case touched. Lesson: none
 ```
 
 | | memory type | check | evidence |
@@ -26,7 +29,7 @@ You currently have no channel set, so anything we send (case follow-ups, reminde
 
 ## eof-idle-close  ·  maintenance  ·  2026-11-24T12:00:00Z
 
-_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": []}`
+_maintenance:_ `{"erased_customers": [], "expired_facts": [], "closed_idle_sessions": [], "purged_episodes": [], "deleted_transcripts": [], "case_followups_repaired": []}`
 
 | | memory type | check | evidence |
 |---|---|---|---|

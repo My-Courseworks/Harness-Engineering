@@ -7,27 +7,26 @@ Live run against DeepSeek: every customer line below went to the real agent (sim
 **Customer:** Hi, Priya (card ending 4427, ZIP 94107). I'm in Lisbon until November 30 and please email me from now on.
 
 - `verify_identity({"card_last4": "4427", "postal_code": "94107"})` → `{"verified": true, "valid_for_minutes": 15}`
-- `remember_customer_fact({"key": "contact_channel", "value": "email"})` → `{"stored": {"contact_channel": {"value": "email", "as_of": "2026-11-09T10:00:00Z", "expires_at": null}}, "replaced": null}`
 - `remember_customer_fact({"key": "travel_notice", "value": "Lisbon", "valid_until": "2026-11-30"})` → `{"stored": {"travel_notice": {"value": "Lisbon", "as_of": "2026-11-09T10:00:00Z", "valid_until": "2026-11-30", "expires_at": "2026-12-01T00:00:00Z"}}, "replaced": null}`
+- `send_verification_code({})` → `{"sent": true, "sent_to": "text message to \u00b7\u00b7\u00b70100", "expires_in_minutes": 5, "resent": false}`
+- `confirm_verification_code({})` → `{"error": "This tool call requires confirmation, please approve or reject."}`
+- `adk_request_confirmation({"originalFunctionCall": {"id": "call_00_Ytc0PR4Vts0jMaSAi75D2154", "args": {}, "name": "confirm_verification_code"}, "toolConfirmation": {"hint": "Please approve or reject the tool call confirm_verif …)` → `null`
 
-**Assistant:** Done - you're verified and both updates are saved:
+**Assistant:** A one-time code has been sent by text message to ···0100; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it arrives, and I will finish your request.
 
-- **Contact channel:** email from now on.
-- **Travel notice:** Lisbon, until 2026-11-30.
-
-Anything else I can help with?
-
-_Episode written:_ Conversation on 2026-11-09: Customer wanted email contact and a travel notice for Lisbon until 2026-11-30. Identity was verified; the email preference and travel notice were saved. No case or transaction ID was provided. The customer said she is in Lisbon until 2026-11-30 (not verified); no other promises were made. Case outcomes: no case touched. Lesson: none
+_Episode written:_ Conversation on 2026-11-09: Customer Priya requested email contact from now on and said she is in Lisbon until 2026-11-30 (not verified). Identity was verified; travel notice for Lisbon was stored until 2026-11-30. A verification code was sent via text, expiring in 5 minutes, but confirmation is pending approval/reject. No case or transaction IDs were provided. Case outcomes: no case touched. Lesson: Next time, pause and obtain explicit customer approval before attempting to confirm the verification code.
 
 ## er-s2  ·  session  ·  priya  ·  2026-11-10T10:00:00Z
 
 **Customer:** Please delete everything you remember about me: my preferences and our past conversations.
 
-- `request_memory_erasure({})` → `{"erased_now": "2 remembered facts, 1 past-conversation summaries, 1 other conversation transcripts, 0 reminders with their notes", "this_conversation": "its transcript is deleted when the conversation ends; nothing more can be stored for the customer in it (a new conversation afterwards starts fresh)", "kept": "dispute cases, transactions and messages already sent are bank records with their own  …`
+- `request_memory_erasure({})` → `{"erased_now": "1 remembered facts, 1 past-conversation summaries, 1 other conversation transcripts, 0 reminders with their notes", "this_conversation": "its transcript is deleted when the conversation ends, or once it has been idle for 30 minutes if the customer just closes the chat; nothing more can be stored for the customer in it (a new conversation afterwards starts fresh)", "kept": "dispute  …`
 
-**Assistant:** Done. I've erased what was remembered about you: 2 stored facts and the summaries and transcripts of your other conversations. Nothing more can be stored for you in this conversation - if you'd like a reminder or a contact preference set up, please start a new conversation.
+**Assistant:** Done. Here's what happened:
 
-What remains: this conversation's transcript is deleted when the conversation ends, and dispute cases, transactions and messages already sent are kept as bank records under their own retention rules.
+- **Erased now:** 1 stored fact (your details), 1 past-conversation summary, 1 other conversation transcript, and 0 reminders.
+- **Kept:** dispute cases, transactions and messages already sent are bank records with their own legal retention.
+- **This conversation:** its transcript is deleted when the conversation ends, or once it has been idle for 30 minutes if you just close the chat. Nothing more can be stored for you in this conversation - if you want a reminder or preference set up later, please start a new conversation.
 
 | | memory type | check | evidence |
 |---|---|---|---|
