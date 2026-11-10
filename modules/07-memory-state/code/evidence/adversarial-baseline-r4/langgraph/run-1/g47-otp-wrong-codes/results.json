@@ -1,0 +1,58 @@
+[
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "three wrong codes: the channel is not changed",
+    "passed": false,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-24T10:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "three failed attempts on the account",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "the challenge is dead",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "ow-s1",
+    "type": "guard",
+    "label": "no code reached the model",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  },
+  {
+    "step": "ow-s2",
+    "type": "working",
+    "label": "the lock holds in a new chat: the digits are refused",
+    "passed": false,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "ow-s2",
+    "type": "working",
+    "label": "and the channel stays unset",
+    "passed": false,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-24T10:20:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ow-shared",
+    "type": "working",
+    "label": "two wrong last-fours and one wrong code share one lock: the third failure locks the account",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "ow-shared",
+    "type": "working",
+    "label": "the channel is not changed",
+    "passed": false,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-13T10:04:00Z\", \"expires_at\": null}"
+  }
+]
