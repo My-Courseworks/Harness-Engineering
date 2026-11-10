@@ -364,6 +364,44 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
                            f"ticket {rng.randint(100000, 999999)}, paid {rng.randint(10, 999)}.{rng.randint(10, 99)}",
                            f"my Amazon order 1{rng.randint(10, 99)}-{rng.randint(1000000, 9999999)}-{rng.randint(1000000, 9999999)}"])
         cases.append({"messages": [text], "expect": "keep", "note": "reference after a label", "pans": [], "codes": [], "expiries": []})
+    # ---- round 5, after its first final pass: a security code said twice in one message (appended, as above)
+    for _ in range(per_family):
+        code, _ = _code(rng, amex=False)
+        first, second = rng.sample([code, " ".join(code), " ".join(_DIGIT_WORDS[int(d)] for d in code)], 2)
+        if rng.random() < 0.25:  # or the same digits typed twice
+            first = second = code
+        said = first + rng.choice([" ({})", " [{}]", " = {}", "/{}", " - {}", "-{}", " {}", ", i.e. {}", " (that is {})"]).format(second)
+        cue = rng.choice(["the cvv is {}", "security code: {}", "the code on the back is {}", "CVC {}", "cvv {}", "card verification value {}"])
+        pan = _random_pan(rng) if rng.random() < 0.5 else None
+        text = cue.format(said) if pan is None else rng.choice(["{n}, {c}", "{n}\n{c}\nexp 12/29", "{c}, card {n}"]).format(
+            n=" ".join(_groups(pan, rng)), c=cue.format(said))
+        cases.append({"messages": [text], "expect": "mask", "note": "code said twice", "pans": [pan] if pan else [], "codes": [code],
+                      "expiries": []})
+    for _ in range(per_family):  # keep: a number restated in brackets or in words that is not a code
+        n = rng.randint(100, 999)
+        words = " ".join(_DIGIT_WORDS[int(d)] for d in str(n))
+        text = rng.choice([f"I was charged {n} ({rng.choice(['two', 'three', 'four'])} payments) by CloudNest", f"room {n} ({words}) at the hotel",
+                           f"flight {n} ({words}) on November 30", f"order {rng.randint(1000, 9999)} ({rng.randint(2024, 2026)}) arrived late",
+                           f"my last four are {n}7 ({words} seven) and ZIP {rng.randint(10000, 99999)}",
+                           f"gate {n} - {words} - is where I paid", f"bus {n}/{n} to the airport"])
+        cases.append({"messages": [text], "expect": "keep", "note": "a number restated, not a code", "pans": [], "codes": [], "expiries": []})
+    for _ in range(per_family):  # an expiry typed with a space or a dot after its cue, with or without the number beside it
+        month, year = rng.randint(1, 12), rng.randint(26, 33)
+        written = rng.choice([f"{month:02d} {year}", f"{month:02d}.{year}", f"{month:02d} 20{year}", f"{month} {year}", f"{month:02d} / {year}"])
+        cue = rng.choice(["exp {}", "expiry {}", "exp. date {}", "expiration: {}", "valid thru {}", "the card expires {}"])
+        pan = _random_pan(rng) if rng.random() < 0.6 else None
+        code, _ = _code(rng, amex=False)
+        text = cue.format(written) if pan is None else rng.choice(["{n}, {e}, cvv {c}", "{n} {e}", "card {n} {e} cvv {c}", "{e} on {n}"]).format(
+            n=" ".join(_groups(pan, rng)), e=cue.format(written), c=code)
+        cases.append({"messages": [text], "expect": "mask", "note": "expiry with a space or a dot after its cue", "pans": [pan] if pan else [],
+                      "codes": [code] if pan and "cvv" in text else [], "expiries": [f"{month:02d}/{year}"]})
+    for _ in range(per_family):  # keep: an amount or a date written the same way, about something else
+        a, b = rng.randint(1, 12), rng.randint(10, 33)
+        text = rng.choice([f"I paid {a}.{b} for parking", f"the fee was {a}.{b} and the tip {rng.randint(1, 9)}.{rng.randint(10, 99)}",
+                           f"my travel notice expiration should be {a} {b}", f"exp. delivery {a} {b}, still nothing",
+                           f"the subscription exp {a:02d} {b} is the one I cancelled", f"seats {a} {b} on the flight to Lisbon",
+                           f"my passport expires {a:02d} 20{b}"])
+        cases.append({"messages": [text], "expect": "keep", "note": "an amount or a date, not an expiry", "pans": [], "codes": [], "expiries": []})
     return cases
 
 

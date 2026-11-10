@@ -205,11 +205,11 @@ async def run_session(fw, h, step: dict) -> dict:
 
 async def run_simulated_session(fw, h, step: dict) -> dict:
     """Unscripted: the model plays the customer and writes each next line after reading the agent's reply."""
-    turns, shown = [], 0
+    turns = []
     for index in range(step["max_turns"]):
-        codes = _sent_codes(h, step["user"])
-        phone = "".join(f"\n(your phone shows: Your Kestrel verification code is {c})" for c in codes[shown:])  # what the persona's phone shows
-        shown = len(codes)
+        # what the persona's phone shows: every code it received, oldest first, for as long as the conversation lasts (the first
+        # round-5 final pass showed a code for one message only, so a persona that answered something else first never typed it)
+        phone = "".join(f"\n(your phone shows: Your Kestrel verification code is {c})" for c in _sent_codes(h, step["user"]))
         line = (await resolved(fw.complete_text(SIMULATED_CUSTOMER_PROMPT.format(
             persona=step["persona"], transcript=_conversation_text(turns) + phone)))).strip()
         if not line or line.startswith("[DONE]"):

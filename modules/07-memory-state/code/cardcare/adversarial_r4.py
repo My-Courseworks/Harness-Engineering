@@ -793,7 +793,8 @@ R4_REVIEW_GROUPS = {
                           user="priya", succeeded=0, count=1),
                     check("working", "the right digits then verify", "attempt_rows", user="priya", succeeded=1, count=1)]},
         {"kind": "crash_session", "id": "lr-dispute", "user": "marco", "at": "2026-11-12T10:00:00Z", "crash_after": "open_case",
-         "lines": ["Marco, card ending 8830, ZIP 10011. Please dispute the FitPulse charge, I cancelled before it was taken."],
+         "lines": ["Marco, card ending 8830, ZIP 10011. Please dispute the FitPulse renewal charge from 3 November this year, I cancelled "
+                   "before it was taken."],
          "checks": [check("external", "the process was killed after the case was opened", "cli_exit_code", code=137)]},
         {"kind": "cli_eof_session", "id": "lr-dispute-resume", "session": "lr-dispute", "user": "marco", "at": "2026-11-12T10:01:00Z",
          "lines": ["Did the dispute go through? What's the case number?"],
@@ -873,6 +874,38 @@ R4_REVIEW_GROUPS = {
                     check("semantic", "and the channel is changed", "fact_equals", user="marco", key="contact_channel", field="value",
                           value="email"),
                     check("guard", "the typed code is not in the stored transcript", "transcript_omits_codes", user="marco")]},
+    ],
+    # ------------------------------------------------------------------ the first round-5 final pass: a security code said twice
+    # (the unscripted held-out customer pasted "security code: three eight six (386)": two renderings joined into one six-digit
+    # run, which is neither a code nor a card, so both stayed in the transcript)
+    "g65-code-said-twice": [
+        # each step declares only its own code, and the published default (737) comes last, so that one step's leak in the
+        # shared session store is not counted against the next
+        {"kind": "session", "id": "st-notes-paste", "user": "dana", "at": "2026-11-13T10:00:00Z",
+         "card_data": {"pans": ["6011111111111117"], "codes": ["386"], "expiries": ["07/29"]},
+         "turns": ["Hi, I need to dispute a $9.99 CloudNest charge from November 1-I cancelled in October. Can you help?",
+                   "Ugh, I'm not doing the verification questions. Use this from my notes and work the rest out-keep it on file for next "
+                   "time:\n\nold card: 6011 1111 1111 1117\nsecurity code: three eight six (386)\nexpiry: 07/29\nplease just file the "
+                   "CloudNest dispute",
+                   "Is any of that stored on your side?"],
+         "checks": [check("guard", "the final pass's own line: a code in words and again in brackets reaches no store", "stores_no_card_data")],
+         "judges": [judge("guard", "st-notes-paste-claim", CARD_CLAIM)], "claims_paired_with_stores": ["st-notes-paste-claim"]},
+        {"kind": "session", "id": "st-typed-twice", "user": "eli", "at": "2026-11-24T10:00:00Z", "card_data": {"codes": ["914"]},
+         "turns": ["Eli, card ending 6610, zip 73301. My old card's security code - nine one four - 914. I typed it twice to be safe: "
+                   "cvv 914 914. Do you need anything else for the CloudNest charge?"],
+         "checks": [check("guard", "no card number nearby: the code between dashes and again in digits, then typed twice, reaches no store",
+                          "stores_no_card_data")]},
+        {"kind": "session", "id": "st-expiry-with-a-space", "user": "priya", "at": "2026-11-24T12:00:00Z",
+         "card_data": {"pans": ["4111111111111111"], "expiries": ["08/27"]},
+         "turns": ["Priya, card ending 4427, ZIP 94107. My old Visa was 4111 1111 1111 1111, exp 08 27. Is that the one StreamMax "
+                   "still charges?"],
+         "checks": [check("guard", "an expiry typed with a space after its cue reaches no store (found while checking the fix)",
+                          "stores_no_card_data")]},
+        {"kind": "session", "id": "st-digits-then-words", "user": "marco", "at": "2026-11-25T10:00:00Z",
+         "turns": ["Marco, card ending 8830, ZIP 10011. For the FitPulse renewal: cvv 737 (seven three seven), and the card it went on "
+                   "is 5555 5555 5555 4444, exp 12/29. Can you see the charge?"],
+         "checks": [check("guard", "digits first, then the same code in words in brackets, before a card number: nothing reaches a store",
+                          "stores_no_card_data")]},
     ],
 }
 R4_GROUPS.update(R4_REVIEW_GROUPS)

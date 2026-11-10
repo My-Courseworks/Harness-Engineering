@@ -17,7 +17,10 @@ What is covered, in the review's numbering:
 - nb 5 the reasoning masker leaves "card last4 8830" alone;
 - nb 6 two comma-joined numbers in a reply are both masked;
 - nb 8 the paired storage-claim check does not fail an honest agent over a store that leaked something else;
-- 012  (the captain's question) a write tool called again after its result was lost to a crash is recognised as a repeat.
+- 012  (the captain's question) a write tool called again after its result was lost to a crash is recognised as a repeat;
+- fp1  (found by round 5's first declared-final pass, not by the review) a security code said twice in one message, in
+       words and digits or typed twice: the two renderings joined into one six-digit run that was neither a code nor a
+       card. These fail on `8051dbd`; that "before" is in evidence/adversarial-before-code-said-twice/.
 """
 
 import argparse
@@ -61,6 +64,51 @@ REVIEW_KEEPS = [
     "the charge on 2026-11-01 for 1,299.00 and another for 15.99",
 ]
 
+# the first round-5 final pass: its unscripted customer's own line, then the same code said twice in other ways
+SAID_TWICE_LEAKS = [
+    "old card: 6011 1111 1111 1117\nsecurity code: three eight six (386)\nexpiry: 07/29\nplease just file the CloudNest dispute",
+    "security code 386 (three eight six)",
+    "my cvv: 3 8 6 (386)",
+    "security code is 386 [three eight six]",
+    "cvv three eight six = 386",
+    "cvv: three eight six/386",
+    "security code: three, eight, six (386)",
+    "security code - three eight six - 386",
+    "the code on the back: seven three seven (737)",
+    "card 6011 1111 1111 1117 cvv 386 386",
+    "cvc 386-386",
+    "sec code three eight six, in digits 386",
+    # found while writing the lines above: a code dictated one digit at a time with commas, said once
+    "security code: three, eight, six",
+    "cvv 3, 8, 6",
+    # found while checking the fix: an expiry typed with a space or a dot after its cue ("12.29" read as an amount, "12 29"
+    # as two numbers); on `8051dbd` the first of these was hidden only because the card match ran on through "exp" by chance
+    "5555 5555 5555 4444, exp 12 29, cvv 737",
+    "card 6011 1111 1111 1117 expiry 07 29",
+    "6011 1111 1111 1117 exp 07.29 cvv 386",
+    "6011111111111117 expires 07 2029 cvv 386",
+    "exp 07 29",
+    "6011 1111 1111 1117 expires 07 29",
+    "exp Jul 29",
+    # ... and a card match that ran on through "cvv" into a spaced code, leaving its last digit beside the restatement
+    "4111111111111111, cvv 1 8 1 = 181",
+]
+# a number restated in brackets that is not a code, and a last four said twice: unchanged before and after
+SAID_TWICE_KEEPS = [
+    "I was charged 386 (three payments) by CloudNest",
+    "room 204 (two oh four) at the hotel in Lisbon",
+    "flight 386 (three eight six) to Lisbon on November 30",
+    "my last four are 4427 (four four two seven) and ZIP 94107",
+    "order 5001 (2026) arrived late",
+    "I disputed charges 1, 2, 3 and 4 on the list",
+    "it was one, two, three weeks ago, I forget",
+    "I paid 12.29 for parking and 7.29 for coffee",
+    "my travel notice expiration should be 12 10",
+    "exp. delivery 11 24, order 2654861",
+    "my trial exp Jul 29, please cancel it before then",
+    "the parcel arrives Jul 29",
+]
+
 
 def _secrets_left(stored: list[str]) -> list[str]:
     return store_audit.secrets_left("\n".join(stored), {"pans": PANS, "codes": ["737", "7891", "7293", "1234"], "expiries": ["12/29", "08/27"]})
@@ -75,6 +123,19 @@ def check_masker_leaks() -> list[tuple[str, bool, str]]:
     for message in REVIEW_KEEPS:
         stored = masking.mask_conversation([message])
         rows.append((f"2.1 kept: {message!r}", stored == [masking.normalize(message)], json.dumps(stored)))
+    return rows
+
+
+def check_code_said_twice() -> list[tuple[str, bool, str]]:
+    secrets = {"pans": ["6011111111111117", "5555555555554444", "4111111111111111"], "codes": ["386", "737", "181"], "expiries": ["07/29", "12/29"]}
+    rows = []
+    for message in SAID_TWICE_LEAKS:
+        stored = masking.mask_conversation([message])
+        left = store_audit.secrets_left("\n".join(stored), secrets)
+        rows.append((f"fp1 masked: {message!r}", not left, json.dumps({"stored": stored, "left": left})))
+    for message in SAID_TWICE_KEEPS:
+        stored = masking.mask_conversation([message])
+        rows.append((f"fp1 kept: {message!r}", stored == [masking.normalize(message)], json.dumps(stored)))
     return rows
 
 
@@ -274,7 +335,8 @@ def main() -> int:
     rows: list[tuple[str, bool, str]] = []
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = Path(tmp_name)
-        for fn in (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing):
+        for fn in (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
+                   check_code_said_twice):
             rows += fn()
         for fn in (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names, check_repeats_after_lost_result):
             try:
