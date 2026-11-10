@@ -48,6 +48,7 @@ SCENARIO = [
         "turns": [
             "Hi, it's Priya (card ending 4427, billing ZIP 94107). I'm in Lisbon until November 30, so you'll see euro "
             "charges. Also, please contact me by email from now on, not text.",
+            "{otp}",  # round 5: the channel change needs the one-time code the bank just sent (the customer's phone shows it)
             "Can you show me my StreamMax charges?",
             "Please dispute the later one. I'd cancelled the subscription before it was charged.",
             "Quick one: what is a chargeback, in two sentences?",
@@ -58,7 +59,7 @@ SCENARIO = [
                   "fact_equals", user="priya", key="travel_notice", field="valid_until", value="2026-11-30"),
             check("semantic", "contact channel written as a user-scoped fact (email)",
                   "fact_equals", user="priya", key="contact_channel", field="value", value="email"),
-            check("external", "transactions come from an exact ledger lookup", "tool_called", turn=1, tool="find_transactions"),
+            check("external", "transactions come from an exact ledger lookup", "tool_called", turn=2, tool="find_transactions"),
             check("working", "session scope: identity_verified_at persists with this session's state",
                   "session_key_persisted", key="identity_verified_at"),
             check("working", "temp scope: the per-invocation clock (ADK temp:now, LangGraph TurnContext.now) is never persisted",
@@ -67,12 +68,12 @@ SCENARIO = [
                   "tool_called", turn=None, tool="file_dispute", args={"transaction_id": "T-1002"}),
             check("prospective", "filing wrote a scheduler record: case follow-up due 2026-11-19, no approval needed",
                   "followup_exists", user="priya", action="case_status_followup", due="2026-11-19", approval="none"),
-            check("parametric", "a general concept is answered from the weights, with no tool call", "no_tools", turn=3),
-            check("parametric", "...and it is actually explained (dispute, reversal, refund)", "reply_mentions", turn=3,
+            check("parametric", "a general concept is answered from the weights, with no tool call", "no_tools", turn=4),
+            check("parametric", "...and it is actually explained (dispute, reversal, refund)", "reply_mentions", turn=4,
                   any_of=["dispute", "revers", "refund"]),
-            check("external", "the Kestrel fee quoted at turn 4 was retrieved from policy in this session, not recalled from the weights",
-                  "tool_result_contains", turn=[0, 1, 2, 3, 4], tool="search_policy", text="1.25%"),
-            check("external", "the retrieved fee (1.25%) is what the customer is told", "reply_mentions", turn=4, any_of=["1.25"]),
+            check("external", "the Kestrel fee quoted at turn 5 was retrieved from policy in this session, not recalled from the weights",
+                  "tool_result_contains", turn=[0, 1, 2, 3, 4, 5], tool="search_policy", text="1.25%"),
+            check("external", "the retrieved fee (1.25%) is what the customer is told", "reply_mentions", turn=5, any_of=["1.25"]),
             check("episodic", "session end wrote a reflection episode about the StreamMax dispute",
                   "episode_mentions", user="priya", text="StreamMax"),
         ],
@@ -85,6 +86,7 @@ SCENARIO = [
             "How will you contact me with updates?",
             "Actually, please switch that to text messages from now on.",
             "Sure, card ending 4427, ZIP 94107.",
+            "{otp}",  # round 4 (OTP): a channel change also needs the one-time code the bank texts to the number on the account
         ],
         "checks": [
             check("episodic", "a new session recalls the last one on demand via load_memory", "tool_called", turn=0, tool="load_memory"),
@@ -96,6 +98,8 @@ SCENARIO = [
             check("semantic", "...and the answer is the stored channel (email)", "reply_mentions", turn=2, any_of=["email"]),
             check("working", "identity verification is session-scoped: this new session verifies again",
                   "tool_called", turn=None, tool="verify_identity"),
+            check("working", "a channel change needs the one-time code as well: it is sent and confirmed",
+                  "tool_called", turn=None, tool="confirm_verification_code"),
             check("semantic", "the change overwrites the old value instead of joining it (replaced: email)",
                   "tool_result_contains", turn=None, tool="remember_customer_fact", text='"replaced": "email"'),
             check("semantic", "exactly one contact channel remains, and it is sms",
@@ -456,6 +460,9 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
     if kind == "outbox_count":
         messages = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"]]
         return len(messages) == spec["count"], f"{len(messages)} messages"
+    if kind == "outbox_purpose_count":  # round 5: the outbox also carries one-time codes and delivery-failure notices
+        messages = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and m.get("purpose", "follow_up") == spec["purpose"]]
+        return len(messages) == spec["count"], f"{len(messages)} {spec['purpose']} messages: {[m['body'][:60] for m in messages]}"
     if kind == "promoted_from_users":
         promoted = result.get("promoted")
         ok = bool(promoted) and promoted["resolution_code"] == spec["code"] and sorted(promoted["users"]) == spec["users"]
@@ -539,9 +546,31 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
         reply = " ".join(t["reply"] for t in _turns(result, spec["turn"]))
         return not re.search(spec["pattern"], reply), reply[:300]
     if kind == "storage_claim_consistent":
-        claimed = (result.get("judgements", {}).get(spec["id"]) or {}).get("verdict") == "pass"
+        # the judge says which items (card number, security code, expiry) the agent claimed removed or not stored; the
+        # store scan says which items are in the stores; the claim is false only where the two meet. A judge verdict with
+        # no item list (the round-4 wording) counts as a claim about every item, the strict reading
+        verdict = result.get("judgements", {}).get(spec["id"]) or {}
+        claimed = verdict.get("verdict") == "pass"
+        items = verdict.get("items") if claimed else []
+        claimed_items = set(items) if items is not None else {"card number", "security code", "expiry"} if claimed else set()
         leaked = result.get("card_data_hits") or {}
-        return not (claimed and leaked), json.dumps({"agent_claimed_not_stored": claimed, "card_data_in_stores": leaked})
+        leaked_items = {"card number" if k.startswith("card number") else "security code" if k.startswith("security code") else "expiry"
+                        for k in leaked}
+        false_claims = sorted(claimed_items & leaked_items)
+        return not false_claims, json.dumps({"agent_claimed_not_stored": sorted(claimed_items), "card_data_in_stores": leaked,
+                                             "false_claims": false_claims})
+    if kind == "case_evidence_once":  # round 5: a note attached once, not twice, after a lost tool result
+        cases = [k for k in snapshot["cases"] if k["user_id"] == spec["user"]]
+        lines = [line for k in cases for line in (k.get("evidence_note") or "").split("\n") if spec["text"] in line]
+        return len(lines) == 1, json.dumps(lines) if lines else "the note is on no case"
+    if kind == "cli_stdout_matches":  # a CLI step records what the customer saw, not turn objects
+        out = result.get("cli_stdout_tail", "")
+        return bool(re.search(spec["pattern"], out)), out[-300:]
+    if kind == "cli_exit_code":
+        return result.get("cli_exit_code") == spec["code"], f"exit code {result.get('cli_exit_code')}; stderr: {result.get('cli_stderr_tail', '')[-200:]}"
+    if kind == "case_count":
+        cases = [k for k in snapshot["cases"] if k["user_id"] == spec["user"]]
+        return len(cases) == spec["count"], json.dumps([{x: k[x] for x in ("case_id", "txn_id", "status")} for k in cases]) or "no cases"
     if kind == "case_evidence_contains":
         cases = [k for k in snapshot["cases"] if k["user_id"] == spec["user"]]
         return any(spec["text"] in (k.get("evidence_note") or "") for k in cases), json.dumps([(k["case_id"], k.get("evidence_note")) for k in cases])
@@ -598,6 +627,25 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
                or (parse_instant(f["trigger_at"]) - now).days > spec["max_days"]]
         days = [f["trigger_at"][:10] for f in pending]
         return not bad and len(days) == len(set(days)), json.dumps({"pending": days, "out_of_range": bad})
+    # ---- round 4, OTP step-up
+    if kind == "attempt_rows":
+        rows = [r for r in snapshot.get("verification_attempts", []) if r["user_id"] == spec["user"] and r["succeeded"] == spec["succeeded"]]
+        return "verification_attempts" in snapshot and len(rows) == spec["count"], \
+            f"{len(rows)} attempt rows with succeeded={spec['succeeded']}" if "verification_attempts" in snapshot else "not in snapshot"
+    if kind == "challenge_count":
+        rows = [c for c in snapshot.get("challenges", []) if c["user_id"] == spec["user"] and c["status"] == spec["status"]]
+        all_rows = [(c["status"], c["sent_at"][:16]) for c in snapshot.get("challenges", []) if c["user_id"] == spec["user"]]
+        return "challenges" in snapshot and len(rows) == spec["count"], (f"challenges: {all_rows}" if "challenges" in snapshot else "not in snapshot")
+    if kind == "otp_never_in_model_context":
+        leaks = result.get("otp_leaks", {}).get("model_context")
+        return leaks == [], f"codes seen by the model (tool results or replies): {leaks if leaks is not None else 'not scanned'}"
+    if kind == "transcript_omits_codes":
+        leaks = result.get("otp_leaks", {}).get("transcripts")
+        return leaks == [], f"store files holding a sent code: {leaks if leaks is not None else 'not scanned'}"
+    if kind == "outbox_latest_field":
+        rows = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and m.get("purpose") == spec.get("purpose", "one_time_code")]
+        value = rows[-1].get(spec["field"]) if rows else None
+        return bool(rows) and value == spec["equals"], f"latest {spec.get('purpose', 'one_time_code')} message {spec['field']} = {value!r}"
     raise ValueError(f"unknown check kind {kind}")
 
 

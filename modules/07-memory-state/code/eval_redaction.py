@@ -313,6 +313,57 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
         cases.append({"messages": [rng.choice(["my card is [REDACTED CARD NUMBER]", "[REDACTED CARD NUMBER] exp [REDACTED EXPIRY]"]),
                                    rng.choice([f"for verification, card ending {last4} and zip {zip_code}", f"my last four are {last4}, ZIP {zip_code}"])],
                       "expect": "keep", "note": "after card message", "pans": [], "codes": [], "expiries": []})
+    # ---- round 5: the families the round-4 review found (appended, so every earlier case of a seed is unchanged)
+    for _ in range(per_family):  # a 3-4 digit token before the number, joined to it by separators only
+        pan = _random_pan(rng)
+        code, code_text = _code(rng, amex=len(pan) == 15)
+        expiry, _ = _expiry(rng)
+        lead = rng.choice([f"CVV: {code}", f"cvv {code}", f"security code {code};", f"PIN {rng.randint(1000, 9999)};",
+                           f"PIN {rng.randint(1000, 9999)}", f"exp {expiry.replace('/', '')}:", f"{expiry.replace('/', '')}"])
+        number = rng.choice([" ", "-"]).join(_groups(pan, rng))
+        codes = [code] if lead.lower().startswith(("cvv", "security")) else []
+        cases.append({"messages": [f"{rng.choice(['', 'here: ', 'In case you need it, '])}{lead} {number}{rng.choice(['', ', exp 12/29', '.'])}"],
+                      "expect": "mask", "note": "leading token in the run", "pans": [pan], "codes": codes, "expiries": []})
+    for _ in range(per_family):  # an order or booking label before the number, in the same run
+        pan = _random_pan(rng)
+        label = rng.choice(["order no. {o};", "Order {o},", "order {o}", "booking {o};", "Order #{o}", "reference {o}:", "ticket {o},"])
+        order = rng.choice([f"{rng.randint(10000, 99999)}", f"{rng.randint(1000000, 9999999)}", f"{rng.randint(100000, 999999)}"])
+        number = rng.choice([" ", "-"]).join(_groups(pan, rng))
+        cases.append({"messages": [f"{label.format(o=order)} {number}{rng.choice([' was declined', ' is the card I used', ''])}"],
+                      "expect": "mask", "note": "order label before the number", "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # a ZIP phrase in the message that opens a split number
+        pan = _random_pan(rng)
+        groups = _groups(pan, rng)
+        if len(groups) < 2:
+            groups = [pan[:-4], pan[-4:]]
+        zip_code = f"{rng.randint(10000, 99999)}"
+        opening = " ".join(groups[:-1]) + rng.choice([f" and my zip is {zip_code}", f", zip {zip_code}", f" (ZIP {zip_code})"])
+        cases.append({"messages": [opening, groups[-1]], "expect": "mask", "note": "zip in the opening message of a split", "pans": [pan],
+                      "codes": [], "expiries": []})
+    for _ in range(per_family):  # the last four first, then the rest of the number
+        pan = _random_pan(rng)
+        if len(pan) != 16:
+            pan = rng.choice([p for p in _TEST_PANS if len(p) == 16])
+        rest = " ".join(pan[i:i + 4] for i in range(0, 12, 4))
+        first = rng.choice([f"card ending {pan[-4:]}, zip {rng.randint(10000, 99999)}", f"the last four are {pan[-4:]}", f"ending in {pan[-4:]}"])
+        second = rng.choice([f"and the first twelve: {rest}", f"the rest is {rest}", f"the first 12 are {rest}"])
+        cases.append({"messages": [first, second] if rng.random() < 0.7 else [f"{first}, {second}"], "expect": "mask",
+                      "note": "last four given, then the rest", "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # the exemption's cost, measured: answer-sized pieces (<= 5 digits per message), one message a step-up answer
+        pan = rng.choice([p for p in _TEST_PANS if len(p) == 16])
+        pieces = [pan[i:i + 4] for i in range(0, 16, 4)]
+        at = rng.randrange(4)
+        zip_code = f"{rng.randint(10000, 99999)}"
+        messages = [f"{p} and my zip is {zip_code}" if i == at else rng.choice(["{}", "then {}", "next {}", "{} ..."]).format(p) for i, p in enumerate(pieces)]
+        cases.append({"messages": messages, "expect": "mask", "note": "answer-sized pieces with a zip phrase (the exemption; listed miss)",
+                      "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # keep: references and tracking numbers after a label, not cards
+        tracking = f"9400 {rng.randint(1000, 9999)} {rng.randint(1000, 9999)} {rng.randint(1000, 9999)} {rng.randint(1000, 9999)} {rng.randint(10, 99)}"
+        text = rng.choice([f"order {rng.randint(1000000, 9999999)} arrived broken", f"tracking {tracking}", f"booking ref QX{rng.randint(1, 9)}-{rng.randint(10000, 99999)}",
+                           f"order no. {rng.randint(10000, 99999)}; the invoice was {rng.randint(1000, 9999)} {rng.randint(1000, 9999)}",
+                           f"ticket {rng.randint(100000, 999999)}, paid {rng.randint(10, 999)}.{rng.randint(10, 99)}",
+                           f"my Amazon order 1{rng.randint(10, 99)}-{rng.randint(1000000, 9999999)}-{rng.randint(1000000, 9999999)}"])
+        cases.append({"messages": [text], "expect": "keep", "note": "reference after a label", "pans": [], "codes": [], "expiries": []})
     return cases
 
 
