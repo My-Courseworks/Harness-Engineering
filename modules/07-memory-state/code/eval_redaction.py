@@ -6,6 +6,7 @@
     python eval_redaction.py fuzz              # round 3's seeded fuzzer (one card number, single-line separators)
     python eval_redaction.py fuzz-v2           # round 4's seeded fuzzer: every family the round-3 review found, many cards
     python eval_redaction.py fuzz-v2-fresh     # the same grammar, three seeds fixed before the final pass and run only then
+    python eval_redaction.py fuzz-v2-fresh3    # round 5: three more seeds, fixed before its second final pass and run only after
     python eval_redaction.py fuzz-independent  # a fuzzer written by a separate agent from its own grammar (round 4)
 
 No model calls. A case is one customer's consecutive messages, scored as the conversation would be STORED: each
@@ -425,6 +426,10 @@ CORPORA = {
     "fuzz-v2-fresh": lambda: [case for seed in (7001, 7002, 7003) for case in fuzz_v2(seed=seed, per_family=100)],
     # declared after the first final pass spent the seeds above and the independent fuzzer's default seed; run only in the second
     "fuzz-v2-fresh2": lambda: [case for seed in (8001, 8002, 8003) for case in fuzz_v2(seed=seed, per_family=100)],
+    # declared after round 5's first final pass, before its masker fix was evaluated on them: the families added this round
+    # were tuned on seed 11 and checked on the two sets above, so those are no longer fresh for them. Run only after the
+    # second pass is declared.
+    "fuzz-v2-fresh3": lambda: [case for seed in (9001, 9002, 9003) for case in fuzz_v2(seed=seed, per_family=100)],
     "fuzz-independent-fresh": lambda: [case for seed in (41, 42, 43) for case in __import__("cardcare.heldout_fuzz_r4", fromlist=["generate"]).generate(seed=seed)],
     "fuzz-independent": _independent,
 }
