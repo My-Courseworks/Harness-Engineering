@@ -58,7 +58,7 @@ async def main_async(args) -> dict:
     if args.command == "retract":
         retracted = procedures.load_registry(args.var_dir)["active"]
         _, episodes = await _episodes(args.framework, args.var_dir)
-        procedures.retract(args.var_dir, args.to, ", ".join(args.by or []), args.reason, now)
+        procedures.retract(args.var_dir, args.to, args.by or [], args.reason, now)
         return {"active": args.to, "review_these_conversations": procedures.conversations_under_version(episodes, retracted)}
     bank_db, scheduler_db = args.var_dir / "bank.db", args.var_dir / "scheduler.db"
     if args.command == "held-messages":

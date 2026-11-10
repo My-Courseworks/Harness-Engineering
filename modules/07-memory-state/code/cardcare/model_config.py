@@ -8,9 +8,14 @@ client at construction and never placed in state, memory, or a transcript.
 import os
 from pathlib import Path
 
+import litellm
 from dotenv import dotenv_values
 
 DEEPSEEK_MODEL = "deepseek-v4-flash"
+# Transport-level retries only (a 5xx or a dropped connection is retried twice, with litellm's backoff). They do not
+# change sampling: a reply that arrives is never re-asked for. Both agents' model clients and the judge use them.
+TRANSPORT_RETRIES = 2
+litellm.num_retries = TRANSPORT_RETRIES
 # The eval judge is a different, larger model than the agent, so the agent is not graded by itself.
 JUDGE_MODEL = "deepseek-v4-pro"
 JUDGE_SAMPLES = 3

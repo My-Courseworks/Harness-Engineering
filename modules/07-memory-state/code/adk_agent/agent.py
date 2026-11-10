@@ -50,7 +50,7 @@ from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService, InMemorySessionService
-from google.adk.tools import ToolContext, load_memory
+from google.adk.tools import FunctionTool, ToolContext, load_memory
 from google.genai import types
 
 from cardcare import desk, privacy, procedures, scheduler, world
@@ -59,6 +59,7 @@ from cardcare.episodes import build_episode, case_outcomes, group_by_customer_tu
 from cardcare.masking import MASK_TOKEN, mask_card_numbers, mask_customer_message, mask_customer_text, removed_fragments, scrub_fragments
 from cardcare.memory_policy import (
     DEFAULT_CHANNEL,
+    VERIFICATION_TTL_MINUTES,
     FACT_KEYS,
     FACT_KEYS_NEEDING_VERIFICATION,
     MAX_CUSTOMER_MESSAGE_CHARS,
@@ -70,7 +71,9 @@ from cardcare.memory_policy import (
     build_fact,
     episode_is_expired,
     fact_is_expired,
+    possession_gate_error,
     render_profile,
+    render_stepup_status,
     session_is_idle,
     transcript_is_expired,
     typed_in_session,
@@ -80,7 +83,7 @@ from cardcare.model_config import DEEPSEEK_MODEL, deepseek_api_key
 from cardcare.retrieval import embed_texts, search_policy as search_policy_documents, top_matches
 from cardcare.sessions import LIVE, SessionKind, followup_kind
 from cardcare.tool_args import (
-    CardLast4, CaseId, CustomerMessage, DisputeReason, EvidenceNote, FactKey, FactValue, FollowupId, MalformedTool, MemoryQuery,
+    CardLast4, CaseId, CustomerMessage, DisputeReason, EnteredCode, EvidenceNote, FactKey, FactValue, FollowupId, MalformedTool, MemoryQuery,
     Merchant, NewEvidence, OptionalCaseId, PolicyQuestion, PostalCode, RemindAt, ReminderNote, RemindOn, TimeZone, TransactionId,
     ValidUntil,
 )
@@ -281,8 +284,12 @@ def _customer_texts(events: list[Event]) -> list[str]:
 # everything), so they need the customer there to ask for it. An unattended session never gets them: it reads text
 # other people wrote (back-office case notes, the customer's own reminder note), and an instruction hidden in that
 # text ("call request_memory_erasure") must find nothing to call.
+# send_verification_code and confirm_verification_code are live-only too: they text a one-time code to the number the bank
+# holds and then WAIT for the customer to type it, and nobody is there to type it in a scheduler session.
 LIVE_ONLY_TOOLS = ("verify_identity", "file_dispute", "add_case_evidence", "remember_customer_fact", "forget_customer_fact",
-                   "schedule_reminder", "cancel_reminder", "request_memory_erasure")
+                   "schedule_reminder", "cancel_reminder", "request_memory_erasure", "send_verification_code", "confirm_verification_code")
+CONFIRMATION_CALL = "adk_request_confirmation"  # ADK's own function call that pauses a turn for the customer's input
+ONE_TIME_CODE_MASK = "[REDACTED ONE-TIME CODE]"
 # Tools only an UNATTENDED session gets: one the scheduler starts when a follow-up or reminder falls due, with no
 # customer present. notify_customer is how that session reaches the customer (one message per follow-up). A live
 # conversation never gets it, because there the agent simply replies in the chat. A session is unattended only when
@@ -311,7 +318,9 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
             return {"verified": False, "error": "verify_identity accepts only the last 4 digits and ZIP the customer typed in this "
                                                 "conversation in the last 15 minutes; ask the customer for them (nothing was counted "
                                                 "against the account)"}
-        attempt = world.attempt_verification(h.bank_db, tool_context.user_id, card_last4, postal_code, now, MAX_VERIFICATION_ATTEMPTS)
+        attempt = world.attempt_verification(h.bank_db, tool_context.user_id, card_last4, postal_code, now, MAX_VERIFICATION_ATTEMPTS,
+                                             session_id=tool_context.session.id,
+                                             repeat_of_lost_call=world.lost_result_is_recent(tool_context.state.get("lost_result_at"), now))
         if attempt["outcome"] == "locked":
             return {"verified": False, "error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after "
                                                 f"{MAX_VERIFICATION_ATTEMPTS} failed attempts; the customer must call Kestrel"}
@@ -333,10 +342,19 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
         record = privacy.session_record(h.privacy_db, tool_context.user_id, tool_context.session.id)
         return record["generation"] if record else -1
 
+    def _lock_error(tool_context: ToolContext) -> str | None:
+        """The account's lock, asked at every action that needs a verification: a verification obtained in the same model
+        response as the lock (the right guess first in a parallel batch) is worth nothing once the lock is on."""
+        if world.verification_locked(h.bank_db, tool_context.user_id, tool_context.state["temp:now"]):
+            return (f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after {MAX_VERIFICATION_ATTEMPTS} failed "
+                    "attempts: nothing that needs verification can be done, in any conversation, until then; the customer must call Kestrel")
+        return None
+
     def file_dispute(transaction_id: TransactionId, reason: DisputeReason, tool_context: ToolContext, evidence_note: EvidenceNote = None) -> dict:
         """File a dispute for one transaction. Requires a verify_identity in the last 15 minutes. Schedules the case follow-up automatically, and
         the result says where it will reach the customer."""
-        error = verification_gate_error(tool_context.state.get("identity_verified_at"), tool_context.state["temp:now"], "filing a dispute")
+        error = _lock_error(tool_context) or verification_gate_error(tool_context.state.get("identity_verified_at"), tool_context.state["temp:now"],
+                                                                     "filing a dispute")
         if error:
             return {"error": error}
         channel, chosen = _channel(tool_context)
@@ -361,8 +379,10 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
     def remember_customer_fact(key: FactKey, value: FactValue, tool_context: ToolContext, valid_until: ValidUntil = None) -> dict:
         """Store a fact the customer stated: their contact channel, or a travel notice. Replaces any earlier value of
         that fact. Changing the contact channel needs a verify_identity in the last 15 minutes."""
-        if key in FACT_KEYS_NEEDING_VERIFICATION:
-            error = verification_gate_error(tool_context.state.get("identity_verified_at"), tool_context.state["temp:now"], f"changing {key}")
+        if key in FACT_KEYS_NEEDING_VERIFICATION:  # knowledge (last four + ZIP) and possession (the one-time code), both fresh
+            error = _lock_error(tool_context) or possession_gate_error(tool_context.state.get("identity_verified_at"),
+                                                                       tool_context.state.get("possession_verified_at"),
+                                                                       tool_context.state["temp:now"], f"changing {key}")
             if error:
                 return {"error": error}
         try:
@@ -382,7 +402,9 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
         if key not in FACT_KEYS:
             return {"error": f"unknown fact {key}"}
         if key in FACT_KEYS_NEEDING_VERIFICATION:
-            error = verification_gate_error(tool_context.state.get("identity_verified_at"), tool_context.state["temp:now"], f"removing {key}")
+            error = _lock_error(tool_context) or possession_gate_error(tool_context.state.get("identity_verified_at"),
+                                                                       tool_context.state.get("possession_verified_at"),
+                                                                       tool_context.state["temp:now"], f"removing {key}")
             if error:
                 return {"error": error}
         had_value = bool(tool_context.state.get(f"user:{key}"))
@@ -426,9 +448,37 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
         return {"erased_now": f"{result['facts']} remembered facts, {result['episodes']} past-conversation summaries, "
                               f"{result['transcripts']} other conversation transcripts, {len(result['reminders_cancelled'])} reminders with "
                               "their notes",
-                "this_conversation": "its transcript is deleted when the conversation ends; nothing more can be stored for the "
-                                     "customer in it (a new conversation afterwards starts fresh)",
+                "this_conversation": "its transcript is deleted when the conversation ends, or once it has been idle for 30 minutes if "
+                                     "the customer just closes the chat; nothing more can be stored for the customer in it (a new "
+                                     "conversation afterwards starts fresh)",
                 "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"}
+
+    def send_verification_code(tool_context: ToolContext) -> dict:
+        """Send a one-time code to the mobile number or email the bank holds on this account, the second step before changing
+        or removing the contact channel. Needs a verify_identity in the last 15 minutes first. The result says where the code
+        went (never the code). Then call confirm_verification_code, which waits for the customer to type it."""
+        now = tool_context.state["temp:now"]
+        error = _lock_error(tool_context) or verification_gate_error(tool_context.state.get("identity_verified_at"), now, "sending a one-time code")
+        if error:
+            return {"error": error}
+        return world.issue_code(h.bank_db, tool_context.user_id, tool_context.session.id, now, MAX_VERIFICATION_ATTEMPTS)
+
+    def confirm_verification_code(tool_context: ToolContext, entered: EnteredCode = None) -> dict:
+        """Check the one-time code that was just sent. If the customer already typed it in their latest message, pass it as
+        `entered`. Otherwise call it with no argument: the conversation pauses until the customer's next message, which is
+        taken as their entry. Never ask the customer to read the code to you and never repeat it."""
+        now = tool_context.state["temp:now"]
+        confirmation = tool_context.tool_confirmation
+        typed = entered or str(((confirmation.payload if confirmation else None) or {}).get("entered", ""))
+        proved = world.possession_proved_at(h.bank_db, tool_context.user_id, tool_context.session.id, now)
+        if proved:  # this conversation already entered the right code (its result was lost to a crash): the bank record is the result
+            tool_context.state["possession_verified_at"] = proved
+            is_code = typed.strip().isdigit() and len(typed.strip()) == 6
+            return {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK if is_code else typed,
+                    "note": "the code was entered correctly before the process stopped; this result is rebuilt from the bank's record of it, so carry out the change or removal the customer asked for before the code was sent" + ("" if is_code else "; the customer's latest message was not a code: answer it too")}
+        attempt = world.attempt_code(h.bank_db, tool_context.user_id, typed, now, MAX_VERIFICATION_ATTEMPTS, session_id=tool_context.session.id,
+                                     repeat_of_lost_call=world.lost_result_is_recent(tool_context.state.get("lost_result_at"), now))
+        return _code_result(tool_context.state, attempt, typed, now)
 
     def notify_customer(message: CustomerMessage, tool_context: ToolContext) -> dict:
         """Send the customer one message on their contact channel. Only for scheduled follow-ups; one per follow-up."""
@@ -450,9 +500,46 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
 
     tools = [verify_identity, find_transactions, file_dispute, add_case_evidence, get_case_status, search_policy,
              remember_customer_fact, forget_customer_fact, schedule_reminder, list_my_followups, cancel_reminder,
-             request_memory_erasure, notify_customer]
+             request_memory_erasure, send_verification_code, confirm_verification_code, notify_customer]
     excluded = LIVE_ONLY_TOOLS if kind.unattended else UNATTENDED_ONLY_TOOLS
-    return [tool for tool in tools if tool.__name__ not in excluded]
+    # confirm_verification_code is ADK's confirmation flow: called without the code it pauses the turn (adk_request_confirmation)
+    # and the customer's next message resumes it with their entry as the payload, which the tool then checks (run_turn routes
+    # it); called with the code the customer already typed, it checks at once. No pause either when the bank already holds
+    # this conversation's proof (a code consumed just before a crash): the tool runs and returns the recorded result
+    def needs_the_customers_entry(tool_context: ToolContext, entered: str | None = None) -> bool:
+        return not entered and not world.possession_proved_at(h.bank_db, tool_context.user_id, tool_context.session.id,
+                                                              tool_context.state["temp:now"])
+
+    return [FunctionTool(tool, require_confirmation=needs_the_customers_entry) if tool.__name__ == "confirm_verification_code" else tool
+            for tool in tools if tool.__name__ not in excluded]
+
+
+def _tool_name(tool) -> str:
+    return getattr(tool, "__name__", None) or tool.name
+
+
+def _code_result(state, attempt: dict, entered: str, now: str) -> dict:
+    """What the model is told after a code entry; the code itself is never in it."""
+    outcome = attempt["outcome"]
+    if outcome == "matched":
+        state["possession_verified_at"] = now
+        return {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK,
+                "next": "the step-up is complete: carry out the change or removal the customer asked for before the code was sent, "
+                        "without asking them to repeat it"}
+    if outcome == "locked":
+        return {"verified": False, "error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after "
+                                            f"{MAX_VERIFICATION_ATTEMPTS} failed attempts; the customer must call Kestrel"}
+    if outcome == "mismatch":
+        return {"verified": False, "error": "that code is not right", "entries_left_for_this_code": attempt["entries_left"],
+                "customer_entered": ONE_TIME_CODE_MASK}
+    if outcome == "expired":
+        return {"verified": False, "error": "the code expired (5 minutes) and no new code has been sent; tell the customer and send a new one only if they ask (send_verification_code)",
+                "customer_entered": ONE_TIME_CODE_MASK if entered.strip().isdigit() else entered}
+    if outcome == "no_open_code":
+        return {"verified": False, "error": "no code is open for this customer; call send_verification_code first", "customer_entered": entered}
+    return {"verified": False, "customer_entered": entered,
+            "note": "the customer wrote this instead of a code: answer it; the code already sent stays valid for its 5 minutes, so call "
+                    "confirm_verification_code again when they are ready, without sending a new one"}
 
 
 # --------------------------------------------------------------------------- agent
@@ -464,7 +551,9 @@ def build_instruction(h: Harness) -> Callable[[ReadonlyContext], str]:
         now = ctx.state["temp:now"]
         facts = {key: ctx.state.get(f"user:{key}") for key in FACT_KEYS}
         profile = render_profile({key: fact for key, fact in facts.items() if fact}, now)
-        return procedures.render_system_prompt(text, version, profile, ctx.state["app:dispute_review_days"], now)
+        return procedures.render_system_prompt(text, version, profile, ctx.state["app:dispute_review_days"], now,
+                                               render_stepup_status(ctx.state.get("identity_verified_at"), ctx.state.get("possession_verified_at"), now,
+                                                                    world.open_code_status(h.bank_db, ctx.user_id, now)))
 
     return instruction
 
@@ -484,11 +573,14 @@ def _is_customer_turn(content: types.Content) -> bool:
 
 
 def window_working_memory(callback_context: CallbackContext, llm_request: LlmRequest) -> None:
-    """before_model_callback: re-send only the turns not yet reflected into long-term memory."""
+    """before_model_callback: re-send the turns not yet reflected into long-term memory, and never fewer than the last
+    WORKING_KEEP_TURNS customer turns (a conversation resumed after its end has every turn reflected; before round 5 the
+    model then saw none of them and, with a one-time code waiting, could not tell what the code had been sent for)."""
     reflected = callback_context.state.get("reflected_turns", 0)
     starts = [i for i, content in enumerate(llm_request.contents) if _is_customer_turn(content)]
-    if 0 < reflected < len(starts):
-        llm_request.contents = llm_request.contents[starts[reflected]:]
+    start = min(reflected, max(0, len(starts) - WORKING_KEEP_TURNS))
+    if 0 < start < len(starts):
+        llm_request.contents = llm_request.contents[starts[start]:]
 
 
 def mask_model_output(llm_response: LlmResponse) -> None:
@@ -522,7 +614,7 @@ def after_model(callback_context: CallbackContext, llm_response: LlmResponse) ->
 
 
 def build_agent(h: Harness, disabled_tools: tuple[str, ...] = (), kind: SessionKind = LIVE) -> Agent:
-    tools = [tool for tool in build_tools(h, kind) if tool.__name__ not in disabled_tools]
+    tools = [tool for tool in build_tools(h, kind) if _tool_name(tool) not in disabled_tools]
     if "load_memory" not in disabled_tools:
         tools.append(load_memory)
     tools.append(report_malformed_tool_call)
@@ -549,9 +641,12 @@ def _turn_record(events: list[Event], customer_text: str) -> dict:
                 tool_calls.append({"name": part.function_call.name, "args": dict(part.function_call.args or {}),
                                    "result": None, "id": part.function_call.id})
             elif part.function_response:
-                for call in tool_calls:
-                    if call["id"] == part.function_response.id:
-                        call["result"] = part.function_response.response
+                matched = [call for call in tool_calls if call["id"] == part.function_response.id]
+                for call in matched:
+                    call["result"] = part.function_response.response
+                if not matched and part.function_response.name != CONFIRMATION_CALL:
+                    # the result of a call made in an earlier turn (a paused confirm_verification_code resumed by this one)
+                    tool_calls.append({"name": part.function_response.name, "args": {}, "result": part.function_response.response, "id": None})
             elif part.text and not part.thought and event.author == AGENT_NAME:
                 reply.append(part.text)
     for call in tool_calls:
@@ -564,28 +659,79 @@ def _transcript_turns(events: list[Event]) -> list[dict]:
     for event in events:
         for part in (event.content.parts if event.content else None) or []:
             if part.function_call:
+                if part.function_call.name == CONFIRMATION_CALL:
+                    continue  # ADK's pause; the customer's entry is rendered from its response below
                 turns.append({"role": "tool", "text": f"called {part.function_call.name}({json.dumps(dict(part.function_call.args or {}))})"})
             elif part.function_response:
+                if part.function_response.name == CONFIRMATION_CALL:
+                    entered = ((part.function_response.response or {}).get("payload") or {}).get("entered")
+                    if entered is not None:
+                        turns.append({"role": "customer", "text": str(entered)})
+                    continue
                 turns.append({"role": "tool", "text": f"{part.function_response.name} -> {json.dumps(part.function_response.response, default=str)[:600]}"})
             elif part.text and not part.thought:
                 turns.append({"role": "customer" if event.author == "user" else "assistant", "text": part.text})
     return turns
 
 
-async def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str) -> int:
-    """A function call with no response (the process died mid-tool) would make every later model call fail; answer it."""
+def _paused_call_id(confirmation_call: types.FunctionCall) -> str | None:
+    """The id of the tool call an adk_request_confirmation call paused."""
+    return ((confirmation_call.args or {}).get("originalFunctionCall") or {}).get("id")
+
+
+def _pending_confirmation(session) -> types.FunctionCall | None:
+    """ADK's pause for the one-time code: the latest adk_request_confirmation call whose paused tool has not recorded
+    its result. Not yet answered is the ordinary wait. Answered with no tool result after the answer is a wait a crash
+    reopened: the Runner stores the customer's entry before it re-runs the tool, so a process that dies inside the tool
+    leaves the entry and no result, and the next message must resume the tool again (ADK's own request processor
+    treats a confirmation as consumed only once the tool's result follows the answer)."""
+    if not session:
+        return None
+    waiting: dict[str, types.FunctionCall] = {}
+    answered: set[str] = set()
+    for event in session.events:
+        for part in (event.content.parts if event.content else None) or []:
+            call, response = part.function_call, part.function_response
+            if call and call.name == CONFIRMATION_CALL:
+                waiting[call.id] = call
+            elif response and response.id in waiting:
+                answered.add(response.id)  # the customer's entry; the paused tool runs next
+            elif response:
+                for confirmation_id in [cid for cid in answered if cid in waiting and _paused_call_id(waiting[cid]) == response.id]:
+                    del waiting[confirmation_id]  # the paused tool's result, recorded after the entry: the wait is over
+    return list(waiting.values())[-1] if waiting else None
+
+
+LOST_RESULT = "the result of this call was lost: the process stopped after the call was made and before its result was recorded, so the call may or may not have taken effect. Every tool is safe to call again with the same arguments (a repeat is recognised and nothing happens twice): make the same call again, or check the current state with a read tool first (get_case_status, list_my_followups), and do not tell the customer anything happened unless the repeated call or the read confirms it"
+
+
+async def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str, now: str | None = None) -> int:
+    """A function call with no response (the process died mid-tool) would make every later model call fail; answer it.
+    Round 4 answered "this call was interrupted and did not run", a guess: the process may have died after the tool's
+    effect and before its result was recorded. Round 5 says the result was lost and that a repeat is safe, which is true
+    of every write tool (cardcare/world.py, desk.py: a repeat is recognised by a constraint, a key overwrite or the
+    guess itself). The repair also records when it said so (`lost_result_at`): only in the two minutes after that is
+    the same verification guess made again taken for the lost call repeated, not for a new attempt. The one-time-code
+    confirmation call is not a dangling call: it waits for the customer."""
     session = await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
     if not session:
         return 0
     answered = {p.function_response.id for e in session.events for p in ((e.content.parts if e.content else None) or []) if p.function_response}
     dangling = [p.function_call for e in session.events for p in ((e.content.parts if e.content else None) or [])
-                if p.function_call and p.function_call.id not in answered]
+                if p.function_call and p.function_call.id not in answered and p.function_call.name != CONFIRMATION_CALL]
+    # a confirm_verification_code whose code the bank recorded as entered correctly by this conversation (the process died
+    # after the code was consumed, before its result and, when the payload event was lost too, the customer's entry were
+    # recorded): answered from the record, and the wait for the entry closed with it, so the next message is a message
+    proved = world.possession_proved_at(h.bank_db, user_id, session_id, now) if now else None
     if dangling:
-        parts = [types.Part(function_response=types.FunctionResponse(id=call.id, name=call.name,
-                                                                     response={"error": "this call was interrupted and did not run"}))
+        matched = {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK, "note": "the code was entered correctly before the process stopped; this result is rebuilt from the bank's record of it, so carry out the change or removal the customer asked for before the code was sent"}
+        parts = [types.Part(function_response=types.FunctionResponse(
+            id=call.id, name=call.name,
+            response=matched if proved and call.name == "confirm_verification_code" else {"error": LOST_RESULT}))
                  for call in dangling]
         await h.session_service.append_event(session, Event(invocation_id=f"repair-{uuid.uuid4().hex[:8]}", author=AGENT_NAME,
-                                                            content=types.Content(role="user", parts=parts)))
+                                                            content=types.Content(role="user", parts=parts),
+                                                            actions=EventActions(state_delta={"lost_result_at": now} if now else {})))
     return len(dangling)
 
 
@@ -626,7 +772,10 @@ async def scrub_earlier_messages(h: Harness, user_id: str, session_id: str, repl
     with closing(sqlite3.connect(h.sessions_db, timeout=60)) as conn, conn:
         for event_id, data in conn.execute("SELECT id, event_data FROM events WHERE app_name = ? AND user_id = ? AND session_id = ?",
                                            (APP_NAME, user_id, session_id)).fetchall():
-            new = json.dumps(_map_strings(json.loads(data), fix)) if data else data
+            event = json.loads(data) if data else None
+            if isinstance(event, dict) and "content" in event:  # only the conversation's content; ids and timestamps are never touched
+                event["content"] = _map_strings(event["content"], fix)
+            new = json.dumps(event) if data else data
             if new != data:
                 conn.execute("UPDATE events SET event_data = ? WHERE id = ? AND app_name = ? AND user_id = ? AND session_id = ?",
                              (new, event_id, APP_NAME, user_id, session_id))
@@ -678,7 +827,10 @@ async def _run_turn(h, user_id, session_id, text, now, disabled_tools, kind, ser
         await finish_requested_erasures(h, now, user_id=user_id, keep=session_id)
         await retire_expired_session(h, user_id, session_id, now)
         privacy.register_session(h.privacy_db, user_id, session_id, kind.label, now)
-        await repair_interrupted_tool_calls(h, user_id, session_id)
+        await repair_interrupted_tool_calls(h, user_id, session_id, now)
+        desk.ensure_case_followups(h.bank_db, h.scheduler_db, now, APP_SETTINGS["app:dispute_review_days"],
+                                   APP_SETTINGS["app:large_dispute_threshold_cents"], user_id=user_id,
+                                   generation_of=lambda uid: privacy.current_generation(h.privacy_db, uid))
         service = h.session_service
     else:
         service = service or await _ephemeral_session(h, user_id, session_id, now)
@@ -699,27 +851,82 @@ async def _run_turn(h, user_id, session_id, text, now, disabled_tools, kind, ser
             await scrub_earlier_messages(h, user_id, sid, replacements)
     agent = build_agent(h, disabled_tools, kind)
     runner = Runner(app_name=APP_NAME, agent=agent, session_service=service, memory_service=h.memory_service, auto_create_session=True)
-    message = types.Content(role="user", parts=[types.Part(text=sent)])
+    pending = _pending_confirmation(session) if kind.persist else None
+    if pending:  # the agent is waiting for the one-time code: this message is the customer's entry, and it resumes the paused tool
+        message = types.Content(role="user", parts=[types.Part(function_response=types.FunctionResponse(
+            id=pending.id, name=CONFIRMATION_CALL, response={"confirmed": True, "payload": {"entered": sent}}))])
+    else:
+        message = types.Content(role="user", parts=[types.Part(text=sent)])
     delta = {"temp:now": now, "last_active_at": now,
              "turn_times": [*((session.state.get("turn_times") or []) if session else []), now][-WORKING_WINDOW_TURNS * 3:]}
     if not (session and session.state.get("first_active_at")):
         delta["first_active_at"] = now
+    if kind.persist and not (session and session.state.get("possession_verified_at")):
+        proved = world.possession_proved_at(h.bank_db, user_id, session_id, now)  # the bank's record rebuilds a copy a crash lost
+        if proved:
+            delta["possession_verified_at"] = proved
     events = []
     try:
         async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=message, state_delta=delta):
             events.append(event)
     except Exception as exc:
-        if kind.persist:
-            await repair_interrupted_tool_calls(h, user_id, session_id)
         record = _turn_record(events, sent)
+        if kind.persist:
+            await repair_interrupted_tool_calls(h, user_id, session_id, now)
+            record = await without_one_time_codes(h, user_id, session_id, sent, record)  # a failed turn keeps no code either
         return {**record, "error": f"{type(exc).__name__}: {exc}", "tools_offered": _tool_names(agent)}
     if kind.persist:
         await _undo_stale_fact_writes(h, user_id, session_id, events)
-    return {**_turn_record(events, sent), "tools_offered": _tool_names(agent)}
+    record = _turn_record(events, sent)
+    if not record["reply"].strip() and kind.persist and _pending_confirmation(
+            await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)):
+        record["reply"] = waiting_for_code_line(h.bank_db, user_id, now)  # the model paused without a word: the bank record speaks
+    if kind.persist:
+        record = await without_one_time_codes(h, user_id, session_id, sent, record)
+    return {**record, "tools_offered": _tool_names(agent)}
+
+
+async def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent: str, record: dict) -> dict:
+    """Redact one-time codes from the stored session and return the turn record without them. A code the tool took: every
+    6-digit run in the message goes. A code no tool took (typed when nothing was pending, or left raw by a crash or a
+    failed turn): the runs that are one of the bank's codes for this customer, by salted hash. Runs at the end of every
+    turn, failed ones included, so a code the bank issued is never kept in a transcript."""
+    taken = any(call["name"] == "confirm_verification_code" and (call.get("result") or {}).get("customer_entered") == ONE_TIME_CODE_MASK
+                for call in record["tool_calls"])
+    codes = set(re.findall(r"(?<!\d)\d{6}(?!\d)", sent)) if taken else set()
+    codes |= set(world.codes_matching(h.bank_db, user_id, await _session_text(h, user_id, session_id)))
+    if not codes:
+        return record
+    await scrub_earlier_messages(h, user_id, session_id, {code: ONE_TIME_CODE_MASK for code in codes})
+    calls = [{**call, "args": {k: (_replace_codes(v, codes) if isinstance(v, str) else v) for k, v in call["args"].items()}}
+             for call in record["tool_calls"]]
+    return {**record, "customer": _replace_codes(sent, codes), "tool_calls": calls}
+
+
+async def _session_text(h: Harness, user_id: str, session_id: str) -> str:
+    """Every string the session's events hold (texts, tool arguments, tool results, confirmation payloads), for the
+    hash check of one-time codes."""
+    session = await h.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    return json.dumps([e.content.model_dump(mode="json") for e in (session.events if session else []) if e.content], default=str)
+
+
+def waiting_for_code_line(bank_db: Path, user_id: str, now: str) -> str:
+    """What the customer reads when the turn paused for the code and the model wrote nothing: composed from the bank's
+    record of the code it just sent, never from the model."""
+    code = world.open_code_status(bank_db, user_id, now)
+    where = f" by {code['sent_to']}" if code else ""
+    return (f"A one-time code has been sent{where}; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it "
+            "arrives, and I will finish your request.")
+
+
+def _replace_codes(text: str, codes: set[str]) -> str:
+    for code in codes:
+        text = text.replace(code, ONE_TIME_CODE_MASK)
+    return text
 
 
 def _tool_names(agent: Agent) -> list[str]:
-    return sorted(getattr(tool, "__name__", None) or tool.name for tool in agent.tools)
+    return sorted(_tool_name(tool) for tool in agent.tools)
 
 
 async def complete_text(prompt: str) -> str:
@@ -743,6 +950,8 @@ async def reflect_turns(h: Harness, user_id: str, session_id: str, now: str, upt
     if not turns:
         return None
     reflection = parse_reflection(await complete_text(reflection_prompt(turns)), user_id, own_case_ids(h.bank_db, user_id))
+    if reflection is None:  # nothing the model wrote: no episode, and the turns stay unreflected for the next opportunity
+        return None
     sequence = session.state.get("episodes_written", 0) + 1
     episode = build_episode(user_id, session_id, sequence, now, reflection, case_outcomes(h.bank_db, user_id, turns),
                             procedures.active_procedure(h.var_dir)[0], customer_present=not kind.unattended)
@@ -785,8 +994,9 @@ async def end_session(h: Harness, user_id: str, session_id: str, now: str, kind:
 async def finish_requested_erasures(h: Harness, now: str, user_id: str | None = None, keep: str | None = None,
                                     only_session: str | None = None, idle_only: bool = False) -> list[str]:
     """Delete the transcript an erasure request was made in: at that chat's end, at the customer's next turn in another
-    chat, or at the next maintenance run, whichever comes first (a closed tab never ends). If the chat goes on after
-    that, it stays stale: still nothing is stored, and what it adds is deleted when it ends."""
+    chat, or when maintenance finds it idle (`idle_only`: 30 minutes without a turn, a closed tab), whichever comes
+    first. A customer who asks to be erased and keeps typing keeps their open conversation until it ends. If the chat
+    goes on after that, it stays stale: still nothing is stored, and what it adds is deleted when it ends."""
     finished = []
     for request in privacy.pending_requests(h.privacy_db, user_id):
         session_id = request["requested_in"]
@@ -809,6 +1019,7 @@ async def erase_customer_memory(h: Harness, user_id: str, now: str, requesting_s
     reminder (its note too, whatever its state) and every transcript but the requesting one, which is still running and
     is deleted when it ends. Bank records (cases, ledger, messages already sent) are not memory and stay."""
     privacy.begin_erasure(h.privacy_db, user_id, requesting_session, now)
+    world.cancel_open_codes(h.bank_db, user_id, now)  # a code waiting to be typed dies with the request
     reminders = scheduler.erase_customer_reminders(h.scheduler_db, user_id, now)
     world.reject_held_messages(h.bank_db, reminders, "erasure")
     facts = await user_facts(h, user_id)
@@ -849,7 +1060,11 @@ async def run_maintenance(h: Harness, now: str) -> dict:
     close idle chats (deleting the ones an erasure overtook), purge expired episodes and delete transcripts 30 days
     after their first turn."""
     CLOCK.set(now)
-    erased = await finish_requested_erasures(h, now)
+    erased = await finish_requested_erasures(h, now, idle_only=True)
+    world.retire_code_messages(h.bank_db, now)  # the outbox keeps a code's text only while the code can be used
+    repaired_cases = desk.ensure_case_followups(h.bank_db, h.scheduler_db, now, APP_SETTINGS["app:dispute_review_days"],
+                                                APP_SETTINGS["app:large_dispute_threshold_cents"],
+                                                generation_of=lambda uid: privacy.current_generation(h.privacy_db, uid))
     expired_facts = []
     for user_id in [customer[0] for customer in world.CUSTOMERS]:
         stale = {key: None for key, fact in (await user_facts(h, user_id)).items() if key in FACT_KEYS and fact_is_expired(fact, now)}
@@ -880,7 +1095,7 @@ async def run_maintenance(h: Harness, now: str) -> dict:
         compact_sqlite(h.sessions_db)
         compact_sqlite(h.episodes_db)
     return {"erased_customers": erased, "expired_facts": expired_facts, "closed_idle_sessions": closed,
-            "purged_episodes": [e["episode_id"] for e in expired], "deleted_transcripts": deleted}
+            "purged_episodes": [e["episode_id"] for e in expired], "deleted_transcripts": deleted, "case_followups_repaired": repaired_cases}
 
 
 async def run_followup_session(h: Harness, record: dict, now: str) -> dict:
@@ -917,6 +1132,8 @@ async def snapshot(h: Harness, user_ids: list[str]) -> dict:
         "persisted_clock_keys": sorted(set(re.findall(r'"(temp:[A-Za-z_]+)"', stored_text))),
         "followups": scheduler.list_followups(h.scheduler_db),
         "outbound_messages": world.outbound_messages(h.bank_db),
+        "verification_attempts": world.verification_attempt_rows(h.bank_db),
+        "challenges": world.list_challenges(h.bank_db),
         "cases": world.all_cases(h.bank_db),
         "procedure": procedures.load_registry(h.var_dir),
         "procedure_text": procedures.active_procedure(h.var_dir)[1],
@@ -931,6 +1148,7 @@ async def chat(var_dir: Path, user_id: str, session_id: str | None, now: str | N
     h = await open_harness(var_dir)
     session_id = session_id or f"chat-{uuid.uuid4().hex[:8]}"
     print(f"Kestrel card-care (ADK) | customer={user_id} session={session_id} | 'exit' or end-of-input ends the session")
+    shown = max((m["message_id"] for m in world.outbound_messages(h.bank_db)), default=0)
     while True:
         try:
             text = (await asyncio.to_thread(input, "\n[you]: ")).strip()
@@ -943,6 +1161,9 @@ async def chat(var_dir: Path, user_id: str, session_id: str | None, now: str | N
             for call in turn["tool_calls"]:
                 print(f"  [tool] {call['name']}({json.dumps(call['args'])})")
             print(f"\n[assistant]: {turn['reply'] or '(no reply: ' + turn.get('error', 'empty turn') + '; you can keep chatting)'}")
+            for line in device_lines(h.bank_db, user_id, shown):  # what the customer's phone shows, not part of the reply
+                print(line)
+            shown = max((m["message_id"] for m in world.outbound_messages(h.bank_db)), default=shown)
     episode = await end_session(h, user_id, session_id, now or wall_clock_now())
     if episode:
         print(f"\n[memory] episode {episode['episode_id']}: {episode['text']}")
@@ -959,7 +1180,23 @@ async def fire_followups(h: Harness, now: str, on_session: Callable[[dict], None
             on_session(session)
         return session
 
-    return await scheduler.fire_due_followups(h.scheduler_db, h.bank_db, now, resume)
+    return await scheduler.fire_due_followups(h.scheduler_db, h.bank_db, now, resume, on_failed=lambda record, at: notify_delivery_failure(h, record, at))
+
+
+async def notify_delivery_failure(h: Harness, record: dict, now: str) -> None:
+    """A record the scheduler gave up on (MAX_ATTEMPTS fires without a message): the customer is told by a bank message
+    on the channel on file, with no model involved, that carries the date and nothing of the reminder's note."""
+    facts = await user_facts(h, record["user_id"])
+    channel = (facts.get("contact_channel") or {}).get("value", DEFAULT_CHANNEL)
+    world.record_outbound_message(h.bank_db, record["user_id"], channel, scheduler.delivery_failure_notice(record), record["followup_id"],
+                                  False, now, purpose="delivery_failure")
+
+
+def device_lines(bank_db: Path, user_id: str, after_message_id: int) -> list[str]:
+    """One-time codes the bank sent this customer since `after_message_id`, as the customer's own device would show them.
+    The agent never sees these lines; the person at the keyboard does, and types the code back."""
+    return [f"\n[your phone, {m['channel']} to {m['destination']}]: {m['body']}" for m in world.outbound_messages(bank_db)
+            if m["user_id"] == user_id and m.get("purpose") == "one_time_code" and m["message_id"] > after_message_id]
 
 
 async def tick(var_dir: Path, now: str | None) -> dict:

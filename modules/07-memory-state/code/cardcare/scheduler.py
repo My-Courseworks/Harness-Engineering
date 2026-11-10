@@ -24,6 +24,11 @@ Round 4:
     failed or cancelled, so a note lives only while its reminder can still fire;
   - erasure cancels a reminder whatever its state, `running` included, and a status change out of `running`
     is compare-and-set, so a fire that an erasure overtook cannot put its record back to pending.
+
+Round 5 (the round-4 review's non-blocking 1, a provider outage): a fire that fails goes back to pending with a
+`not_before` that doubles each time (5, 10, 20 ... 1280 minutes: about 43 hours over MAX_ATTEMPTS fires), so an
+outage of three tick intervals no longer loses a reminder, and the record that finally fails is reported to
+`on_failed`, which the agents use to tell the customer, by a message that carries none of the reminder's words.
 """
 
 import inspect
@@ -39,7 +44,8 @@ from pathlib import Path
 from cardcare import world
 from cardcare.clock import format_instant, parse_instant
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 10
+RETRY_BACKOFF_MINUTES = [5, 10, 20, 40, 80, 160, 320, 640, 1280]  # after the n-th failure; the last fire is the tenth
 RUNNING_LEASE_MINUTES = 10
 
 SCHEMA = """
@@ -59,7 +65,8 @@ CREATE TABLE IF NOT EXISTS followups (
   cancelled_at TEXT,
   last_error TEXT,
   generation INTEGER NOT NULL DEFAULT 0,
-  local_day TEXT
+  local_day TEXT,
+  not_before TEXT
 );
 """
 # One live reminder per customer per local day: a "send me three reminders" request, however it is phrased and
@@ -88,7 +95,7 @@ def create_scheduler(db_path: Path) -> None:
     with closing(_connect(db_path)) as conn, conn:
         conn.executescript(SCHEMA)
         columns = {row[1] for row in conn.execute("PRAGMA table_info(followups)")}
-        for column, ddl in (("generation", "INTEGER NOT NULL DEFAULT 0"), ("local_day", "TEXT")):
+        for column, ddl in (("generation", "INTEGER NOT NULL DEFAULT 0"), ("local_day", "TEXT"), ("not_before", "TEXT")):
             if column not in columns:  # a store written by an earlier version
                 conn.execute(f"ALTER TABLE followups ADD COLUMN {column} {ddl}")
         conn.execute("DROP INDEX IF EXISTS one_reminder_per_day")
@@ -192,9 +199,11 @@ def reject_followup(db_path: Path, bank_db: Path, followup_id: str, reviewer: st
 
 
 def _due_records(db_path: Path, now: str) -> list[dict]:
+    """Pending records whose trigger time has come and whose retry back-off (if any) has passed."""
     instant = parse_instant(now)
     pending = [r for r in list_followups(db_path) if r["status"] == "pending"]
-    return sorted((r for r in pending if parse_instant(r["trigger_at"]) <= instant), key=lambda r: parse_instant(r["trigger_at"]))
+    due = [r for r in pending if parse_instant(r["trigger_at"]) <= instant and (not r.get("not_before") or parse_instant(r["not_before"]) <= instant)]
+    return sorted(due, key=lambda r: parse_instant(r["trigger_at"]))
 
 
 def _set_status(db_path: Path, followup_id: str, from_status: str, to_status: str, **fields) -> bool:
@@ -234,10 +243,13 @@ async def fire_due_followups(
     bank_db: Path,
     now: str,
     run_followup_session: Callable[[dict, str], object],
+    on_failed: Callable[[dict, str], object] | None = None,
 ) -> list[dict]:
     """Wake the agent for every due record, then set its status from the outbound-message log.
 
-    `run_followup_session(record, now)` is the framework's resume callback (sync or async).
+    `run_followup_session(record, now)` is the framework's resume callback (sync or async). A fire that produces no
+    message puts the record back to pending with a growing back-off (RETRY_BACKOFF_MINUTES); after MAX_ATTEMPTS it is
+    failed, its note purged, and `on_failed(record, now)` (sync or async) is called once, so that someone is told.
     Returns one outcome row per record touched: fired_done, awaiting_approval, retry, failed, or recovered_*.
     """
     now = format_instant(parse_instant(now))
@@ -258,14 +270,29 @@ async def fire_due_followups(
         elif _messages_for(bank_db, followup_id, "held"):
             moved, outcome = _set_status(scheduler_db, followup_id, "running", "awaiting_approval", last_error=None), "awaiting_approval"
         else:
-            exhausted = record["attempts"] + 1 >= MAX_ATTEMPTS
+            attempts = record["attempts"] + 1
+            exhausted = attempts >= MAX_ATTEMPTS
+            backoff = RETRY_BACKOFF_MINUTES[min(attempts, len(RETRY_BACKOFF_MINUTES)) - 1]
             moved = _set_status(scheduler_db, followup_id, "running", "failed" if exhausted else "pending",
-                                last_error=error or "agent finished without drafting a customer message")
+                                last_error=error or "agent finished without drafting a customer message",
+                                not_before=None if exhausted else format_instant(parse_instant(now) + timedelta(minutes=backoff)))
             outcome = "failed" if exhausted else "retry"
+            if moved and exhausted and on_failed is not None:
+                told = on_failed(get_followup(scheduler_db, followup_id), now)
+                if inspect.isawaitable(told):
+                    await told
         if not moved:  # cancelled while it ran (an erasure): it stays cancelled
             outcome = f"cancelled_while_running ({get_followup(scheduler_db, followup_id)['status']})"
         outcomes.append({"followup_id": followup_id, "user_id": record["user_id"], "outcome": outcome, "error": error})
     return outcomes
+
+
+def delivery_failure_notice(record: dict) -> str:
+    """What the customer is told when the scheduler gives a record up: the date and the kind, never the note (a reminder's
+    note is their words and was purged with the record)."""
+    what = "a reminder you set" if record["action"] == "customer_reminder" else "an update on your dispute"
+    return (f"Kestrel could not deliver {what} that was due on {record['trigger_at'][:10]}. Nothing on your account has changed. "
+            "If you still need it, please set it up again in the card-care chat.")
 
 
 def followup_trigger_message(record: dict) -> str:

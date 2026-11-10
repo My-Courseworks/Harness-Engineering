@@ -12,23 +12,39 @@ processes may share these files) is one SQL transaction, never a read in one cal
   - a dispute checks for an open case on the transaction, numbers the new case and inserts it in one transaction,
     behind a unique index (one open case per transaction);
   - evidence is appended by one UPDATE, so parallel notes cannot overwrite each other;
-  - one message per follow-up is a unique index.
+  - one message per follow-up is a unique index;
+  - a one-time code is issued and checked in one transaction each (one open code per customer is a unique index).
+
+The one-time code (round 4): `customers.otp_channel` and `customers.otp_destination` are the issuer's registered mobile
+number or email, set when the account was opened and changeable only out of band. No chat tool writes them, and no
+memory fact copies them: the follow-up channel the customer picks in chat is memory; the number the bank texts is not.
+A code is 6 digits, stored as a salted hash, single-use, dead after CODE_TTL_MINUTES or CODE_MAX_ENTRIES wrong entries;
+every wrong entry is a failed attempt on the account's shared lock. The sent message is a row in the outbox, which is
+the bank's record of what it sent, with the full destination (an SMS gateway log has it too); the code itself never
+goes into a tool result.
 """
 
+import hashlib
+import re
+import secrets
 import sqlite3
+import uuid
 from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 
 from cardcare.clock import format_instant, parse_instant
-from cardcare.memory_policy import VERIFICATION_LOCK_HOURS
+from cardcare.memory_policy import (CODE_MAX_ENTRIES, CODE_RESEND_SECONDS, CODE_TTL_MINUTES, MAX_VERIFICATION_ATTEMPTS, VERIFICATION_LOCK_HOURS,
+                                    VERIFICATION_TTL_MINUTES)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS customers (
   user_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
   card_last4 TEXT NOT NULL,
-  postal_code TEXT NOT NULL
+  postal_code TEXT NOT NULL,
+  otp_channel TEXT NOT NULL DEFAULT 'sms',       -- where the issuer sends one-time codes: the registered mobile or email
+  otp_destination TEXT NOT NULL DEFAULT ''       -- set out of band, never by a chat tool, never copied into memory
 );
 CREATE TABLE IF NOT EXISTS transactions (
   txn_id TEXT PRIMARY KEY,
@@ -62,8 +78,27 @@ CREATE TABLE IF NOT EXISTS outbound_messages (
   status TEXT NOT NULL,          -- sent, held (drafted, awaiting a reviewer), or rejected
   drafted_at TEXT NOT NULL,
   sent_at TEXT,
-  reviewed_by TEXT
+  reviewed_by TEXT,
+  destination TEXT,              -- the address it went to (one-time codes: the registered number or email)
+  purpose TEXT NOT NULL DEFAULT 'follow_up'   -- follow_up or one_time_code
 );
+-- One-time codes: issued, checked and retired in the bank, never in memory.
+CREATE TABLE IF NOT EXISTS verification_challenges (
+  challenge_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES customers(user_id),
+  session_id TEXT,
+  code_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  sent_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,          -- open, consumed, expired, failed, cancelled
+  closed_at TEXT,
+  consumed_in TEXT                 -- round 5: the conversation that entered the matching code (a repeat from it is the same proof)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_open_code_per_customer ON verification_challenges(user_id) WHERE status = 'open';
 -- "One message per follow-up" is a constraint, not a read-then-insert: parallel tool calls cannot race past it.
 CREATE UNIQUE INDEX IF NOT EXISTS one_message_per_followup
   ON outbound_messages(followup_id) WHERE followup_id IS NOT NULL AND status != 'rejected';
@@ -71,9 +106,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_message_per_followup
 CREATE TABLE IF NOT EXISTS verification_attempts (
   user_id TEXT NOT NULL,
   at TEXT NOT NULL,
-  succeeded INTEGER NOT NULL
+  succeeded INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'digits',  -- digits (last four + ZIP) or code (the one-time code)
+  session_id TEXT,                      -- round 5: after a tool result was lost to a crash, the same guess made again in the same
+  guess_hash TEXT                       -- conversation within REPEAT_WINDOW_SECONDS is the same attempt, not a new one
 );
 """
+REPEAT_WINDOW_SECONDS = 120
 # One open case per transaction: parallel filings cannot open two.
 CASE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS one_open_case_per_transaction ON cases(user_id, txn_id) WHERE status = 'under_review'"
 
@@ -83,6 +122,14 @@ CUSTOMERS = [
     ("dana", "Dana", "5127", "60614"),
     ("eli", "Eli", "6610", "73301"),
 ]
+# The registered one-time-code destination per customer: fictional numbers from the reserved 555-01xx block, and one
+# fictional email, so both channel kinds appear. These are bank records, seeded, never written by any tool.
+OTP_DESTINATIONS = {
+    "priya": ("sms", "+1 415 555 0100"),
+    "marco": ("sms", "+1 212 555 0133"),
+    "dana": ("email", "dana.k@example.com"),
+    "eli": ("sms", "+1 512 555 0188"),
+}
 
 TRANSACTIONS = [
     ("T-1001", "priya", "2026-09-28", "StreamMax", "StreamMax Premium monthly", 1599, "USD", "subscription"),
@@ -133,12 +180,23 @@ def seed_bank(db_path: Path) -> None:
     """Create the bank tables and load the fixed seed customers and transactions."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with closing(_connect(db_path)) as conn, conn:
+        for table, column, ddl in (("customers", "otp_channel", "TEXT NOT NULL DEFAULT 'sms'"), ("customers", "otp_destination", "TEXT NOT NULL DEFAULT ''"),
+                                   ("outbound_messages", "destination", "TEXT"), ("outbound_messages", "purpose", "TEXT NOT NULL DEFAULT 'follow_up'"),
+                                   ("verification_attempts", "kind", "TEXT NOT NULL DEFAULT 'digits'"),
+                                   ("verification_attempts", "session_id", "TEXT"), ("verification_attempts", "guess_hash", "TEXT"),
+                                   ("verification_challenges", "consumed_in", "TEXT")):
+            if table in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")} \
+                    and column not in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")  # a store written by an earlier version
         conn.executescript(SCHEMA)
         try:
             conn.execute(CASE_INDEX)
         except sqlite3.IntegrityError:  # a store written by an earlier version already holds duplicate open cases
             pass
-        conn.executemany("INSERT OR IGNORE INTO customers VALUES (?, ?, ?, ?)", CUSTOMERS)
+        conn.executemany("INSERT OR IGNORE INTO customers (user_id, display_name, card_last4, postal_code) VALUES (?, ?, ?, ?)", CUSTOMERS)
+        for user_id, (channel, destination) in OTP_DESTINATIONS.items():
+            conn.execute("UPDATE customers SET otp_channel = ?, otp_destination = ? WHERE user_id = ? AND otp_destination = ''",
+                         (channel, destination, user_id))
         conn.executemany("INSERT OR IGNORE INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?)", TRANSACTIONS)
 
 
@@ -225,14 +283,15 @@ def resolve_case(db_path: Path, case_id: str, status: str, resolution_code: str,
     return _case_view(row) if row else {"error": f"no case {case_id}: the dispute it stands for was never filed"}
 
 
-def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, held: bool, now: str) -> dict | None:
+def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str, followup_id: str | None, held: bool, now: str,
+                            destination: str | None = None, purpose: str = "follow_up") -> dict | None:
     """Send a message now, or hold the draft for a reviewer when `held`. None if this follow-up already has its message."""
     try:
         with closing(_connect(db_path)) as conn, conn:
             cursor = conn.execute(
-                "INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (user_id, channel, body, followup_id, "held" if held else "sent", now, None if held else now),
+                "INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at, destination, purpose)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_id, channel, body, followup_id, "held" if held else "sent", now, None if held else now, destination, purpose),
             )
             row = conn.execute("SELECT * FROM outbound_messages WHERE message_id = ?", (cursor.lastrowid,)).fetchone()
     except sqlite3.IntegrityError:
@@ -241,8 +300,12 @@ def record_outbound_message(db_path: Path, user_id: str, channel: str, body: str
 
 
 def _failures(conn: sqlite3.Connection, user_id: str, now: str) -> int:
+    """Failed attempts of either kind in the lock window since the account's last completed step-up. Only a correct
+    one-time code resets the count: a correct last four and ZIP does not, or someone who knows the digits could
+    re-verify between code guesses and get three fresh guesses each time."""
     since = format_instant(parse_instant(now) - timedelta(hours=VERIFICATION_LOCK_HOURS))  # instants are stored normalised
-    last_ok = conn.execute("SELECT MAX(rowid) FROM verification_attempts WHERE user_id = ? AND succeeded = 1", (user_id,)).fetchone()[0]
+    last_ok = conn.execute("SELECT MAX(rowid) FROM verification_attempts WHERE user_id = ? AND succeeded = 1 AND kind = 'code'",
+                           (user_id,)).fetchone()[0]
     return conn.execute("SELECT COUNT(*) FROM verification_attempts WHERE user_id = ? AND succeeded = 0 AND at > ? AND rowid > ?",
                         (user_id, since, last_ok or 0)).fetchone()[0]
 
@@ -253,27 +316,255 @@ def failed_verifications(db_path: Path, user_id: str, now: str) -> int:
         return _failures(conn, user_id, now)
 
 
-def attempt_verification(db_path: Path, user_id: str, card_last4: str, postal_code: str, now: str, max_failures: int) -> dict:
+def verification_locked(db_path: Path, user_id: str, now: str) -> bool:
+    """Whether the account's lock is on: three failures in the window. The lock is asked at every action that needs a
+    verification, not only at new guesses, so a verification obtained in the same breath as the lock (the right guess
+    first in a parallel batch, the round-4 review's non-blocking 3) buys nothing: locked means locked everywhere."""
+    with closing(_connect(db_path)) as conn:
+        return _failures(conn, user_id, now) >= MAX_VERIFICATION_ATTEMPTS
+
+
+def _guess_hash(*parts: str) -> str:
+    return hashlib.sha256(":".join(parts).encode()).hexdigest()
+
+
+def lost_result_is_recent(lost_result_at: str | None, now: str) -> bool:
+    """Whether the harness told this conversation, within REPEAT_WINDOW_SECONDS, that a tool call's result was lost. Only
+    then may the same guess made again be the lost call repeated; without it every entry is a new attempt, so a customer
+    who types the same wrong code twice has made two attempts."""
+    return bool(lost_result_at) and 0 <= (parse_instant(now) - parse_instant(lost_result_at)).total_seconds() <= REPEAT_WINDOW_SECONDS
+
+
+def _repeat_of(conn: sqlite3.Connection, user_id: str, kind: str, guess_hash: str, session_id: str | None, now: str):
+    """The account's latest attempt, if it is this very guess made again in the same conversation within
+    REPEAT_WINDOW_SECONDS: what a tool call repeated after its result was lost (the process died after the row was
+    written and before the framework recorded the result) looks like. A repeat is not a new attempt: it is answered
+    from the row and counted once. A different guess, another conversation, or the same guess later is new. Callers
+    ask only when the conversation was told of a lost result (`repeat_of_lost_call`)."""
+    if not session_id:
+        return None
+    row = conn.execute("SELECT * FROM verification_attempts WHERE user_id = ? ORDER BY rowid DESC LIMIT 1", (user_id,)).fetchone()
+    if row and row["kind"] == kind and row["guess_hash"] == guess_hash and row["session_id"] == session_id \
+            and 0 <= (parse_instant(now) - parse_instant(row["at"])).total_seconds() <= REPEAT_WINDOW_SECONDS:
+        return row
+    return None
+
+
+def attempt_verification(db_path: Path, user_id: str, card_last4: str, postal_code: str, now: str, max_failures: int,
+                         session_id: str | None = None, repeat_of_lost_call: bool = False) -> dict:
     """One step-up attempt, atomically: count the failures since the last success, refuse without evaluating once
     `max_failures` stand, otherwise evaluate and record the attempt, all inside one BEGIN IMMEDIATE transaction. Six
-    parallel guesses are six transactions in a row, so no guess is ever evaluated past the limit."""
+    parallel guesses are six transactions in a row, so no guess is ever evaluated past the limit. With
+    `repeat_of_lost_call` (the conversation was just told a result was lost), the same guess made again in the same
+    conversation within REPEAT_WINDOW_SECONDS is answered from its row, not counted again."""
+    guess = _guess_hash(user_id, str(card_last4).strip(), str(postal_code).strip())
     with closing(_connect(db_path, autocommit=True)) as conn:
         conn.execute("BEGIN IMMEDIATE")
         try:
+            repeat = _repeat_of(conn, user_id, "digits", guess, session_id, now) if repeat_of_lost_call else None
+            if repeat is not None:
+                return {"outcome": "matched" if repeat["succeeded"] else "mismatch", "failures": _failures(conn, user_id, now), "repeat": True}
             failures = _failures(conn, user_id, now)
             if failures >= max_failures:
                 return {"outcome": "locked", "failures": failures}
             row = conn.execute("SELECT card_last4, postal_code FROM customers WHERE user_id = ?", (user_id,)).fetchone()
             matched = bool(row) and row["card_last4"] == str(card_last4).strip() and row["postal_code"] == str(postal_code).strip()
-            conn.execute("INSERT INTO verification_attempts VALUES (?, ?, ?)", (user_id, format_instant(parse_instant(now)), int(matched)))
-            return {"outcome": "matched" if matched else "mismatch", "failures": 0 if matched else failures + 1}
+            conn.execute("INSERT INTO verification_attempts (user_id, at, succeeded, kind, session_id, guess_hash) VALUES (?, ?, ?, 'digits', ?, ?)",
+                         (user_id, format_instant(parse_instant(now)), int(matched), session_id, guess))
+            return {"outcome": "matched" if matched else "mismatch", "failures": failures if matched else failures + 1}
         finally:
             conn.execute("COMMIT")
 
 
 def record_verification(db_path: Path, user_id: str, succeeded: bool, now: str) -> None:
     with closing(_connect(db_path)) as conn, conn:
-        conn.execute("INSERT INTO verification_attempts VALUES (?, ?, ?)", (user_id, format_instant(parse_instant(now)), int(succeeded)))
+        conn.execute("INSERT INTO verification_attempts (user_id, at, succeeded, kind) VALUES (?, ?, ?, 'digits')",
+                     (user_id, format_instant(parse_instant(now)), int(succeeded)))
+
+
+# --------------------------------------------------------------------------- one-time codes
+
+
+def masked_destination(channel: str, destination: str) -> str:
+    """What a customer may be told: "text message to ···0100", "email to d···@example.com"."""
+    if channel == "email" and "@" in destination:
+        local, domain = destination.split("@", 1)
+        return f"email to {local[:1]}···@{domain}"
+    digits = re.sub(r"\D", "", destination)
+    return f"text message to ···{digits[-4:]}"
+
+
+def otp_destination(db_path: Path, user_id: str) -> tuple[str, str]:
+    with closing(_connect(db_path)) as conn:
+        row = conn.execute("SELECT otp_channel, otp_destination FROM customers WHERE user_id = ?", (user_id,)).fetchone()
+    return (row["otp_channel"], row["otp_destination"]) if row else ("sms", "")
+
+
+def _code_hash(code: str, salt: str) -> str:
+    return hashlib.sha256(f"{salt}:{code}".encode()).hexdigest()
+
+
+def issue_code(db_path: Path, user_id: str, session_id: str, now: str, max_failures: int) -> dict:
+    """Issue a one-time code to the customer's registered destination, in one transaction: refuse while the account is
+    locked; refuse a resend within CODE_RESEND_SECONDS of a still-valid code; otherwise cancel any open code, store the
+    new one hashed, and write the message the gateway sends to the outbox. Parallel calls meet the one-open-code index
+    and all but one get the "already sent" answer. The code is returned only so the caller can log the message; it is
+    never put in a tool result."""
+    instant = format_instant(parse_instant(now))
+    with closing(_connect(db_path, autocommit=True)) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if _failures(conn, user_id, now) >= max_failures:
+                return {"error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after {max_failures} failed "
+                                 "attempts; no code is sent; the customer must call Kestrel"}
+            open_code = conn.execute("SELECT * FROM verification_challenges WHERE user_id = ? AND status = 'open'", (user_id,)).fetchone()
+            if open_code:
+                age = (parse_instant(instant) - parse_instant(open_code["sent_at"])).total_seconds()
+                if parse_instant(instant) < parse_instant(open_code["expires_at"]) and age < CODE_RESEND_SECONDS:
+                    return {"error": f"a code was sent {int(age)} seconds ago and is still valid; ask the customer to enter it "
+                                     f"(a new one can be sent {CODE_RESEND_SECONDS} seconds after the last)",
+                            "sent_to": masked_destination(open_code["channel"], open_code["destination"])}
+                conn.execute("UPDATE verification_challenges SET status = 'cancelled', closed_at = ? WHERE challenge_id = ?",
+                             (instant, open_code["challenge_id"]))
+            channel, destination = conn.execute("SELECT otp_channel, otp_destination FROM customers WHERE user_id = ?", (user_id,)).fetchone()
+            code, salt = f"{secrets.randbelow(10 ** 6):06d}", secrets.token_hex(8)
+            expires_at = format_instant(parse_instant(instant) + timedelta(minutes=CODE_TTL_MINUTES))
+            try:
+                conn.execute("INSERT INTO verification_challenges (challenge_id, user_id, session_id, code_hash, salt, channel, destination,"
+                             " sent_at, expires_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')",
+                             (f"V-{uuid.uuid4().hex[:8]}", user_id, session_id, _code_hash(code, salt), salt, channel, destination, instant, expires_at))
+            except sqlite3.IntegrityError:
+                return {"error": "a code was just sent; ask the customer to enter it", "sent_to": masked_destination(channel, destination)}
+            body = (f"Your Kestrel verification code is {code}. It expires in {CODE_TTL_MINUTES} minutes. Kestrel will never ask you to share it.")
+            conn.execute("INSERT INTO outbound_messages (user_id, channel, body, followup_id, status, drafted_at, sent_at, destination, purpose)"
+                         " VALUES (?, ?, ?, NULL, 'sent', ?, ?, ?, 'one_time_code')", (user_id, channel, body, instant, instant, destination))
+            return {"sent": True, "sent_to": masked_destination(channel, destination), "expires_in_minutes": CODE_TTL_MINUTES, "resent": bool(open_code)}
+        finally:
+            conn.execute("COMMIT")
+
+
+def attempt_code(db_path: Path, user_id: str, entered: str, now: str, max_failures: int, session_id: str | None = None,
+                 repeat_of_lost_call: bool = False) -> dict:
+    """Check an entered code, in one transaction: refuse while locked; no open code, or an expired one, is not a guess;
+    a wrong code is a failed attempt on the account and on the code; a match consumes the code and records a success.
+    With `repeat_of_lost_call` (the conversation was just told a result was lost, and the call is made again): the code
+    this conversation consumed within the last VERIFICATION_TTL_MINUTES is the same proof and matches again; the same
+    wrong code within REPEAT_WINDOW_SECONDS is the same mistake and is not counted again. Without it a code is
+    single-use and every wrong entry counts."""
+    instant = format_instant(parse_instant(now))
+    digits = re.sub(r"\D", "", entered or "")
+    with closing(_connect(db_path, autocommit=True)) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            latest = conn.execute("SELECT * FROM verification_challenges WHERE user_id = ? ORDER BY sent_at DESC, challenge_id DESC LIMIT 1",
+                                  (user_id,)).fetchone()
+            if repeat_of_lost_call and latest is not None and len(digits) == 6 and session_id:
+                if latest["status"] == "consumed" and latest["consumed_in"] == session_id and latest["closed_at"] \
+                        and (parse_instant(now) - parse_instant(latest["closed_at"])).total_seconds() <= VERIFICATION_TTL_MINUTES * 60 \
+                        and _code_hash(digits, latest["salt"]) == latest["code_hash"]:
+                    return {"outcome": "matched", "code": digits, "repeat": True}
+                repeat = _repeat_of(conn, user_id, "code", _guess_hash(latest["challenge_id"], digits), session_id, now)
+                if repeat is not None and not repeat["succeeded"]:
+                    return {"outcome": "mismatch", "failures": _failures(conn, user_id, now), "repeat": True,
+                            "entries_left": max(0, CODE_MAX_ENTRIES - latest["attempts"]), "code_dead": latest["status"] == "failed"}
+            failures = _failures(conn, user_id, now)
+            if failures >= max_failures:
+                return {"outcome": "locked", "failures": failures}
+            open_code = conn.execute("SELECT * FROM verification_challenges WHERE user_id = ? AND status = 'open'", (user_id,)).fetchone()
+            if not open_code:
+                return {"outcome": "no_open_code"}
+            if parse_instant(instant) >= parse_instant(open_code["expires_at"]):
+                conn.execute("UPDATE verification_challenges SET status = 'expired', closed_at = ? WHERE challenge_id = ?", (instant, open_code["challenge_id"]))
+                return {"outcome": "expired", "sent_to": masked_destination(open_code["channel"], open_code["destination"])}
+            if len(digits) != 6:
+                return {"outcome": "no_code_entered"}
+            if _code_hash(digits, open_code["salt"]) == open_code["code_hash"]:
+                conn.execute("UPDATE verification_challenges SET status = 'consumed', closed_at = ?, attempts = attempts + 1, consumed_in = ? "
+                             "WHERE challenge_id = ?", (instant, session_id, open_code["challenge_id"]))
+                conn.execute("INSERT INTO verification_attempts (user_id, at, succeeded, kind, session_id, guess_hash) VALUES (?, ?, 1, 'code', ?, ?)",
+                             (user_id, instant, session_id, _guess_hash(open_code["challenge_id"], digits)))
+                return {"outcome": "matched", "code": digits}
+            attempts = open_code["attempts"] + 1
+            dead = attempts >= CODE_MAX_ENTRIES
+            conn.execute("UPDATE verification_challenges SET attempts = ?, status = ?, closed_at = ? WHERE challenge_id = ?",
+                         (attempts, "failed" if dead else "open", instant if dead else None, open_code["challenge_id"]))
+            conn.execute("INSERT INTO verification_attempts (user_id, at, succeeded, kind, session_id, guess_hash) VALUES (?, ?, 0, 'code', ?, ?)",
+                         (user_id, instant, session_id, _guess_hash(open_code["challenge_id"], digits)))
+            return {"outcome": "mismatch", "failures": failures + 1, "entries_left": 0 if dead else CODE_MAX_ENTRIES - attempts, "code_dead": dead}
+        finally:
+            conn.execute("COMMIT")
+
+
+def cancel_open_codes(db_path: Path, user_id: str, now: str) -> int:
+    with closing(_connect(db_path)) as conn, conn:
+        return conn.execute("UPDATE verification_challenges SET status = 'cancelled', closed_at = ? WHERE user_id = ? AND status = 'open'",
+                            (format_instant(parse_instant(now)), user_id)).rowcount
+
+
+def retire_code_messages(db_path: Path, now: str) -> int:
+    """Maintenance: the outbox keeps a code's text only while the code can be used; afterwards the body says the code expired."""
+    cutoff = format_instant(parse_instant(now) - timedelta(minutes=CODE_TTL_MINUTES))
+    with closing(_connect(db_path)) as conn, conn:
+        return conn.execute("UPDATE outbound_messages SET body = 'Your Kestrel verification code [expired]. Kestrel will never ask you to share it.'"
+                            " WHERE purpose = 'one_time_code' AND drafted_at <= ? AND body NOT LIKE '%[expired]%'", (cutoff,)).rowcount
+
+
+def open_code_status(db_path: Path, user_id: str, now: str) -> dict | None:
+    """The customer's latest one-time code as the bank sees it, for the system prompt: when it was sent, where, whether
+    it can still be entered. The model is told this from the record, not from its own memory of the conversation (a
+    round-5 dev run had the agent deny, seven minutes later, that it had sent a code its own history showed)."""
+    with closing(_connect(db_path)) as conn:
+        if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+            return None
+        row = conn.execute("SELECT channel, destination, sent_at, expires_at, status, closed_at, consumed_in FROM verification_challenges "
+                           "WHERE user_id = ? ORDER BY sent_at DESC, challenge_id DESC LIMIT 1", (user_id,)).fetchone()
+    if not row:
+        return None
+    status = row["status"]
+    if status == "open" and parse_instant(row["expires_at"]) <= parse_instant(now):
+        status = "expired"
+    return {"sent_at": row["sent_at"], "expires_at": row["expires_at"], "sent_to": masked_destination(row["channel"], row["destination"]),
+            "status": status, "closed_at": row["closed_at"], "consumed_in": row["consumed_in"]}
+
+
+def possession_proved_at(db_path: Path, user_id: str, session_id: str, now: str) -> str | None:
+    """When this conversation entered the right code, if it did within the last VERIFICATION_TTL_MINUTES: the bank's
+    record of the possession proof. The session keeps a copy (`possession_verified_at`); a process that died after the
+    code was consumed and before the tool's result was recorded (the round-5 lost-result probe) loses the copy, and
+    the next turn rebuilds it from here."""
+    code = open_code_status(db_path, user_id, now)
+    if not code or code["status"] != "consumed" or code["consumed_in"] != session_id or not code["closed_at"]:
+        return None
+    if (parse_instant(now) - parse_instant(code["closed_at"])).total_seconds() > VERIFICATION_TTL_MINUTES * 60:
+        return None
+    return code["closed_at"]
+
+
+def codes_matching(db_path: Path, user_id: str, text: str) -> list[str]:
+    """The 6-digit runs in `text` that are one of this customer's one-time codes, open or dead, by salted hash. What
+    the harness redacts from a stored message when the customer typed a code outside a wait (nothing pending, so no
+    tool took it): a code the bank issued is never kept in a transcript, whatever happened to it."""
+    runs = sorted(set(re.findall(r"(?<!\d)\d{6}(?!\d)", text)))
+    if not runs:
+        return []
+    with closing(_connect(db_path)) as conn:
+        if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+            return []
+        rows = conn.execute("SELECT code_hash, salt FROM verification_challenges WHERE user_id = ?", (user_id,)).fetchall()
+    return [run for run in runs if any(_code_hash(run, row["salt"]) == row["code_hash"] for row in rows)]
+
+
+def list_challenges(db_path: Path) -> list[dict]:
+    with closing(_connect(db_path)) as conn:
+        if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+            return []
+        return [{k: row[k] for k in row.keys() if k not in ("code_hash", "salt")} for row in
+                conn.execute("SELECT * FROM verification_challenges ORDER BY sent_at, challenge_id")]
+
+
+def verification_attempt_rows(db_path: Path) -> list[dict]:
+    with closing(_connect(db_path)) as conn:
+        return [dict(row) for row in conn.execute("SELECT rowid AS id, user_id, at, succeeded, kind FROM verification_attempts ORDER BY rowid")]
 
 
 def release_message(db_path: Path, message_id: int, reviewer: str, now: str) -> None:
@@ -290,9 +581,13 @@ def reject_message(db_path: Path, message_id: int, reviewer: str, now: str) -> N
 
 def add_case_evidence(db_path: Path, user_id: str, case_id: str, evidence_note: str, now: str) -> dict:
     """Attach more evidence to one of the customer's open cases: one UPDATE that appends, so parallel calls never
-    overwrite each other's notes."""
+    overwrite each other's notes. The same line attached again (a call repeated after its result was lost) is already
+    there and is not appended twice."""
     line = f"[{now[:10]}] {evidence_note}"
     with closing(_connect(db_path)) as conn, conn:
+        current = conn.execute("SELECT * FROM cases WHERE case_id = ? AND user_id = ?", (case_id, user_id)).fetchone()
+        if current and current["status"] == "under_review" and line in (current["evidence_note"] or "").split("\n"):
+            return {**_case_view(current), "already_attached": True}
         cursor = conn.execute(
             "UPDATE cases SET evidence_note = CASE WHEN evidence_note IS NULL OR evidence_note = '' THEN ? "
             "ELSE evidence_note || char(10) || ? END WHERE case_id = ? AND user_id = ? AND status = 'under_review'",

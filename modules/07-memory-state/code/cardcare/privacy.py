@@ -4,11 +4,14 @@ Each customer has a memory generation, and every session is registered with the 
 `begin_erasure` raises the generation under a write lock on this database. From that moment:
   - every memory write (a fact, an episode, a reminder) is made inside `write_guard`, which holds the same lock and
     lets the write through only if the writing session's generation is current. A session that started before the
-    erasure, including the one the customer asked in, can write nothing more, whatever runs concurrently;
+    erasure, including the one the customer asked in, can write nothing more, whatever runs concurrently. Every session
+    registered before the request keeps its row, at its old generation, so a second open tab that types again after
+    the erasure is stale too (round 4 deleted those rows, and the tab's next turn re-registered it as current: the
+    round-4 review's finding 2.2a);
   - the erasure then deletes facts, episodes, reminders and their notes, and every transcript except the one the
-    request was made in, which is still running. That one is deleted at its end, at the next maintenance run, or at the
-    customer's next turn in another session, whichever comes first, and its request is then marked executed. It
-    stays registered as stale, so if the chat goes on, it still stores nothing;
+    request was made in, which is still running. That one is deleted at its end, at the customer's next turn in another
+    session, or when maintenance finds it idle (30 minutes without a turn: a closed tab), whichever comes first, and its
+    request is then marked executed. It stays registered as stale, so if the chat goes on, it still stores nothing;
   - scheduled work created in an older generation can no longer write memory either: a reminder is cancelled with
     the rest, and a case follow-up, which must still reach the customer, runs without storing a session at all.
 Bank records (cases, the ledger, messages already sent) are not memory and are not touched. This database keeps
@@ -109,14 +112,15 @@ def write_guard(db_path: Path, user_id: str, session_id: str):
 
 def begin_erasure(db_path: Path, user_id: str, session_id: str | None, now: str) -> int:
     """Record the request and raise the customer's generation, atomically. Every session registered so far is stale
-    from here on; the requesting session stays registered (stale) so that its own end can finish the erasure."""
+    from here on and keeps its row at the old generation: `register_session` is INSERT OR IGNORE, so none of them,
+    the requesting one or another open tab, can come back as current at its next turn. Their rows go with their
+    transcripts (`forget_session`), when maintenance or their own end deletes those."""
     with closing(_connect(db_path)) as conn:
         conn.execute("BEGIN IMMEDIATE")
         generation = _generation(conn, user_id) + 1
         conn.execute("INSERT INTO memory_generations VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET generation = excluded.generation",
                      (user_id, generation))
         conn.execute("INSERT INTO erasure_requests (user_id, requested_at, requested_in) VALUES (?, ?, ?)", (user_id, now, session_id))
-        conn.execute("DELETE FROM memory_sessions WHERE user_id = ? AND session_id IS NOT ?", (user_id, session_id))
         conn.execute("COMMIT")
     return generation
 

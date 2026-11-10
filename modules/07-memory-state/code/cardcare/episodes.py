@@ -70,17 +70,29 @@ def scrub_other_customers(text: str, user_id: str, own_case_ids: set[str]) -> st
     return _CASE_ID.sub(lambda m: m.group() if m.group() in own_case_ids else "[a case not on this account]", text)
 
 
-def parse_reflection(raw: str, user_id: str, own_case_ids: set[str]) -> dict:
+MIN_SUMMARY_CHARS = 10
+
+
+def parse_reflection(raw: str, user_id: str, own_case_ids: set[str]) -> dict | None:
+    """The validation stage for a reflection: JSON if the model wrote JSON (its `summary` field, never the JSON text
+    itself), the raw text otherwise; card numbers masked, other customers scrubbed; and None when there is no summary
+    to speak of (an empty or whitespace summary, under a degraded provider: the round-4 review stored one as a
+    180-day episode). None means no episode: the turns stay unreflected and are reflected at the next opportunity."""
     match = re.search(r"\{.*\}", raw, re.DOTALL)
-    try:
-        data = json.loads(match.group()) if match else {}
-    except json.JSONDecodeError:
-        data = {}
+    data = None
+    if match:
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            data = None
 
     def validate(value: str, limit: int) -> str:
         return scrub_other_customers(mask_card_numbers(value[:limit]), user_id, own_case_ids)
 
-    return {"summary": validate(str(data.get("summary") or raw.strip()), 600), "lesson": validate(str(data.get("lesson") or "none"), 300)}
+    summary = validate(str((data or {}).get("summary") or ("" if data is not None else raw)).strip(), 600)
+    if len(summary.strip()) < MIN_SUMMARY_CHARS:
+        return None
+    return {"summary": summary, "lesson": validate(str((data or {}).get("lesson") or "none"), 300)}
 
 
 def case_outcomes(bank_db, user_id: str, turns: list[dict]) -> list[dict]:

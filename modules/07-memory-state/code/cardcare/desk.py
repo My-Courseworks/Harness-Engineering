@@ -52,17 +52,24 @@ def file_dispute_with_followup(
     # of one transaction open one case, and only the call that opened it schedules the follow-up.
     case, created = world.open_case(bank_db, user_id, transaction_id, reason,
                                     mask_customer_text(evidence_note) if evidence_note else None, now)
-    if not created:
-        return {"error": f"case {case['case_id']} is already open for {transaction_id}"}
     # Customer-facing outcomes on large disputes are reviewed by a person before they go out.
     approval = "ops_reviewer" if txn["amount_cents"] >= large_dispute_threshold_cents else "none"
-    followup = scheduler.schedule_followup(
+    existing = [f for f in scheduler.user_followups(scheduler_db, user_id)
+                if f["action"] == "case_status_followup" and f["resume"].get("case_id") == case["case_id"] and f["status"] not in ("cancelled", "failed")]
+    if not created and existing:
+        return {"error": f"case {case['case_id']} is already open for {transaction_id}", "case_id": case["case_id"], "status": case["status"],
+                "followup": {"followup_id": existing[0]["followup_id"], "due": existing[0]["trigger_at"][:10]}}
+    # the case exists but its follow-up does not: the step that opens the case and the one that schedules the follow-up are
+    # two databases, so a process that died between them (round 5's lost-result probe) left a dispute nobody would revisit;
+    # a repeated filing completes it instead of refusing it
+    followup = existing[0] if existing else scheduler.schedule_followup(
         scheduler_db, user_id, "case_status_followup", add_days(now, review_days),
         {"case_id": case["case_id"]}, approval, now, generation=generation,
     )
     return {
         "case_id": case["case_id"],
         "status": case["status"],
+        **({} if created else {"note": "this dispute was already filed (a call whose result was lost); nothing was filed twice"}),
         "followup": {
             "followup_id": followup["followup_id"],
             "due": followup["trigger_at"][:10],
@@ -71,6 +78,26 @@ def file_dispute_with_followup(
                        "channel before then, the follow-up uses the new one",
         },
     }
+
+
+def ensure_case_followups(bank_db: Path, scheduler_db: Path, now: str, review_days: int, large_dispute_threshold_cents: int,
+                          user_id: str | None = None, generation_of=lambda user_id: 0) -> list[str]:
+    """Every case under review has a follow-up record: the invariant `file_dispute_with_followup` establishes in two
+    databases, which a process that dies between the two steps breaks (round 5's lost-result probe). Called at the
+    start of a customer's turn (their cases) and by maintenance (every customer's), it writes the missing records,
+    due `review_days` after the case was opened, reviewed when the dispute is large. Returns the case ids repaired."""
+    existing = {f["resume"].get("case_id") for f in scheduler.list_followups(scheduler_db)
+                if f["action"] == "case_status_followup" and f["status"] not in ("cancelled", "failed")}
+    repaired = []
+    for case in world.all_cases(bank_db):
+        if case["status"] != "under_review" or case["case_id"] in existing or (user_id and case["user_id"] != user_id):
+            continue
+        txn = world.get_transaction(bank_db, case["user_id"], case["txn_id"])
+        approval = "ops_reviewer" if txn and txn["amount_cents"] >= large_dispute_threshold_cents else "none"
+        scheduler.schedule_followup(scheduler_db, case["user_id"], "case_status_followup", add_days(case["opened_at"], review_days),
+                                    {"case_id": case["case_id"]}, approval, now, generation=generation_of(case["user_id"]))
+        repaired.append(case["case_id"])
+    return repaired
 
 
 def schedule_customer_reminder(scheduler_db: Path, user_id: str, note: str, remind_on: str, remind_at: str, timezone: str, now: str,

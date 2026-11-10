@@ -100,20 +100,22 @@ def active_procedure(var_dir: Path) -> tuple[str, str]:
     return version, procedure_text(var_dir, version)
 
 
-def render_system_prompt(procedure: str, version: str, profile: str, review_days: int, now: str) -> str:
-    """The instruction in force, plus the per-turn context the harness assembles around it."""
-    return (
-        f"{procedure}\n"
-        f"## Context for this turn (assembled by the harness; procedure {version})\n"
-        f"- Current time: {now}\n"
-        f"- Disputes are currently reviewed in about {review_days} days (app-wide operating setting).\n"
-        f"- What you remember about this customer (their facts only; current, and authoritative over anything recalled from past conversations):\n"
-        f"{textwrap.indent(profile, '  ')}\n"
-        f"- What Kestrel keeps from this conversation: its transcript, which is everything the customer types (including any last four "
-        f"and ZIP they gave; card numbers the masking recognises are replaced by [REDACTED ...]), for up to 30 days from its first "
-        f"message; then only a short summary, kept 180 days; the facts above until they change or expire. Dispute cases and messages "
-        f"already sent are bank records with their own retention.\n"
-    )
+def render_system_prompt(procedure: str, version: str, profile: str, review_days: int, now: str, stepup: str = "") -> str:
+    """The instruction in force, plus the per-turn context the harness assembles around it. `stepup` is the session's
+    verification status, rendered from session state, so the model knows it after a window cut or a resumed session."""
+    lines = [procedure, f"## Context for this turn (assembled by the harness; procedure {version})", f"- Current time: {now}"]
+    if stepup:
+        lines.append(f"- Step-up status in this conversation: {stepup}")
+    lines += [
+        f"- Disputes are currently reviewed in about {review_days} days (app-wide operating setting).",
+        "- What you remember about this customer (their facts only; current, and authoritative over anything recalled from past conversations):",
+        textwrap.indent(profile, "  "),
+        "- What Kestrel keeps from this conversation: its transcript, which is everything the customer types (including any last four "
+        "and ZIP they gave; card numbers the masking recognises are replaced by [REDACTED ...]), for up to 30 days from its first "
+        "message; then only a short summary, kept 180 days; the facts above until they change or expire. Dispute cases and messages "
+        "already sent are bank records with their own retention.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def identifiers_in(text: str) -> list[str]:
@@ -234,12 +236,17 @@ def _ancestors(registry: dict, version: str) -> list[str]:
     return chain
 
 
-def retract(var_dir: Path, to_version: str, reviewer: str, reason: str, now: str) -> dict:
+def retract(var_dir: Path, to_version: str, reviewer: str | list[str], reason: str, now: str) -> dict:
     """Retract the active version: point the instruction back at a version it was built on. Nothing is deleted, so it
-    stays auditable. Raises ValueError for anything else (an unknown or retracted target, a reviewer with no role)."""
-    roles = approver_roles([reviewer])[0]["roles"]
-    if not roles:
-        raise ValueError(f"{reviewer!r} holds no reviewer role in the registry; a retraction needs an {OPS_ROLE} or a {POLICY_OWNER_ROLE}")
+    stays auditable. `reviewer` is one name or several (each looked up in the registry on its own; the round-4 code
+    joined two names into one string the registry did not know). Raises ValueError for anything else (an unknown or
+    retracted target, a reviewer with no role)."""
+    reviewers = [reviewer] if isinstance(reviewer, str) else list(reviewer)
+    roles = sorted({role for entry in approver_roles(reviewers) for role in entry["roles"]})
+    unknown = [entry["name"] for entry in approver_roles(reviewers) if not entry["roles"]]
+    if unknown or not roles:
+        raise ValueError(f"{unknown or reviewers!r} hold(s) no reviewer role in the registry; a retraction needs an {OPS_ROLE} or a {POLICY_OWNER_ROLE}")
+    reviewer = reviewers[0] if len(reviewers) == 1 else reviewers
     with _registry_lock(var_dir):
         registry = load_registry(var_dir)
         active = registry["active"]

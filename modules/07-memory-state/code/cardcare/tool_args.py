@@ -49,3 +49,6 @@ MalformedTool = Annotated[str, Field(description="Harness use only: the name of 
 NewEvidence = Annotated[str, Field(description=(
     "The new evidence, in the customer's words (for example a cancellation reference they found later). Never card numbers, "
     "security codes or expiry dates."))]
+EnteredCode = Annotated[str | None, Field(description=(
+    "The 6-digit one-time code, only if the customer already typed it in their latest message. Omit it otherwise: the "
+    "conversation then pauses until their next message, which is taken as the code. Never guess or make one up."))]

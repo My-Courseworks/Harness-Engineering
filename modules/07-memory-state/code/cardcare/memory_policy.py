@@ -7,7 +7,7 @@ to live there or for how long.
 
 import re
 
-from cardcare.clock import add_days, parse_instant
+from cardcare.clock import add_days, add_minutes, parse_instant
 from cardcare.masking import mask_customer_text
 
 # Semantic memory is a closed schema. A free-form key chosen by the model is how
@@ -40,6 +40,15 @@ REMINDER_HORIZON_DAYS = 90
 VERIFICATION_TTL_MINUTES = 15
 MAX_VERIFICATION_ATTEMPTS = 3
 VERIFICATION_LOCK_HOURS = 24
+# The step-up is tiered (round 4): filing a dispute needs the last four and ZIP (something the customer knows); changing
+# or removing the contact channel, the account-takeover actions, also needs a one-time code sent to the mobile number
+# or email the bank holds on the account (something the customer has). The code is 6 digits, lives CODE_TTL_MINUTES,
+# is single-use, dies after CODE_MAX_ENTRIES wrong entries, and a new one can be sent CODE_RESEND_SECONDS after the last.
+# A correct code is good for the same VERIFICATION_TTL_MINUTES as the digits; every wrong code is a failed attempt on
+# the same account lock as a wrong last four.
+CODE_TTL_MINUTES = 5
+CODE_MAX_ENTRIES = 3
+CODE_RESEND_SECONDS = 60
 
 # Retention, per data class. Transcripts are the raw record of everything said, so they live shortest:
 # a session is deleted 30 days after its *first* turn, however recently it was used, so no line of any
@@ -96,6 +105,46 @@ def verification_gate_error(verified_at: str | None, now: str, action: str) -> s
         return f"{action} requires verify_identity in this conversation"
     if not verification_is_fresh(verified_at, now):
         return f"identity verification expired ({VERIFICATION_TTL_MINUTES} minutes); call verify_identity again before {action}"
+    return None
+
+
+def render_stepup_status(verified_at: str | None, code_verified_at: str | None, now: str, open_code: dict | None = None) -> str:
+    """One line for the system prompt: what this conversation has proved so far, and until when it counts. `open_code` is
+    the bank's record of the latest code sent to this customer (world.open_code_status), so a code sent and not yet
+    entered is stated from the record: the model neither forgets it nor invents one."""
+    def status(label: str, at: str | None) -> str:
+        if not at:
+            return f"{label}: not done"
+        if verification_is_fresh(at, now):
+            until = add_minutes(at, VERIFICATION_TTL_MINUTES)
+            return f"{label}: done at {at[11:16]} UTC, valid until {until[11:16]} UTC"
+        return f"{label}: done at {at[11:16]} UTC but expired (15 minutes); needed again"
+    code = status("one-time code", code_verified_at)
+    if not code_verified_at and open_code and open_code["status"] == "open":
+        code = (f"one-time code: sent at {open_code['sent_at'][11:16]} UTC by {open_code['sent_to']}, not yet entered, usable until "
+                f"{open_code['expires_at'][11:16]} UTC; if the customer's latest message is a 6-digit code, call confirm_verification_code "
+                "with it as entered")
+    elif not code_verified_at and open_code and open_code["status"] == "expired":
+        code = (f"one-time code: the code sent at {open_code['sent_at'][11:16]} UTC expired at {open_code['expires_at'][11:16]} UTC unused; "
+                "send a new one if the customer still needs the change")
+    elif not code_verified_at and open_code and open_code["status"] == "failed":
+        code = "one-time code: the last code was entered wrongly three times and is dead; send a new one if the account is not locked"
+    elif not code_verified_at and open_code and open_code["status"] == "consumed":
+        code = (f"one-time code: the code sent at {open_code['sent_at'][11:16]} UTC was entered correctly at {(open_code.get('closed_at') or '')[11:16]} "
+                "UTC in another conversation; this one needs its own")
+    return status("last four + ZIP", verified_at) + "; " + code
+
+
+def possession_gate_error(verified_at: str | None, code_verified_at: str | None, now: str, action: str) -> str | None:
+    """The second factor for the account-takeover actions: a fresh last-four-plus-ZIP step-up AND a fresh one-time code."""
+    error = verification_gate_error(verified_at, now, action)
+    if error:
+        return error
+    if not code_verified_at:
+        return (f"{action} also requires a one-time code: call send_verification_code, then confirm_verification_code when the "
+                "customer has entered it")
+    if not verification_is_fresh(code_verified_at, now):
+        return f"the one-time code verification expired ({VERIFICATION_TTL_MINUTES} minutes); send a new code before {action}"
     return None
 
 
