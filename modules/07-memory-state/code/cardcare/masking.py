@@ -19,11 +19,18 @@ it is, wherever its pieces sit in the message (or in the last three customer mes
    A card number is a sequence of runs (one run, or several separated by anything at all: newlines, list markers,
    sentences, words) whose digits number 13-19, start with a card network's prefix (2221-2720, 3[0,4-9], 4, 5, 6),
    pass Luhn, and are grouped like a card when they span several runs (4s with a shorter last group, Amex 4-6-5,
-   Diners 4-6-4, or spoken). The first run is used whole, the last whole or its first tokens (a code may follow
-   on the same line). One run with a card prefix and card grouping is masked even when Luhn fails: a mistyped card.
+   Diners 4-6-4, or spoken). The first run may be entered at any of its tokens (a code, PIN, expiry or order number
+   typed just before the number: "CVV: 737 5555 5555 5555 4444", "order 12345, 5555 5555 5555 4444"), the last
+   is used whole or cut after any token (a code may follow on the same line). One run with a card prefix and card
+   grouping is masked even when Luhn fails: a mistyped card. A run after a reference label ("order", "tracking") is
+   that reference, except a complete card number ending it (the round-4 review's "Order 12345 5555 5555 5555 4444").
 5. Across messages: a sequence that ends in this message and starts in one of the last three customer messages is
    masked here, and the earlier stored message is rewritten too (`mask_customer_message` returns the rewrite), so
-   the opening half of a number sent in two messages does not stay behind.
+   the opening half of a number sent in two messages does not stay behind. One exemption, measured and listed: when
+   every piece is a last-four- or ZIP-sized group (at most 5 digits per message), one message reads as a step-up
+   answer and none says "card number", the pieces are taken for verification answers that pass Luhn by chance. The
+   rest of a number whose last four was already given ("card ending 4444" ... "the first twelve: 5555 5555 5555") is
+   masked when it completes that last four into a card number.
 6. Codes and expiries. In a message that carries card data (a number found in it, or masked in one of the last
    two messages), every remaining bare candidate of 3-4 digits is the security code and every month/year pair or
    month name with a year is the expiry. Elsewhere a code is masked only after a cue phrase ("cvv", "security
@@ -59,10 +66,10 @@ _UNIT_WORDS = {"dollar", "dollars", "usd", "euro", "euros", "eur", "cents", "buc
 _CURRENCY = set("$€£¥")
 _MONTHS = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
 _MONTH = re.compile(_MONTHS + r"$", re.IGNORECASE)
-_LAST_FOUR_CUE = re.compile(r"(ending|ends|ended)(\s+(in|with|on))?\W*$|last\s+(4|four)(\s+digits?)?(\s+of\s+(my|the)\s+card)?"
+_LAST_FOUR_CUE = re.compile(r"(ending|ends|ended)(\s+(in|with|on))?\W*$|last\s*(4|four)(\s+digits?)?(\s+of\s+(my|the)\s+card)?"
                             r"(\s+(are|is|were|was))?\W*$|last\s+digits(\s+(are|is))?\W*$", re.IGNORECASE)
 # "ok just the last four then: 4689", "you only need the last four? It's 4427": the cue may sit a few words before the number
-_LAST_FOUR_LOOSE = re.compile(r"\b(last\s+(4|four)(\s+digits?)?|ending(\s+(in|with))?|ends\s+(in|with))\b(?P<tail>[^\d\n]{0,25})$", re.IGNORECASE)
+_LAST_FOUR_LOOSE = re.compile(r"\b(last\s*(4|four)(\s+digits?)?|ending(\s+(in|with))?|ends\s+(in|with))\b(?P<tail>[^\d\n]{0,25})$", re.IGNORECASE)
 # a number after one of these labels is that kind of reference, unless it is itself a valid card number
 _REFERENCE_CUE = re.compile(r"\b(tracking|order|booking|reference|ref|confirmation|invoice|ticket|receipt|claim|serial|parcel|shipment)"
                             r"(\s+(number|no\.?|num|id|code|#))?\s*[:#]?\s*$", re.IGNORECASE)
@@ -72,7 +79,7 @@ _CARD_CUE = re.compile(r"\b(card\s*(number|no\.?|num|#|:)|card\s+is|number\s+is|
 _NOT_CARD_EXPIRY = re.compile(r"\b(notice|subscription|delivery|deliver|membership|trial|offer|warranty|passport|licen[cs]e|plan|contract|"
                               r"lease|insurance|coupon|voucher|domain|prescription|visa\s+application|reservation|booking)\b", re.IGNORECASE)
 # a message answering the step-up: a last four with its usual words, or a ZIP
-_VERIFICATION_ANSWER = re.compile(r"\b(zip|zip\s*code|postal\s*code|postcode|card\s+ending|ending\s+in|last\s+(4|four))\b[^\d\n]{0,25}\d",
+_VERIFICATION_ANSWER = re.compile(r"\b(zip|zip\s*code|postal\s*code|postcode|card\s+ending|ending\s+in|last\s*(4|four))\b[^\d\n]{0,25}\d",
                                   re.IGNORECASE)
 _ZIP_CUE = re.compile(r"\b(zip|zip\s*code|postal\s*code|post\s*code|postcode)(\s+(is|was|=))?\W*$", re.IGNORECASE)
 _YEAR_CUE = re.compile(r"\b(since|in|year|from|of|until|till|by)\W*$", re.IGNORECASE)
@@ -157,10 +164,12 @@ def _tokens(text: str) -> list[dict]:
         else:
             out.append(token)
             i += 1
-    # a lone spoken unit that counts something is not a digit: "the first four are", "three digits on the back"
+    # a lone spoken number that counts something is not a digit: "the first four are", "three digits on the back", "the
+    # first twelve:" (one word: a unit, a teen or a ten; "fifty-five" and "double five" are never counts)
     counts = []
     for j, token in enumerate(out):
-        if token["spoken"] and token.get("single_word") and len(token["digits"]) == 1:
+        if token["spoken"] and token.get("single_word") and (len(token["digits"]) == 1 or token["text"].lower() in _TEENS
+                                                               or token["text"].lower() in _TENS):
             prev = out[j - 1]["text"].lower() if j else ""
             nxt = out[j + 1]["text"].lower() if j + 1 < len(out) else ""
             in_sequence = (j and out[j - 1]["spoken"]) or (j + 1 < len(out) and out[j + 1]["spoken"])
@@ -251,7 +260,9 @@ def _last_four_loose(before: str) -> bool:
 
 def _classify_references(tokens: list[dict], text: str) -> None:
     """A run of digits right after "tracking", "order #", "booking ref" ... is that reference, unless the run is itself a
-    valid card number (a label never hides a card)."""
+    valid card number, or a complete card number ends it ("Order 12345 5555 5555 5555 4444": the order number is the
+    reference, the card is a card). A label never hides a card. A long reference whose tail happens to pass Luhn
+    ("tracking 9400 1234 5678 9012 3456 78") is one number: its tail is not grouped like a whole card."""
     for i, t in enumerate(tokens):
         if t["digits"] is None or t["role"] or t["spoken"] or not _REFERENCE_CUE.search(_before(text, t, 30)):
             continue
@@ -264,10 +275,9 @@ def _classify_references(tokens: list[dict], text: str) -> None:
                 continue
             else:
                 break
-        digits = _digits(run)
-        if not (13 <= len(digits) <= 19 and _card_prefix(digits) and _passes_luhn(digits)):
-            for x in run:
-                x["role"] = "reference"
+        card_from = next((k for k in range(len(run)) if _card_after_label(run, k)), None)
+        for x in run[:card_from]:
+            x["role"] = "reference"
 
 
 def _classify_dates(tokens: list[dict], text: str) -> None:
@@ -354,6 +364,22 @@ def _card_prefix(digits: str) -> bool:
     return digits[0] == "2" and 2221 <= int(digits[:4]) <= 2720
 
 
+def _card_after_label(run: list[dict], k: int) -> bool:
+    """Whether `run[k:]` is a card number that follows a reference in the same run: 13-19 digits, a card prefix, Luhn,
+    card grouping, and (unless it is the whole run) a label token before it that is not grouped like the card's first
+    group. "Order 12345 5555 5555 5555 4444" and "order no. 2654861; 3782 822463 10005" are a label and a card; a
+    tracking number whose tail happens to pass Luhn ("9400 1234 5678 9012 3456 78") is one number, and so is "order
+    1234 5555 5555 5555 4444", which reads as twenty digits in fours: that shape is a listed miss."""
+    tokens = run[k:]
+    digits = _digits(tokens)
+    if not (13 <= len(digits) <= 19 and _card_prefix(digits) and _passes_luhn(digits)):
+        return False
+    lengths = [len(t["digits"]) for t in tokens]
+    if not _card_grouping(lengths, spoken=False, digits=digits):
+        return False
+    return k == 0 or len(run[k - 1]["digits"]) != lengths[0]
+
+
 def _card_grouping(lengths: list[int], spoken: bool, digits: str = "") -> bool:
     """How a card is written in groups: 4s (or 8s, 12s) with a last group no longer than the one before it, equal
     groups with a shorter last one (6-6-4), Amex 4-6-5, Diners 4-6-4; spoken groups and a single group are free."""
@@ -407,40 +433,51 @@ def _card_sequences(runs: list[list[dict]]) -> list[list[dict]]:
 def _card_sequences_in(runs: list[list[dict]]) -> list[list[dict]]:
     found = []
     for i in range(len(runs)):
-        total = 0
-        for j in range(i, min(len(runs), i + 19)):
-            if any(t["role"] == "last4" for run in runs[i:j] for t in run):
-                break  # a last four may only end a card number
-            for cut in range(len(runs[j]), 0, -1):
-                pieces = [run for run in runs[i:j]] + [runs[j][:cut]]
-                tokens = [t for run in pieces for t in run]
-                digits = _digits(tokens)
-                last = tokens[-1]
-                # a number run into its code: one spoken group, or one long written token, with 3-4 code digits on the end
-                if cut == len(runs[j]) and (last["spoken"] or len(last["digits"]) >= 16) and len(digits) <= 23 and _card_prefix(digits):
-                    tails = [k for k in ((1, 2, 3, 4) if last["spoken"] else (3, 4)) if k < len(last["digits"])]
-                    if any(13 <= len(digits) - k <= 19 and _passes_luhn(digits[:-k]) for k in tails):
-                        found.append(tokens)
-                        break
-                if not 13 <= len(digits) <= 19 or not _card_prefix(digits):
-                    continue
-                spoken = all(t["spoken"] for t in tokens)
-                lengths = [len(_digits(run)) for run in pieces] if any(t["spoken"] for t in tokens) else [len(t["digits"]) for t in tokens]
-                if _passes_luhn(digits) and (len(pieces) == 1 or _card_grouping(lengths, spoken, digits)):
+        for start in range(len(runs[i])):
+            found += _card_sequences_from(runs, i, runs[i][start:])
+    return found
+
+
+def _card_sequences_from(runs: list[list[dict]], i: int, first: list[dict]) -> list[list[dict]]:
+    """Card numbers that begin with `first` (the first run, or a suffix of it: a code, PIN, expiry or order number typed
+    just before the number in the same run is not part of it) and end in a later run or in `first` itself."""
+    found = []
+    total = 0
+    for j in range(i, min(len(runs), i + 19)):
+        head = [first] + runs[i + 1:j]
+        if any(t["role"] == "last4" for run in head for t in run):
+            break  # a last four may only end a card number
+        last_run = first if j == i else runs[j]
+        for cut in range(len(last_run), 0, -1):
+            pieces = head + [runs[j][:cut]] if j > i else [first[:cut]]
+            tokens = [t for run in pieces for t in run]
+            digits = _digits(tokens)
+            last = tokens[-1]
+            # a number run into its code: one spoken group, or one long written token, with 3-4 code digits on the end
+            if cut == len(last_run) and (last["spoken"] or len(last["digits"]) >= 16) and len(digits) <= 23 and _card_prefix(digits):
+                tails = [k for k in ((1, 2, 3, 4) if last["spoken"] else (3, 4)) if k < len(last["digits"])]
+                if any(13 <= len(digits) - k <= 19 and _passes_luhn(digits[:-k]) for k in tails):
                     found.append(tokens)
                     break
-                # a mistyped card: one written run, card grouping, Luhn fails
-                # ... or pasted one group per line, nothing but line breaks and list markers between the groups
-                shape = [len(t["digits"]) for t in tokens]
-                one_message = len({t.get("message", 0) for t in tokens}) == 1
-                no_words = not any(t.get("words_before") for run in pieces[1:] for t in run[:1])
-                if cut == len(runs[j]) and not spoken and one_message and (len(pieces) == 1 or no_words) and (
-                        shape in ([4, 4, 4, 4], [4, 6, 5], [4, 4, 4, 4, 3], [5, 5, 5]) or (len(tokens) == 1 and len(digits) in (15, 16))):
-                    found.append(tokens)
-                    break
-            total += len(_digits(runs[j]))
-            if total > 19:
+            if not 13 <= len(digits) <= 19 or not _card_prefix(digits):
+                continue
+            spoken = all(t["spoken"] for t in tokens)
+            lengths = [len(_digits(run)) for run in pieces] if any(t["spoken"] for t in tokens) else [len(t["digits"]) for t in tokens]
+            if _passes_luhn(digits) and (len(pieces) == 1 or _card_grouping(lengths, spoken, digits)):
+                found.append(tokens)
                 break
+            # a mistyped card: one written run, card grouping, Luhn fails
+            # ... or pasted one group per line, nothing but line breaks and list markers between the groups
+            shape = [len(t["digits"]) for t in tokens]
+            one_message = len({t.get("message", 0) for t in tokens}) == 1
+            no_words = not any(t.get("words_before") for run in pieces[1:] for t in run[:1])
+            if cut == len(last_run) and not spoken and one_message and (len(pieces) == 1 or no_words) and (
+                    shape in ([4, 4, 4, 4], [4, 6, 5], [4, 4, 4, 4, 3], [5, 5, 5]) or (len(tokens) == 1 and len(digits) in (15, 16))):
+                found.append(tokens)
+                break
+        total += len(_digits(last_run))
+        if total > 19:
+            break
     return found
 
 
@@ -473,6 +510,12 @@ def mask_card_numbers(text: str) -> str:
 def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, taken: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
     spans = []
     inside = lambda t: any(t["start"] >= a and t["end"] <= b for a, b, _ in taken + spans)
+    # an expiry typed as four digits after its cue ("exp 0827"): an expiry, before the code rule can take it for a code
+    for t in tokens:
+        if t["digits"] is not None and not t["spoken"] and t["role"] is None and len(t["digits"]) == 4 and 1 <= int(t["digits"][:2]) <= 12 \
+                and not inside(t) \
+                and _card_expiry_cue(_before(text, t, 30), text, t):
+            spans.append((t["start"], t["end"], EXPIRY_MASK))
     for run in _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True):  # never a last four, ZIP or year
         first, last = run[0], run[-1]
         digits = _digits(run)
@@ -533,9 +576,11 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
     rewrites: dict[int, list[tuple[int, int, str]]] = {}
     window = list(range(max(0, len(previous) - 3), len(previous)))
     earlier = []
+    last_fours = [t["digits"] for t in tokens if t["role"] == "last4"]
     for index in window:
         earlier_text = normalize(previous[index])
         earlier_tokens = [dict(t, message=index) for t in _tokens(earlier_text)]
+        last_fours += [t["digits"] for t in earlier_tokens if t["role"] == "last4"]
         for run in _runs(earlier_tokens, earlier_text, index):
             earlier.append([dict(t, message=index) for t in run])
     answers = {index for index in window if _VERIFICATION_ANSWER.search(previous[index])}
@@ -551,9 +596,12 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
                 continue
             involved = {t["message"] for t in seq}
             # verification answers typed in turn ("hmm, 2425?", "try 0634", "card ending 8230, ZIP 81775") can pass Luhn
-            # together by chance: they complete a card number only if the customer said they were giving one
+            # together by chance: short pieces (a last-four or ZIP-sized group per message) complete a card number only if
+            # the customer said they were giving one. A message that holds eight or more digits of the number is never
+            # an answer, whatever else it says ("5555 5555 5555 and my zip is 94107" / "4444": the round-4 review)
             texts = [normalize(previous[i]) if i < len(previous) else text for i in involved]
-            if involved & answers and not any(_CARD_CUE.search(x) for x in texts):
+            short = all(len(_digits([t for t in seq if t["message"] == m])) <= 5 for m in involved)
+            if involved & answers and short and not any(_CARD_CUE.search(x) for x in texts):
                 continue
             spans.append((here[0]["start"], here[-1]["end"], CARD_DIGITS_MASK))
             for index in {t["message"] for t in there}:
@@ -571,6 +619,15 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
                     piece = [t for run in earlier_runs[a:b] for t in run]
                     if len(_digits(piece)) >= 12 and abs(len(_digits(piece)) - len(digits)) <= 2 and _edit_distance(_digits(piece), digits) <= 2:
                         rewrites.setdefault(index, []).append((piece[0]["start"], piece[-1]["end"], CARD_DIGITS_MASK))
+    # the rest of a number whose last four was already given, here or in the window ("card ending 4444, zip 94107" then "and
+    # the first twelve: 5555 5555 5555"): card-prefixed digits in card groups that complete a last four into a Luhn number
+    taken = lambda run: any(run[0]["start"] >= a and run[-1]["end"] <= b for a, b, _ in spans)
+    for run in runs:
+        digits = _digits(run)
+        if 8 <= len(digits) <= 15 and _card_prefix(digits) and not taken(run) and all(t["role"] is None for t in run) \
+                and (len(run) == 1 or all(len(t["digits"]) == 4 for t in run)) \
+                and any(13 <= len(digits + lf) <= 19 and _passes_luhn(digits + lf) for lf in last_fours):
+            spans.append((run[0]["start"], run[-1]["end"], CARD_DIGITS_MASK))
     card_context = bool(spans) or any(CARD_NUMBER_MASK in p or CARD_DIGITS_MASK in p for p in previous[-2:]) \
         or any(_card_expiry_cue(text[:t["start"]][-30:], text, t) for t in tokens if t["role"] in ("month_pair", "month_year")) \
         or bool(re.search(r"\b(cvv2?|cvc2?|cid|csc|security\s+code|card\s+number)\b", text, re.IGNORECASE))
