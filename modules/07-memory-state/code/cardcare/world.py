@@ -34,7 +34,9 @@ from datetime import timedelta
 from pathlib import Path
 
 from cardcare.clock import format_instant, parse_instant
-from cardcare.memory_policy import (CODE_MAX_ENTRIES, CODE_RESEND_SECONDS, CODE_TTL_MINUTES, MAX_VERIFICATION_ATTEMPTS, VERIFICATION_LOCK_HOURS,
+from cardcare.masking import ONE_TIME_CODE_MASK
+from cardcare.memory_policy import (CODE_MAX_ENTRIES, CODE_RESEND_SECONDS, CODE_TTL_MINUTES, MAX_CODES_PER_DAY, MAX_VERIFICATION_ATTEMPTS,
+                                    VERIFICATION_LOCK_HOURS,
                                     VERIFICATION_TTL_MINUTES)
 
 SCHEMA = """
@@ -435,10 +437,21 @@ def issue_code(db_path: Path, user_id: str, session_id: str, now: str, max_failu
                     return {"error": f"a code was sent {int(age)} seconds ago and is still valid; ask the customer to enter it "
                                      f"(a new one can be sent {CODE_RESEND_SECONDS} seconds after the last)",
                             "sent_to": masked_destination(open_code["channel"], open_code["destination"])}
+            day_ago = format_instant(parse_instant(instant) - timedelta(hours=24))
+            recent = [row["sent_at"] for row in conn.execute("SELECT sent_at FROM verification_challenges WHERE user_id = ? AND sent_at > ? "
+                                                             "ORDER BY sent_at", (user_id, day_ago))]
+            if len(recent) >= MAX_CODES_PER_DAY:  # refused before the open code is touched: it stays usable
+                again = format_instant(parse_instant(recent[0]) + timedelta(hours=24))
+                return {"error": f"{MAX_CODES_PER_DAY} codes were sent to this account in the last 24 hours, which is the limit; no code is sent "
+                                 f"and none can be until {again}. A code already sent stays valid for its {CODE_TTL_MINUTES} minutes; "
+                                 "otherwise the customer must call Kestrel"}
+            if open_code:
                 conn.execute("UPDATE verification_challenges SET status = 'cancelled', closed_at = ? WHERE challenge_id = ?",
                              (instant, open_code["challenge_id"]))
             channel, destination = conn.execute("SELECT otp_channel, otp_destination FROM customers WHERE user_id = ?", (user_id,)).fetchone()
-            code, salt = f"{secrets.randbelow(10 ** 6):06d}", secrets.token_hex(8)
+            # six digits that never start with zero: a code is then the same six digits wherever it is handled as a number
+            # (a model's JSON argument, a msgpack integer), where "039074" would be 39074 and no reader would know it
+            code, salt = str(100_000 + secrets.randbelow(900_000)), secrets.token_hex(8)
             expires_at = format_instant(parse_instant(instant) + timedelta(minutes=CODE_TTL_MINUTES))
             try:
                 conn.execute("INSERT INTO verification_challenges (challenge_id, user_id, session_id, code_hash, salt, channel, destination,"
@@ -501,7 +514,8 @@ def attempt_code(db_path: Path, user_id: str, entered: str, now: str, max_failur
                          (attempts, "failed" if dead else "open", instant if dead else None, open_code["challenge_id"]))
             conn.execute("INSERT INTO verification_attempts (user_id, at, succeeded, kind, session_id, guess_hash) VALUES (?, ?, 0, 'code', ?, ?)",
                          (user_id, instant, session_id, _guess_hash(open_code["challenge_id"], digits)))
-            return {"outcome": "mismatch", "failures": failures + 1, "entries_left": 0 if dead else CODE_MAX_ENTRIES - attempts, "code_dead": dead}
+            return {"outcome": "mismatch", "failures": failures + 1, "entries_left": 0 if dead else CODE_MAX_ENTRIES - attempts, "code_dead": dead,
+                    "account_locked": failures + 1 >= max_failures}
         finally:
             conn.execute("COMMIT")
 
@@ -551,20 +565,153 @@ def possession_proved_at(db_path: Path, user_id: str, session_id: str, now: str)
     return code["closed_at"]
 
 
-def codes_matching(db_path: Path, text: str) -> list[str]:
-    """The 6-digit runs in `text` that are one of the bank's one-time codes, open or dead, by salted hash. What the
-    harness redacts from a stored message when the customer typed a code outside a wait (nothing pending, so no tool
-    took it): a code the bank issued is never kept in a transcript, whatever happened to it and whoever it was sent to
-    (a code read off someone else's phone is still a code). Every customer's challenges are compared: one hash per
-    challenge row per 6-digit run, which a deployment would bound by the challenge's age."""
-    runs = sorted(set(re.findall(r"(?<!\d)\d{6}(?!\d)", text)))
-    if not runs:
-        return []
+_CODE_SEPARATOR = r"[ \u00a0.\-]"
+_NUMBER_WORDS = {"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8",
+                 "nine": "9"}
+# six digits the way a code is typed: together, as two threes, as three pairs, or one at a time, one separator between
+# groups; never part of a longer run of digits ("+1 415 555 0100", "5555 5555 5555 4444" and "1,234,567" hold none)
+_CODE_SPAN = re.compile(
+    rf"(?<!\d)(?<!\d{_CODE_SEPARATOR})(?:\d{{6}}|\d{{3}}{_CODE_SEPARATOR}\d{{3}}|\d{{2}}{_CODE_SEPARATOR}\d{{2}}{_CODE_SEPARATOR}\d{{2}}"
+    rf"|\d(?:{_CODE_SEPARATOR}\d){{5}})(?!\d)(?!{_CODE_SEPARATOR}\d)")
+_SPOKEN_DIGITS = re.compile(r"\b(?:" + "|".join(_NUMBER_WORDS) + r")\b(?:[\s,\-]+(?:" + "|".join(_NUMBER_WORDS) + r")\b)*", re.IGNORECASE)
+
+
+def code_spans(text: str) -> list[tuple[int, int, str]]:
+    """Every place in `text` where a one-time code may have been typed, as (start, end, its six digits). This is the one
+    definition of "a typed code": the bank checks what it finds, the harness removes what it finds, and nothing else is
+    ever compared with a code. Round 5 had two definitions (the check stripped every non-digit, the redaction looked for
+    six contiguous digits), so "481 975" was accepted and kept."""
+    spans = [(m.start(), m.end(), re.sub(r"\D", "", m.group())) for m in _CODE_SPAN.finditer(text)]
+    for m in _SPOKEN_DIGITS.finditer(text):
+        words = re.findall(r"[A-Za-z]+", m.group())
+        if len(words) == 6:
+            spans.append((m.start(), m.end(), "".join(_NUMBER_WORDS[w.lower()] for w in words)))
+    return sorted(spans)
+
+
+def _without(text: str, spans: list[tuple[int, int, str]]) -> str:
+    for start, end, _ in sorted(spans, reverse=True):
+        text = text[:start] + ONE_TIME_CODE_MASK + text[end:]
+    return text
+
+
+def take_code_entry(db_path: Path, user_id: str, session_id: str, text: str, now: str, max_failures: int,
+                    repeat_of_lost_call: bool = False) -> dict:
+    """The door every customer message passes before the model reads it or anything stores it. Returns the text to keep
+    and what the bank made of it: {"text", "entry"}.
+
+    While the bank holds an open code for this customer, every code-shaped span is replaced by the marker, in any of
+    their conversations, match or not: what the customer can read never tells the code from another six-digit number.
+    Round 5 replaced a span only when it hash-matched an issued code and did so in the reply, which made the marker a
+    yes/no test of "is this the code" outside the attempt counter (the round-5 review's list echo: 300 candidates a
+    message, no failure recorded). The only comparison is the entry: in the conversation the code was sent from, a
+    message with exactly one span is checked once by attempt_code, counted like any attempt. No span is not an entry.
+    Two or more are not compared at all.
+
+    With no code open, six digits are just six digits, except the customer's own dead codes, which are removed by salted
+    hash (a dead code is worth nothing, so saying which number it was gives nothing away). The same hash search runs
+    over what the shape rule leaves: a code of theirs written in a form the bank does not take is removed, and if it is
+    the open code, that code is cancelled first (outcome "written_unusably")."""
+    spans = code_spans(text)
     with closing(_connect(db_path)) as conn:
         if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+            return {"text": text, "entry": None}
+        open_code = conn.execute("SELECT session_id, expires_at FROM verification_challenges WHERE user_id = ? AND status = 'open'",
+                                 (user_id,)).fetchone()
+        issued = conn.execute("SELECT code_hash, salt FROM verification_challenges WHERE user_id = ?", (user_id,)).fetchall()
+    usable = open_code is not None and parse_instant(now) < parse_instant(open_code["expires_at"])
+    if open_code is None or (not usable and open_code["session_id"] != session_id):
+        # Nothing can be entered: six digits are six digits again, five minutes after the send at the latest. A code past
+        # its five minutes that nobody has typed since is still marked open; it is as dead as a used one.
+        return {"text": _marked(text, codes_exposed_in(db_path, user_id, text, now)), "entry": None}
+    kept = _without(text, spans)  # by shape: every form the bank takes, whether or not it is the code
+    # By hash, in what is left: one of the customer's own codes in a form the bank does not take ("481,975", "4819 75").
+    # It is not an entry and not something to keep. If it is the open code, that code is cancelled before anything is
+    # said: it has been written into a conversation, and a match is never an answer about a code that can still be used.
+    kept = _marked(kept, codes_exposed_in(db_path, user_id, kept, now))
+    if not _has_open_code(db_path, user_id):
+        return {"text": kept, "entry": {"outcome": "written_unusably"}}
+    if open_code["session_id"] != session_id:
+        return {"text": kept, "entry": {"outcome": "other_conversation"} if spans else None}
+    if not spans:
+        return {"text": kept, "entry": {"outcome": "no_code_entered"}}
+    if len(spans) > 1:
+        return {"text": kept, "entry": {"outcome": "several_numbers"}}
+    attempt = attempt_code(db_path, user_id, spans[0][2], now, max_failures, session_id=session_id, repeat_of_lost_call=repeat_of_lost_call)
+    return {"text": kept, "entry": {key: value for key, value in attempt.items() if key != "code"}}
+
+
+def _marked(text: str, renderings: list[str]) -> str:
+    for rendering in sorted(renderings, key=len, reverse=True):
+        text = text.replace(rendering, ONE_TIME_CODE_MASK)
+    return text
+
+
+def _has_open_code(db_path: Path, user_id: str) -> bool:
+    with closing(_connect(db_path)) as conn:
+        return conn.execute("SELECT 1 FROM verification_challenges WHERE user_id = ? AND status = 'open'", (user_id,)).fetchone() is not None
+
+
+def open_code_sent_at(db_path: Path, user_id: str, session_id: str) -> str | None:
+    """When the customer's open code was sent, if it was sent from this conversation: only then is there anything to
+    wait for here (None otherwise)."""
+    with closing(_connect(db_path)) as conn:
+        row = conn.execute("SELECT session_id, sent_at FROM verification_challenges WHERE user_id = ? AND status = 'open'", (user_id,)).fetchone()
+    return row["sent_at"] if row and row["session_id"] == session_id else None
+
+
+def waits_for_an_entry(db_path: Path, user_id: str, session_id: str, entry: dict | None, now: str) -> bool:
+    """Whether confirm_verification_code should pause for the customer's next message: a code sent from this conversation
+    is open, and this turn's message was not an entry for it (it held no code, or the code was sent during this turn,
+    after the message was read: "that one expired, send another" is answered with a new code and a new wait)."""
+    sent_at = open_code_sent_at(db_path, user_id, session_id)
+    return sent_at is not None and ((entry or {}).get("outcome") in (None, "no_code_entered") or parse_instant(sent_at) >= parse_instant(now))
+
+
+def attempt_went_unanswered(db_path: Path, user_id: str, session_id: str, recorded_through: str | None) -> bool:
+    """Whether the bank holds a code attempt from this conversation that is newer than anything the conversation itself
+    recorded: the door checked an entry and the process stopped before the turn was stored, so the customer never saw
+    an answer. Only then is the same entry typed again the lost one repeated (attempt_code's `repeat_of_lost_call`)."""
+    with closing(_connect(db_path)) as conn:
+        row = conn.execute("SELECT at FROM verification_attempts WHERE user_id = ? AND session_id = ? AND kind = 'code' ORDER BY rowid DESC LIMIT 1",
+                           (user_id, session_id)).fetchone()
+    return bool(row) and (recorded_through is None or parse_instant(row["at"]) > parse_instant(recorded_through))
+
+
+# Six digits in order with up to two characters that are neither digits nor letters between any two of them, not
+# touching a digit or a letter: every way a code can sit in text, the forms the door takes and the ones it does not
+# ("481,975", "4819 75"). Dates, clock times and ids are blanked first: they are never a code.
+_SIX_DIGITS_ANYHOW = re.compile(r"(?<![0-9A-Za-z])(?=(\d(?:[^0-9A-Za-z]{0,2}\d){5})(?![0-9A-Za-z]))")
+_DATE_TIME_OR_ID = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?(?:Z|[+-]\d{2}:\d{2})?"
+                              r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def codes_exposed_in(db_path: Path, user_id: str, text: str, now: str) -> list[str]:
+    """Defence in depth for what did not come through the door as an entry: a code the customer wrote in a form the bank
+    does not take ("481,975"), and a model's own output (a reply, a tool-call argument, as text or as a number). `text`
+    is searched for this customer's codes, by salted hash, in every rendering the evidence check can read. If it holds
+    one, the open code is cancelled on the spot: it has been written into a conversation, so it is burnt, and saying
+    which number it was is then worth nothing (a match is never an answer about a code that can still be used). Every
+    matching rendering is returned for the caller to rewrite."""
+    readable = _DATE_TIME_OR_ID.sub(lambda m: "#" * len(m.group()), text)
+    candidates = {m.group(1): re.sub(r"\D", "", m.group(1)) for m in _SIX_DIGITS_ANYHOW.finditer(readable)}
+    candidates.update({text[start:end]: digits for start, end, digits in code_spans(text)})  # number words too
+    if not candidates:
+        return []
+    with closing(_connect(db_path)) as conn, conn:
+        if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
             return []
-        rows = conn.execute("SELECT code_hash, salt FROM verification_challenges").fetchall()
-    return [run for run in runs if any(_code_hash(run, row["salt"]) == row["code_hash"] for row in rows)]
+        rows = conn.execute("SELECT challenge_id, code_hash, salt, status FROM verification_challenges WHERE user_id = ?", (user_id,)).fetchall()
+        found = []
+        for rendering, digits in candidates.items():
+            matches = [row for row in rows if _code_hash(digits, row["salt"]) == row["code_hash"]]
+            if matches:
+                found.append(rendering)
+                for row in matches:
+                    if row["status"] == "open":
+                        conn.execute("UPDATE verification_challenges SET status = 'cancelled', closed_at = ? WHERE challenge_id = ?",
+                                     (format_instant(parse_instant(now)), row["challenge_id"]))
+    return found
 
 
 def list_challenges(db_path: Path) -> list[dict]:

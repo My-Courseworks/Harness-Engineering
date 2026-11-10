@@ -206,6 +206,11 @@ def _due_records(db_path: Path, now: str) -> list[dict]:
     return sorted(due, key=lambda r: parse_instant(r["trigger_at"]))
 
 
+def customers_with_due_records(db_path: Path, now: str) -> set[str]:
+    """The customers the scheduler is about to fire something for at `now`."""
+    return {record["user_id"] for record in _due_records(db_path, now)}
+
+
 def _set_status(db_path: Path, followup_id: str, from_status: str, to_status: str, **fields) -> bool:
     """Compare-and-set transition, so two workers can never both fire one record, and a record an erasure cancelled
     mid-fire stays cancelled. A reminder that becomes done, failed or cancelled loses its note in the same statement."""

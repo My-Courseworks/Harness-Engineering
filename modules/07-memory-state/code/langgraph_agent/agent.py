@@ -49,7 +49,8 @@ from pydantic import BaseModel
 from cardcare import desk, privacy, procedures, scheduler, world
 from cardcare.clock import parse_instant, wall_clock_now
 from cardcare.episodes import build_episode, case_outcomes, group_by_customer_turn, own_case_ids, parse_reflection, reflection_prompt
-from cardcare.masking import MASK_TOKEN, ONE_TIME_CODE_MASK, mask_card_numbers, mask_customer_message, mask_customer_text, removed_fragments, scrub_fragments, turn_without_codes
+from cardcare.masking import (MASK_TOKEN, ONE_TIME_CODE_MASK, mask_card_numbers, mask_customer_message, mask_customer_text, normalize,
+                              removed_fragments, removed_summary, scrub_fragments, turn_without_codes)
 from cardcare.memory_policy import (
     DEFAULT_CHANNEL,
     VERIFICATION_TTL_MINUTES,
@@ -62,6 +63,7 @@ from cardcare.memory_policy import (
     WORKING_KEEP_TURNS,
     WORKING_WINDOW_TURNS,
     build_fact,
+    describe_code_entry,
     episode_is_expired,
     fact_is_expired,
     possession_gate_error,
@@ -76,7 +78,7 @@ from cardcare.model_config import DEEPSEEK_MODEL, TRANSPORT_RETRIES, deepseek_ap
 from cardcare.retrieval import EMBEDDING_DIMS, embed_texts, search_policy as search_policy_documents
 from cardcare.sessions import LIVE, SessionKind, followup_kind
 from cardcare.tool_args import (
-    CardLast4, CaseId, CustomerMessage, DisputeReason, EnteredCode, EvidenceNote, FactKey, FactValue, FollowupId, MalformedTool, MemoryQuery,
+    CardLast4, CaseId, CustomerMessage, DisputeReason, EvidenceNote, FactKey, FactValue, FollowupId, MalformedTool, MemoryQuery,
     Merchant, NewEvidence, OptionalCaseId, PolicyQuestion, PostalCode, RemindAt, ReminderNote, RemindOn, TimeZone, TransactionId,
     ValidUntil,
 )
@@ -122,6 +124,10 @@ class TurnContext:
     user_id: str
     now: str
     session_id: str = ""
+    code_entry: dict | None = None  # what the door made of this turn's message (world.take_code_entry)
+    resumed_with: str = ""          # the customer's message, as stored, when it resumed a wait for the code
+    resumed_call: str = ""          # the id of the paused confirm_verification_code call that message resumed
+    masking_note: str = ""          # what the masker removed from this turn's message (masking.removed_summary)
 
 
 class Harness(NamedTuple):
@@ -383,12 +389,14 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
         conversation's transcript is deleted when it ends. Nothing more can be stored for them in this conversation."""
         now = runtime.context.now
         result = erase_customer_memory(h, runtime.context.user_id, now, requesting_session=_session(runtime))
-        return json.dumps({"erased_now": f"{result['facts']} remembered facts, {result['episodes']} past-conversation summaries, "
-                                         f"{result['transcripts']} other conversation transcripts, {len(result['reminders_cancelled'])} "
-                                         "reminders with their notes",
-                           "this_conversation": "its transcript is deleted when the conversation ends, or once it has been idle for 30 minutes "
-                                                "if the customer just closes the chat; nothing more can be stored for the customer in it (a "
-                                                "new conversation afterwards starts fresh)",
+        return json.dumps({"erased_now": {"remembered_facts": result["fact_kinds"] or "none were stored",
+                                          "past_conversation_summaries": result["episodes"],
+                                          "other_conversation_transcripts": result["transcripts"],
+                                          "reminders_with_their_notes": len(result["reminders_cancelled"])},
+                           "this_conversation": "its transcript is deleted when the conversation ends, once it has been idle for 30 minutes "
+                                                "if the customer just closes the chat, or when a scheduled follow-up of theirs falls due, "
+                                                "whichever comes first; until then the customer can keep talking here, and nothing more can "
+                                                "be stored for them in it (a new conversation afterwards starts fresh)",
                            "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"})
 
     @tool
@@ -402,26 +410,34 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
         return json.dumps(world.issue_code(h.bank_db, runtime.context.user_id, _session(runtime), runtime.context.now, MAX_VERIFICATION_ATTEMPTS))
 
     @tool
-    def confirm_verification_code(runtime: ToolRuntime[TurnContext], entered: EnteredCode = None) -> Command:
-        """Check the one-time code that was just sent. If the customer already typed it in their latest message, pass it as
-        `entered`. Otherwise call it with no argument: the conversation pauses until the customer's next message, which is
-        taken as their entry. Never ask the customer to read the code to you and never repeat it."""
+    def confirm_verification_code(runtime: ToolRuntime[TurnContext]) -> Command:
+        """Wait for, or read the result of, the customer's one-time code. It takes no arguments: the harness takes a typed
+        code out of the customer's message before you see it (you see [REDACTED ONE-TIME CODE] in its place) and has the
+        bank check it. Call it right after send_verification_code: the conversation pauses until the customer's next
+        message. Call it again after a message that held an entry to read what the bank made of it. Never ask the
+        customer to read the code to you."""
         # Nothing with a side effect may precede interrupt(): LangGraph re-runs the interrupted task from the top on resume
-        # (this call only: every tool call is its own task, see dispatch_tool_calls). A read may:
-        # when the bank already holds this conversation's proof (a code consumed just before a crash), there is no wait
-        now = runtime.context.now
-        proved = world.possession_proved_at(h.bank_db, runtime.context.user_id, _session(runtime), now)
-        entered = str(entered or ("" if proved else interrupt({"ask": "the one-time code the bank sent"})))
-        if proved:  # this conversation already entered the right code (its result was lost to a crash): the bank record is the result
-            is_code = entered.strip().isdigit() and len(entered.strip()) == 6
-            result = {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK if is_code else entered,
-                      "note": "the code was entered correctly before the process stopped; this result is rebuilt from the bank's record of it, so carry out the change or removal the customer asked for before the code was sent" + ("" if is_code else "; the customer's latest message was not a code: answer it too")}
-            return Command(update={"possession_verified_at": proved, "messages": [ToolMessage(json.dumps(result), tool_call_id=runtime.tool_call_id)]})
-        result = _code_result(world.attempt_code(h.bank_db, runtime.context.user_id, entered, now, MAX_VERIFICATION_ATTEMPTS,
-                                                 session_id=_session(runtime),
-                                                 repeat_of_lost_call=world.lost_result_is_recent(runtime.state.get("lost_result_at"), now)), entered)
-        update = {"possession_verified_at": now} if result.get("verified") else {}
-        return Command(update={**update, "messages": [ToolMessage(json.dumps(result), tool_call_id=runtime.tool_call_id)]})
+        # (this call only: every tool call is its own task, see dispatch_tool_calls). Reads may. The entry itself never
+        # passes through here: the door (run_turn) took it out of the message and had the bank check it.
+        context, session = runtime.context, _session(runtime)
+        proved = world.possession_proved_at(h.bank_db, context.user_id, session, context.now)
+        entry = context.code_entry
+        waits = not proved and world.waits_for_an_entry(h.bank_db, context.user_id, session, entry, context.now)
+        answer = lambda result, update=None: Command(update={**(update or {}), "messages": [ToolMessage(json.dumps(result), tool_call_id=runtime.tool_call_id)]})
+        if runtime.tool_call_id == context.resumed_call:
+            # the re-run of the call this turn's message resumed: interrupt() returns at once. Taking the resume value here
+            # is what lets a later wait in the same turn pause ("I didn't get it, send a new one": a new code, a new wait).
+            interrupt({"ask": "the one-time code the bank sent"})
+        elif waits:
+            last_ai = next((m for m in reversed(runtime.state["messages"]) if isinstance(m, AIMessage)), None)
+            confirms = [c["id"] for c in (last_ai.tool_calls if last_ai else []) if c["name"] == "confirm_verification_code"]
+            if confirms and runtime.tool_call_id != confirms[0]:
+                # two waits in one model response would be two interrupts, which one customer message cannot resume: the
+                # conversation would fail at every later turn (the round-5 review's non-blocking 2). One wait is the wait.
+                return answer({"verified": False, "note": "one wait for the code is already open from this same response; this call does nothing"})
+            interrupt({"ask": "the one-time code the bank sent"})
+        update = {"possession_verified_at": proved} if proved else ({"possession_verified_at": context.now} if (entry or {}).get("outcome") == "matched" else {})
+        return answer(describe_code_entry(entry, context.resumed_with, proved), update)
 
     @tool
     def notify_customer(message: CustomerMessage, runtime: ToolRuntime[TurnContext]) -> str:
@@ -462,38 +478,16 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
     return [t for t in tools if t.name not in excluded]
 
 
-def _code_result(attempt: dict, entered: str) -> dict:
-    """What the model is told after a code entry; the code itself is never in it."""
-    outcome = attempt["outcome"]
-    if outcome == "matched":
-        return {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK,
-                "next": "the step-up is complete: carry out the change or removal the customer asked for before the code was sent, "
-                        "without asking them to repeat it"}
-    if outcome == "locked":
-        return {"verified": False, "error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after "
-                                            f"{MAX_VERIFICATION_ATTEMPTS} failed attempts; the customer must call Kestrel"}
-    if outcome == "mismatch":
-        return {"verified": False, "error": "that code is not right", "entries_left_for_this_code": attempt["entries_left"],
-                "customer_entered": ONE_TIME_CODE_MASK}
-    if outcome == "expired":
-        return {"verified": False, "error": "the code expired (5 minutes) and no new code has been sent; tell the customer and send a new one only if they ask (send_verification_code)",
-                "customer_entered": ONE_TIME_CODE_MASK if entered.strip().isdigit() else entered}
-    if outcome == "no_open_code":
-        return {"verified": False, "error": "no code is open for this customer; call send_verification_code first", "customer_entered": entered}
-    return {"verified": False, "customer_entered": entered,
-            "note": "the customer wrote this instead of a code: answer it; the code already sent stays valid for its 5 minutes, so call "
-                    "confirm_verification_code again when they are ready, without sending a new one"}
-
-
-def _pending_interrupt(h: Harness, user_id: str, session_id: str) -> bool:
-    """Is the thread paused inside confirm_verification_code, waiting for the customer's entry? The thread is then parked
-    before its tools node with that call unanswered. (Verified: the parked state survives a restart and an update_state,
-    such as the reflection marks a session end writes, and Command(resume=...) still continues it; the interrupt value in
-    the snapshot does not survive an update_state, so it is not what is checked.)"""
+def _paused_confirm_call(h: Harness, user_id: str, session_id: str) -> str:
+    """The id of the confirm_verification_code call the thread is paused inside, waiting for the customer's entry ("" when
+    it is not paused). The thread is then parked before its tools node with that call unanswered. (Verified: the parked
+    state survives a restart and an update_state, such as the reflection marks a session end writes, and
+    Command(resume=...) still continues it; the interrupt value in the snapshot does not survive an update_state, so it is
+    not what is checked.)"""
     messages = _thread_state(h, user_id, session_id).get("messages", [])
     answered = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
     last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
-    return bool(last_ai) and any(c["name"] == "confirm_verification_code" and c["id"] not in answered for c in last_ai.tool_calls)
+    return next((c["id"] for c in (last_ai.tool_calls if last_ai else []) if c["name"] == "confirm_verification_code" and c["id"] not in answered), "")
 
 
 # --------------------------------------------------------------------------- graph
@@ -531,7 +525,8 @@ def build_graph(h: Harness, disabled_tools: tuple[str, ...] = (), kind: SessionK
         system = procedures.render_system_prompt(text, version, profile, settings["dispute_review_days"], runtime.context.now,
                                                  render_stepup_status(state.get("identity_verified_at"), state.get("possession_verified_at"),
                                                                       runtime.context.now,
-                                                                      world.open_code_status(h.bank_db, runtime.context.user_id, runtime.context.now)))
+                                                                      world.open_code_status(h.bank_db, runtime.context.user_id, runtime.context.now)),
+                                                 runtime.context.masking_note)
         context = [SystemMessage(system), *windowed_messages(state["messages"], state.get("reflected_turns") or 0)]
         response = model.invoke(context)
         if not response.tool_calls and not response.invalid_tool_calls and not (isinstance(response.content, str) and response.content.strip()):
@@ -607,7 +602,7 @@ def _customer_entered(message: ToolMessage) -> str | None:
         value = json.loads(message.content) if isinstance(message.content, str) else None
     except json.JSONDecodeError:
         return None
-    return value.get("customer_entered") if isinstance(value, dict) else None
+    return value.get("customer_wrote", value.get("customer_entered")) if isinstance(value, dict) else None
 
 
 def mask_model_output(message: AIMessage) -> AIMessage:
@@ -643,11 +638,11 @@ def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str, now
     that a repeat is safe, which is true of every write tool (cardcare/world.py, desk.py), and records when it said so
     (`lost_result_at`): only in the two minutes after that is the same verification guess made again taken for the lost
     call repeated, not for a new attempt. The one-time-code confirmation
-    is not a dangling call: it waits for the customer (`_pending_interrupt`), unless the bank's record says this
+    is not a dangling call: it waits for the customer (`_paused_confirm_call`), unless the bank's record says this
     conversation already entered the right code (the process died after the code was consumed): then the call is
     answered from that record and the proof restored."""
     proved = world.possession_proved_at(h.bank_db, user_id, session_id, now) if now else None
-    if _pending_interrupt(h, user_id, session_id) and not proved:
+    if _paused_confirm_call(h, user_id, session_id) and not proved:
         return 0  # the unanswered call is confirm_verification_code, legitimately waiting for the customer
     messages = _thread_state(h, user_id, session_id).get("messages", [])
     answered = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
@@ -661,9 +656,8 @@ def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str, now
     graph, config = build_graph(h), thread_config(user_id, session_id)
     finished = [task.result for task in graph.get_state(config).tasks if isinstance(task.result, dict)]
     recorded = {m.tool_call_id: m for result in finished for m in result.get("messages") or [] if isinstance(m, ToolMessage)}
-    matched = {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, "customer_entered": ONE_TIME_CODE_MASK,
-               "note": "the code was entered correctly before the process stopped; this result is rebuilt from the bank's record of it, "
-                       "so carry out the change or removal the customer asked for before the code was sent"}
+    matched = {**describe_code_entry(None, "", proved), "note": "the code was entered correctly before the process stopped; this result is "
+                                                                  "rebuilt from the bank's record of it"} if proved else {}
     lost = [c for c in dangling if c["id"] not in recorded]
     update = {key: value for result in finished for key, value in result.items() if key != "messages"}
     update["messages"] = [recorded.get(c["id"]) or ToolMessage(
@@ -678,9 +672,13 @@ def repair_interrupted_tool_calls(h: Harness, user_id: str, session_id: str, now
 
 
 def _map_strings(value, fix):
-    """Apply `fix` to every string inside a checkpointed value: dicts, lists, tuples and pydantic models (messages)."""
+    """Apply `fix` to every string inside a checkpointed value: dicts, lists, tuples and pydantic models (messages). A
+    number is offered to `fix` as its digits and replaced only if `fix` changes it (a code a model response carried as
+    a number)."""
     if isinstance(value, str):
         return fix(value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return fix(str(value)) if fix(str(value)) != str(value) else value
     if isinstance(value, list):
         return [_map_strings(v, fix) for v in value]
     if isinstance(value, tuple):
@@ -791,6 +789,16 @@ def run_turn(h: Harness, user_id: str, session_id: str, text: str, now: str, dis
         [(session_id, text) for text in own]
     sent, rewrites = mask_customer_message(text, tuple(text for _, text in earlier))  # card data never enters a store
     sent = _cap(sent)
+    entry = None
+    if kind.persist and not kind.unattended:
+        # The door: while a one-time code is open for this customer, a typed code is taken here, before the model reads the
+        # message and before anything stores it; the bank checks a single entry, and nothing else is ever compared with the
+        # code. An entry whose turn was never recorded (the process stopped after the bank's check) is the same entry
+        # when it is typed again.
+        unanswered = world.attempt_went_unanswered(h.bank_db, user_id, session_id, state.get("last_active_at"))
+        door = world.take_code_entry(h.bank_db, user_id, session_id, sent, now, MAX_VERIFICATION_ATTEMPTS, repeat_of_lost_call=unanswered)
+        sent, entry = door["text"], door["entry"]
+    masking_note = removed_summary(normalize(text), sent)  # after the door: a code it took is something removed, too
     if rewrites and kind.persist:
         by_session: dict[str, dict[str, str]] = {}
         for index, rewritten in rewrites.items():
@@ -807,9 +815,12 @@ def run_turn(h: Harness, user_id: str, session_id: str, text: str, now: str, dis
         proved = world.possession_proved_at(h.bank_db, user_id, session_id, now)  # the bank's record rebuilds a copy a crash lost
         if proved:
             update["possession_verified_at"] = proved
-    context = TurnContext(user_id=user_id, now=now, session_id=session_id)
-    pending = kind.persist and _pending_interrupt(h, user_id, session_id)
-    if pending:  # the agent is waiting for the one-time code: this message is the customer's entry, and it resumes the paused tool
+    if entry and entry.get("outcome") == "matched":
+        update["possession_verified_at"] = now
+    pending = _paused_confirm_call(h, user_id, session_id) if kind.persist else ""
+    context = TurnContext(user_id=user_id, now=now, session_id=session_id, code_entry=entry, resumed_with=sent if pending else "",
+                          resumed_call=pending, masking_note=masking_note)
+    if pending:  # the agent is waiting for the one-time code: this message resumes the paused tool (the door already took any entry)
         update.pop("messages")
         update = Command(resume=sent, update=update)
     try:
@@ -819,49 +830,55 @@ def run_turn(h: Harness, user_id: str, session_id: str, text: str, now: str, dis
         record = _turn_record(partial, sent)
         if kind.persist:
             repair_interrupted_tool_calls(h, user_id, session_id, now)
-            record = without_one_time_codes(h, user_id, session_id, sent, record)  # a failed turn keeps no code either
+            record = without_one_time_codes(h, user_id, session_id, sent, record, now)  # a failed turn keeps no code either
         return {**record, "error": f"{type(exc).__name__}: {exc}", "tools_offered": offered}
     record = _turn_record(result["messages"][already:], sent)
-    if not record["reply"].strip() and kind.persist and _pending_interrupt(h, user_id, session_id):
-        record["reply"] = waiting_for_code_line(h.bank_db, user_id, now)  # the model paused without a word: the bank record speaks
+    if not record["reply"].strip() and kind.persist and _paused_confirm_call(h, user_id, session_id):
+        record["reply"] = waiting_for_code_line(h.bank_db, user_id, now, entry)  # the model paused without a word: the bank record speaks
     if kind.persist:
-        record = without_one_time_codes(h, user_id, session_id, sent, record)
+        record = without_one_time_codes(h, user_id, session_id, sent, record, now)
     return {**record, "tools_offered": offered}
 
 
-def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent: str, record: dict) -> dict:
-    """Redact one-time codes from the stored thread and return the turn record without them. A code the tool took: every
-    6-digit run in the message goes. A code no tool took (typed when nothing was pending, or left raw by a crash or a
-    failed turn): the runs that are one of the bank's codes for this customer, by salted hash. Runs at the end of every
-    turn, failed ones included, so a code the bank issued is never kept in a transcript."""
-    taken = any(call["name"] == "confirm_verification_code" and (call.get("result") or {}).get("customer_entered") == ONE_TIME_CODE_MASK
-                for call in record["tool_calls"])
-    codes = set(re.findall(r"(?<!\d)\d{6}(?!\d)", sent)) if taken else set()
-    codes |= set(world.codes_matching(h.bank_db, _thread_text(h, user_id, session_id)))
+def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent: str, record: dict, now: str) -> dict:
+    """Defence in depth at the end of every turn, failed ones included. A typed code never gets this far (the door took
+    it), and the model is never given one, so this should find nothing. If the thread nevertheless holds one of the
+    customer's codes (a model response that carried it, as text or as a number), the open code is cancelled, since it has
+    been written into a conversation, and every rendering of it is rewritten in the stored thread and in the returned turn."""
+    codes = world.codes_exposed_in(h.bank_db, user_id, _thread_text(h, user_id, session_id), now)
     if not codes:
         return record
     scrub_earlier_messages(h, user_id, session_id, {code: ONE_TIME_CODE_MASK for code in codes})
-    return turn_without_codes(record, sent, codes)  # the reply too: the model can repeat a code the customer typed
+    return turn_without_codes(record, sent, set(codes))
 
 
 def _thread_text(h: Harness, user_id: str, session_id: str) -> str:
-    """Every checkpoint and pending write of the thread as text (msgpack keeps strings readable), for the hash check of
-    one-time codes."""
-    thread_id = thread_config(user_id, session_id)["configurable"]["thread_id"]
+    """Every string and number the thread's checkpoints and pending writes hold, one per line, read through the saver's
+    own serializer (so a number is its digits and a string is itself, not msgpack bytes run together)."""
+    serde, thread_id, found = h.checkpointer.serde, thread_config(user_id, session_id)["configurable"]["thread_id"], []
+
+    def collect(text: str) -> str:
+        found.append(text)
+        return text
+
     with closing(sqlite3.connect(h.var_dir / "lg_checkpoints.db", timeout=60)) as conn:
-        blobs = [row[0] for row in conn.execute("SELECT checkpoint FROM checkpoints WHERE thread_id = ?", (thread_id,))]
-        blobs += [row[0] for row in conn.execute("SELECT metadata FROM checkpoints WHERE thread_id = ?", (thread_id,))]
+        rows = conn.execute("SELECT type, checkpoint FROM checkpoints WHERE thread_id = ?", (thread_id,)).fetchall()
         if "writes" in {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
-            blobs += [row[0] for row in conn.execute("SELECT value FROM writes WHERE thread_id = ?", (thread_id,))]
-    return " ".join(b.decode("latin-1") if isinstance(b, (bytes, bytearray)) else str(b or "") for b in blobs)
+            rows += conn.execute("SELECT type, value FROM writes WHERE thread_id = ?", (thread_id,)).fetchall()
+    for kind, blob in rows:
+        _map_strings(serde.loads_typed((kind, blob)), collect)
+    return "\n|\n".join(found)  # three characters apart: two stored values never read as one number
 
 
-def waiting_for_code_line(bank_db: Path, user_id: str, now: str) -> str:
+def waiting_for_code_line(bank_db: Path, user_id: str, now: str, entry: dict | None = None) -> str:
     """What the customer reads when the turn paused for the code and the model wrote nothing (DeepSeek emits tool calls
     without text): composed from the bank's record of the code it just sent, never from the model."""
     code = world.open_code_status(bank_db, user_id, now)
     where = f" by {code['sent_to']}" if code else ""
-    return (f"A one-time code has been sent{where}; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it "
+    # the customer wrote the previous code in a form the bank does not take: say why they are being sent another
+    why = ("What you typed held the code in a form the bank does not take, so that code was cancelled; please type only the six digits. "
+           if (entry or {}).get("outcome") == "written_unusably" else "")
+    return (f"{why}A one-time code has been sent{where}; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it "
             "arrives, and I will finish your request.")
 
 
@@ -928,23 +945,26 @@ def list_episodes(store: SqliteStore) -> list[dict]:
 
 
 def finish_requested_erasures(h: Harness, now: str, user_id: str | None = None, keep: str | None = None,
-                              only_session: str | None = None, idle_only: bool = False) -> list[str]:
+                              only_session: str | None = None, idle_only: bool = False,
+                              not_waiting_for: frozenset[str] = frozenset()) -> list[dict]:
     """Delete the transcript an erasure request was made in: at that chat's end, at the customer's next turn in another
-    chat, or when maintenance finds it idle (`idle_only`: 30 minutes without a turn, a closed tab), whichever comes
-    first. A customer who asks to be erased and keeps typing keeps their open conversation until it ends. If the chat
-    goes on after that, it stays stale: still nothing is stored, and what it adds is deleted when it ends."""
+    chat, when the background job finds it idle (`idle_only`: 30 minutes without a turn, a closed tab), or when a
+    scheduled follow-up of that customer is about to fire (`not_waiting_for`), whichever comes first. A customer who
+    asks to be erased and keeps typing keeps their open conversation until then. If the chat goes on after that, it
+    stays stale: still nothing is stored, and what it adds is deleted when it ends. Returns what was finished, as
+    {"user_id", "session_id"}, so the caller can report it."""
     finished = []
     for request in privacy.pending_requests(h.privacy_db, user_id):
         session_id = request["requested_in"]
         if session_id == keep or (only_session and session_id != only_session):
             continue
         state = _thread_state(h, request["user_id"], session_id) if session_id else {}
-        if idle_only and state and not session_is_idle(state.get("last_active_at"), now):
+        if idle_only and request["user_id"] not in not_waiting_for and state and not session_is_idle(state.get("last_active_at"), now):
             continue
         if session_id:
             delete_transcript(h, request["user_id"], session_id, forget=bool(only_session))
         privacy.finish_request(h.privacy_db, request["rowid"], now)
-        finished.append(request["user_id"])
+        finished.append({"user_id": request["user_id"], "session_id": session_id})
     if finished:
         compact_sqlite(h.var_dir / "lg_checkpoints.db")
     return finished
@@ -975,7 +995,8 @@ def erase_customer_memory(h: Harness, user_id: str, now: str, requesting_session
         for request in privacy.pending_requests(h.privacy_db, user_id):
             if request["requested_in"] is None:
                 privacy.finish_request(h.privacy_db, request["rowid"], now)
-    return {"user_id": user_id, "facts": len(facts), "episodes": len(episodes), "transcripts": len(threads), "reminders_cancelled": reminders}
+    return {"user_id": user_id, "facts": len(facts), "fact_kinds": sorted(key for key, fact in facts.items() if key in FACT_KEYS and fact),
+            "episodes": len(episodes), "transcripts": len(threads), "reminders_cancelled": reminders}
 
 
 def retire_expired_session(h: Harness, user_id: str, session_id: str, now: str) -> bool:
@@ -1029,8 +1050,9 @@ def run_maintenance(h: Harness, now: str) -> dict:
     if deleted or expired or expired_facts:
         compact_sqlite(h.var_dir / "lg_checkpoints.db")
         compact_sqlite(h.var_dir / "lg_store.db")
-    return {"erased_customers": erased, "expired_facts": expired_facts, "closed_idle_sessions": closed, "case_followups_repaired": repaired_cases,
-            "purged_episodes": [e["episode_id"] for e in expired], "deleted_transcripts": deleted}
+    return {"erased_customers": sorted({e["user_id"] for e in erased}), "expired_facts": expired_facts, "closed_idle_sessions": closed,
+            "case_followups_repaired": repaired_cases, "purged_episodes": [e["episode_id"] for e in expired],
+            "deleted_transcripts": [e["session_id"] for e in erased if e["session_id"]] + deleted}
 
 
 def run_followup_session(h: Harness, record: dict, now: str) -> dict:
@@ -1101,10 +1123,19 @@ def chat(var_dir: Path, user_id: str, session_id: str | None, now: str | None) -
         print(f"\n[memory] episode {episode['episode_id']}: {episode['text']}")
 
 
+def finish_erasures_before_firing(h: Harness, now: str) -> list[dict]:
+    """Before the scheduler fires anything: the erasure of every customer who has a record due now is finished (their
+    follow-up must not run beside a transcript they asked to be deleted), and so is any whose chat has gone idle. An
+    open chat of a customer with nothing due is left alone. Round 5 finished every pending erasure here, with no gate,
+    so the `tick` the README says to run every minute deleted an open chat a minute after the request while the tool
+    had told the customer it would be kept (the round-5 review's 2.3)."""
+    return finish_requested_erasures(h, now, idle_only=True, not_waiting_for=frozenset(scheduler.customers_with_due_records(h.scheduler_db, now)))
+
+
 async def fire_followups(h: Harness, now: str, on_session=None) -> list[dict]:
-    """The scheduler's job: finish every pending erasure first (the requesting chat's transcript goes, whether or not a
-    record of that customer is due), then fire what is due. `on_session` sees each follow-up session's record."""
-    finish_requested_erasures(h, now)
+    """The scheduler's job: finish the erasures that must not wait (finish_erasures_before_firing), then fire what is
+    due. `on_session` sees each follow-up session's record."""
+    finish_erasures_before_firing(h, now)
 
     def resume(record: dict, at: str) -> dict:
         session = run_followup_session(h, record, at)
@@ -1131,12 +1162,16 @@ def device_lines(bank_db: Path, user_id: str, after_message_id: int) -> list[str
 
 
 async def tick(var_dir: Path, now: str | None) -> dict:
-    """One pass of the harness's background work: memory maintenance, then the scheduler (which finishes any pending
-    erasure before it fires anything)."""
+    """One pass of the harness's background work: memory maintenance, then the scheduler. What it prints says what it
+    did, the erasures it finished and the transcripts it deleted included."""
     h = open_harness(var_dir)
     at = now or wall_clock_now()
     maintenance = run_maintenance(h, at)
-    return {"now": at, "maintenance": maintenance, "followups": await fire_followups(h, at)}
+    before_firing = finish_erasures_before_firing(h, at)
+    return {"now": at, "maintenance": maintenance,
+            "before_followups": {"erased_customers": sorted({e["user_id"] for e in before_firing}),
+                                 "deleted_transcripts": [e["session_id"] for e in before_firing if e["session_id"]]},
+            "followups": await fire_followups(h, at)}
 
 
 def main() -> None:

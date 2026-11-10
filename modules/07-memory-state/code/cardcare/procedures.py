@@ -100,12 +100,14 @@ def active_procedure(var_dir: Path) -> tuple[str, str]:
     return version, procedure_text(var_dir, version)
 
 
-def render_system_prompt(procedure: str, version: str, profile: str, review_days: int, now: str, stepup: str = "") -> str:
+def render_system_prompt(procedure: str, version: str, profile: str, review_days: int, now: str, stepup: str = "", masking: str = "") -> str:
     """The instruction in force, plus the per-turn context the harness assembles around it. `stepup` is the session's
     verification status, rendered from session state, so the model knows it after a window cut or a resumed session."""
     lines = [procedure, f"## Context for this turn (assembled by the harness; procedure {version})", f"- Current time: {now}"]
     if stepup:
         lines.append(f"- Step-up status in this conversation: {stepup}")
+    if masking:  # what the masker did to the latest message, from its own record: the model does not have to infer it
+        lines.append(f"- Masking of the customer's latest message: {masking}")
     lines += [
         f"- Disputes are currently reviewed in about {review_days} days (app-wide operating setting).",
         "- What you remember about this customer (their facts only; current, and authoritative over anything recalled from past conversations):",

@@ -8,7 +8,7 @@ to live there or for how long.
 import re
 
 from cardcare.clock import add_days, add_minutes, parse_instant
-from cardcare.masking import mask_customer_text
+from cardcare.masking import ONE_TIME_CODE_MASK, mask_customer_text
 
 # Semantic memory is a closed schema. A free-form key chosen by the model is how
 # two facts that mean the same thing ("contact_pref", "preferred_channel") come
@@ -49,6 +49,7 @@ VERIFICATION_LOCK_HOURS = 24
 CODE_TTL_MINUTES = 5
 CODE_MAX_ENTRIES = 3
 CODE_RESEND_SECONDS = 60
+MAX_CODES_PER_DAY = 5  # codes sent to one account in any 24 hours: without a cap, 60 fit in an hour (round-5 review)
 
 # Retention, per data class. Transcripts are the raw record of everything said, so they live shortest:
 # a session is deleted 30 days after its *first* turn, however recently it was used, so no line of any
@@ -122,8 +123,8 @@ def render_stepup_status(verified_at: str | None, code_verified_at: str | None, 
     code = status("one-time code", code_verified_at)
     if not code_verified_at and open_code and open_code["status"] == "open":
         code = (f"one-time code: sent at {open_code['sent_at'][11:16]} UTC by {open_code['sent_to']}, not yet entered, usable until "
-                f"{open_code['expires_at'][11:16]} UTC; if the customer's latest message is a 6-digit code, call confirm_verification_code "
-                "with it as entered")
+                f"{open_code['expires_at'][11:16]} UTC; a six-digit number the customer types is taken by the harness before you "
+                "see the message (you see [REDACTED ONE-TIME CODE]); call confirm_verification_code() to wait for it or to read the result")
     elif not code_verified_at and open_code and open_code["status"] == "expired":
         code = (f"one-time code: the code sent at {open_code['sent_at'][11:16]} UTC expired at {open_code['expires_at'][11:16]} UTC unused; "
                 "send a new one if the customer still needs the change")
@@ -196,3 +197,42 @@ def transcript_is_expired(first_active_at: str | None, now: str) -> bool:
 
 def session_is_idle(last_active_at: str | None, now: str) -> bool:
     return bool(last_active_at) and (parse_instant(now) - parse_instant(last_active_at)).total_seconds() >= IDLE_SESSION_MINUTES * 60
+
+
+def describe_code_entry(entry: dict | None, message: str, proved_at: str | None = None) -> dict:
+    """What confirm_verification_code tells the model about the customer's latest message, from what the door made of it
+    (world.take_code_entry) and the bank's record of the proof. The typed digits are never in it: the door took them.
+    `message` is the customer's message as stored, shown when it was more than an entry so the model can answer it."""
+    outcome = (entry or {}).get("outcome")
+    wrote = {"customer_wrote": message} if message.strip() else {}  # set when the message resumed a wait: it is not in the history otherwise
+    if outcome == "matched" or (proved_at and outcome in (None, "no_code_entered", "no_open_code")):
+        return {"verified": True, "valid_for_minutes": VERIFICATION_TTL_MINUTES, **wrote,
+                "next": "the step-up is complete: carry out the change or removal the customer asked for before the code was sent, "
+                        "without asking them to repeat it"}
+    if outcome == "locked":
+        return {"verified": False, **wrote, "error": f"verification is locked on this account for {VERIFICATION_LOCK_HOURS} hours after "
+                f"{MAX_VERIFICATION_ATTEMPTS} failed attempts: no code can be sent and nothing that needs verification can be done; "
+                "the customer must call Kestrel. Do not offer to send a new code"}
+    if outcome == "mismatch":
+        if entry.get("account_locked"):
+            return {"verified": False, **wrote, "error": f"that code is not right, and it was failed attempt {MAX_VERIFICATION_ATTEMPTS} of "
+                    f"{MAX_VERIFICATION_ATTEMPTS}: verification is now locked on this account for {VERIFICATION_LOCK_HOURS} hours. No new code "
+                    "can be sent and nothing that needs verification can be done; the customer must call Kestrel. Do not offer to send a new code"}
+        return {"verified": False, **wrote, "error": "that code is not right", "entries_left_for_this_code": entry["entries_left"]}
+    if outcome == "expired":
+        return {"verified": False, **wrote, "error": f"the code expired ({CODE_TTL_MINUTES} minutes) and no new code has been sent; tell the "
+                "customer and send a new one only if they ask (send_verification_code)"}
+    if outcome == "written_unusably":
+        return {"verified": False, **wrote, "error": "the customer wrote the code in a form the bank does not take (for example with a comma, "
+                "or grouped four and two). It was removed from their message, and that code is now cancelled because it was written into "
+                "the conversation. Send a new code (send_verification_code) and ask them to type only its six digits"}
+    if outcome == "several_numbers":
+        return {"verified": False, **wrote, "note": "the message held more than one six-digit number: none was checked and nothing was "
+                "counted. Ask the customer to type only the code, as their whole message"}
+    if outcome == "other_conversation":
+        return {"verified": False, **wrote, "note": "a code is open for this customer, but it was sent from another conversation: a six-digit "
+                "number typed here is removed and not checked. To verify in this conversation, send a new code (send_verification_code)"}
+    if outcome == "no_open_code" or entry is None:
+        return {"verified": False, **wrote, "error": "no code is open for this customer in this conversation; call send_verification_code first"}
+    return {"verified": False, **wrote, "note": "the customer wrote this instead of a code: answer it; the code already sent stays valid "
+            f"for its {CODE_TTL_MINUTES} minutes, so call confirm_verification_code again when they are ready, without sending a new one"}
