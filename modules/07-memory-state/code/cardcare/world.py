@@ -263,6 +263,17 @@ def list_cases(db_path: Path, user_id: str, case_id: str | None) -> list[dict]:
     return [_case_view(row) for row in rows]
 
 
+def with_next_step(case: dict) -> dict:
+    """A case as the agent reads it: a decided case also says what can still be done with it. add_case_evidence refuses
+    a decided case and says to file a new dispute; a model that only read "rejected" told customers their proof could be
+    "added to the case" (round 5's second final pass, LangGraph, both runs). The record now says it before anyone asks."""
+    if case["status"] == "under_review":
+        return case
+    return {**case, "next_step": "This case is decided and closed: nothing can be added to it. With new proof (for example the "
+                                 "merchant's cancellation confirmation) the customer can ask in the card-care chat for a new dispute "
+                                 "of the same charge."}
+
+
 def cases_by_id(db_path: Path, case_ids: list[str]) -> list[dict]:
     if not case_ids:
         return []

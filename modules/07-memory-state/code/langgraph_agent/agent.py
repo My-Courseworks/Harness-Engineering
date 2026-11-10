@@ -303,7 +303,7 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
     @tool
     def get_case_status(runtime: ToolRuntime[TurnContext], case_id: OptionalCaseId = None) -> str:
         """Current status of one dispute case, or of all this customer's cases when case_id is omitted."""
-        return json.dumps({"cases": world.list_cases(h.bank_db, runtime.context.user_id, case_id)})
+        return json.dumps({"cases": [world.with_next_step(case) for case in world.list_cases(h.bank_db, runtime.context.user_id, case_id)]})
 
     @tool
     def search_policy(question: PolicyQuestion) -> str:

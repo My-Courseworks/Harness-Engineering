@@ -369,7 +369,7 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list[Callable]:
 
     def get_case_status(tool_context: ToolContext, case_id: OptionalCaseId = None) -> dict:
         """Current status of one dispute case, or of all this customer's cases when case_id is omitted."""
-        return {"cases": world.list_cases(h.bank_db, tool_context.user_id, case_id)}
+        return {"cases": [world.with_next_step(case) for case in world.list_cases(h.bank_db, tool_context.user_id, case_id)]}
 
     def search_policy(question: PolicyQuestion) -> dict:
         """Search Kestrel's policy documents (fees, dispute rules, travel notices, contact channels)."""
