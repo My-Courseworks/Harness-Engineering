@@ -45,12 +45,13 @@ reflections), so case ids, dates and amounts in generated text are never touched
 
 import re
 import unicodedata
+from collections import Counter
 
 CARD_NUMBER_MASK = "[REDACTED CARD NUMBER]"
 SECURITY_CODE_MASK = "[REDACTED SECURITY CODE]"
 EXPIRY_MASK = "[REDACTED EXPIRY]"
 CARD_DIGITS_MASK = "[REDACTED CARD DIGITS]"
-MASK_TOKEN = re.compile(r"\[REDACTED [A-Z ]+\]")
+MASK_TOKEN = re.compile(r"\[REDACTED [A-Z \-]+\]")
 ONE_TIME_CODE_MASK = "[REDACTED ONE-TIME CODE]"
 
 _DROP = dict.fromkeys(map(ord, "​‌‍⁠﻿­"), None)
@@ -158,10 +159,12 @@ def _spoken_value(tokens: list[dict], i: int) -> tuple[str, int] | None:
 def _tokens(text: str) -> list[dict]:
     """Digit tokens, plus spoken numbers merged into groups; every other token keeps its kind."""
     raw = _raw_tokens(text)
+    markers = [m.span() for m in MASK_TOKEN.finditer(text)]  # "ONE" in [REDACTED ONE-TIME CODE] is not the digit one
+    in_marker = lambda token: any(start <= token["start"] and token["end"] <= end for start, end in markers)
     out, i = [], 0
     while i < len(raw):
         token = raw[i]
-        spoken = _spoken_value(raw, i) if token["kind"] == "word" else None
+        spoken = _spoken_value(raw, i) if token["kind"] == "word" and not in_marker(token) else None
         if spoken:
             digits, last = spoken
             out.append({"text": text[token["start"]:raw[last]["end"]], "start": token["start"], "end": raw[last]["end"], "kind": "digits",
@@ -196,7 +199,41 @@ def _tokens(text: str) -> list[dict]:
         if token["spoken"] and token["digits"] == "0" and token["text"].lower() == "oh":
             token.update(kind="word", digits=None, spoken=False)
     _classify(merged, text)
+    _release_card_groups(merged, text)
     return merged
+
+
+# roles that are a reading of one token by its neighbours ("a year after a month and a day", "an identifier glued to a
+# word", "an amount before 'days'"): a complete card number is a stronger reading of the same digits and wins
+_SOFT_ROLES = {"identifier", "amount", "time", "date", "year", "phone", "month_year"}
+
+
+def _release_card_groups(tokens: list[dict], text: str) -> None:
+    """A complete card number wins over a role. "exp Dec 29 5555 5555 5555 4444" gave the first 5555 the role of a year,
+    "Visa-4111 1111 1111 1111" made 4111 an identifier, "... 4444 days ago" made 4444 an amount; each took a group out
+    of the number and left twelve digits that are no card (the round-5 review's 2.4). Here, written tokens joined by
+    separators only are read once more without their roles: a window of them that is 13-19 digits, starts with a card
+    network's prefix, passes Luhn and is grouped like a card is a card, and any soft role inside it is dropped. A
+    reference after a label keeps its own rule (_classify_references), a last four and a ZIP are never soft."""
+    written = [t for t in tokens if t["digits"] is not None and not t["spoken"]]
+    run: list[dict] = []
+    for t in [*written, None]:
+        joined = t is not None and run and t["start"] - run[-1]["end"] <= 3 and not re.search(r"[^\W\d_]|\n|\r", text[run[-1]["end"]:t["start"]])
+        if joined:
+            run.append(t)
+            continue
+        for i in range(len(run)):
+            for j in range(len(run), i, -1):
+                window = run[i:j]
+                if not any(x["role"] in _SOFT_ROLES for x in window) or any(x["role"] not in _SOFT_ROLES and x["role"] is not None for x in window):
+                    continue
+                digits = _digits(window)
+                if 13 <= len(digits) <= 19 and _card_prefix(digits) and _passes_luhn(digits) \
+                        and _card_grouping([len(x["digits"]) for x in window], False, digits):
+                    for x in window:
+                        x["role"] = None
+                    break
+        run = [t] if t is not None else []
 
 
 def _before(text: str, token: dict, width: int = 40) -> str:
@@ -275,8 +312,8 @@ def _classify_references(tokens: list[dict], text: str) -> None:
         run = [t]
         for nxt in tokens[i + 1:]:
             if nxt["digits"] is not None and not nxt["spoken"] and nxt["role"] is None and nxt["start"] - run[-1]["end"] <= 3 \
-                    and not re.search(r"[^\W\d_]|\n", text[run[-1]["end"]:nxt["start"]]):
-                run.append(nxt)
+                    and not re.search(r"[^\W\d_]|\n|[,;:]\s", text[run[-1]["end"]:nxt["start"]]):
+                run.append(nxt)  # "ticket 1042, 4111 ...", "Booking 2291: 4242 ...": the label ends at the punctuation
             elif nxt["digits"] is None and nxt["kind"] == "symbol" and nxt["start"] - run[-1]["end"] <= 1:
                 continue
             else:
@@ -386,7 +423,9 @@ def _card_after_label(run: list[dict], k: int) -> bool:
     lengths = [len(t["digits"]) for t in tokens]
     if not _card_grouping(lengths, spoken=False, digits=digits):
         return False
-    return k == 0 or len(run[k - 1]["digits"]) != lengths[0]
+    # a four-digit label before a number in fours reads as twenty digits in fours and stays one reference (a listed miss);
+    # a 4-6-5 or 4-6-4 grouping is a card's own shape whatever stands before it ("receipt 4821 3782 822463 10005")
+    return k == 0 or len(run[k - 1]["digits"]) != lengths[0] or lengths in ([4, 6, 5], [4, 6, 4])
 
 
 def _card_grouping(lengths: list[int], spoken: bool, digits: str = "") -> bool:
@@ -451,6 +490,16 @@ def _card_sequences_in(runs: list[list[dict]]) -> list[list[dict]]:
     return found
 
 
+def _counts_up(tokens: list[dict]) -> bool:
+    """Six or more tokens that count upwards past nine are a count, not a card: the numerals of a numbered list ("2. ...
+    3. ... 13. ...") read together as 2345678910111213, sixteen digits with a Mastercard prefix that pass Luhn, and the
+    reply masker removed lines 2 to 13 of every such list (the round-5 review's non-blocking 1). Each token is the one
+    before it or one more ("5. item 5 / 6. item 6" repeats each numeral), and the count reaches ten: thirteen digits
+    cannot be had from one-digit numerals that only count up."""
+    values = [int(t["digits"]) for t in tokens]
+    return len(values) >= 6 and values[-1] >= 10 and all(b - a in (0, 1) for a, b in zip(values, values[1:]))
+
+
 def _card_sequences_from(runs: list[list[dict]], i: int, first: list[dict]) -> list[list[dict]]:
     """Card numbers that begin with `first` (the first run, or a suffix of it: a code, PIN, expiry or order number typed
     just before the number in the same run is not part of it) and end in a later run or in `first` itself."""
@@ -474,7 +523,7 @@ def _card_sequences_from(runs: list[list[dict]], i: int, first: list[dict]) -> l
                 if any(13 <= len(digits) - k <= 19 and _passes_luhn(digits[:-k]) for k in tails):
                     found.append(tokens)
                     break
-            if not 13 <= len(digits) <= 19 or not _card_prefix(digits):
+            if not 13 <= len(digits) <= 19 or not _card_prefix(digits) or _counts_up(tokens):
                 continue
             spoken = all(t["spoken"] for t in tokens)
             lengths = [len(_digits(run)) for run in pieces] if any(t["spoken"] for t in tokens) else [len(t["digits"]) for t in tokens]
@@ -668,8 +717,24 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
         answers.add(len(previous))
     if earlier:
         current = [[dict(t, message=len(previous)) for t in run] for run in runs]
-        combined = earlier + current
-        for seq in _card_sequences(combined):
+        # A security code typed at the seam is not part of the number: "my card is 5555 5555 5555" / "CVV 737 4444",
+        # "5555 5555 5555 737" / "4444" (the round-5 review's non-blocking 11). The number is also looked for with one
+        # code-sized token dropped from the end of an earlier message, or from the start of this one.
+        seams = [earlier + current]
+        if current and len(current[0]) > 1 and len(current[0][0]["digits"]) in (3, 4):
+            seams.append(earlier + [current[0][1:]] + current[1:])
+        ends = {run[0]["message"]: k for k, run in enumerate(earlier)}  # the last run of each earlier message
+        trimmed = [run[:-1] if k in ends.values() and len(run) > 1 and len(run[-1]["digits"]) in (3, 4) else run for k, run in enumerate(earlier)]
+        if trimmed != earlier:
+            seams.append(trimmed + current)
+        found, seen = [], set()
+        for combined in seams:
+            for seq in _card_sequences(combined):
+                key = tuple((t["message"], t["start"]) for t in seq)
+                if key not in seen:
+                    seen.add(key)
+                    found.append(seq)
+        for seq in found:
             here = [t for t in seq if t["message"] == len(previous)]
             there = [t for t in seq if t["message"] != len(previous)]
             if not here or not there:
@@ -708,11 +773,48 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
                 and (len(run) == 1 or all(len(t["digits"]) == 4 for t in run)) \
                 and any(13 <= len(digits + lf) <= 19 and _passes_luhn(digits + lf) for lf in last_fours):
             spans.append((run[0]["start"], run[-1]["end"], CARD_DIGITS_MASK))
+    # ... and the same when those digits came in two or three messages ("card ending 4444 zip 94107" / "5555 5555" / "5555":
+    # the round-5 review's non-blocking 11): plain groups that end the earlier messages and open this one. One message
+    # must hold eight or more of them, as above: guessed last fours typed in turn are not the rest of a card number.
+    plain = lambda run: all(t["role"] is None for t in run) and (len(run) == 1 or all(len(t["digits"]) == 4 for t in run))
+    chain = [runs[0]] if runs and plain(runs[0]) and not taken(runs[0]) else []
+    for index in reversed(window if chain else []):
+        last_run = next((run for run in reversed(earlier) if run[0]["message"] == index), None)
+        if not last_run or not plain(last_run):
+            break
+        chain.insert(0, last_run)
+        digits = "".join(_digits(run) for run in chain)
+        if 8 <= len(digits) <= 15 and _card_prefix(digits) and any(len(_digits(run)) >= 8 for run in chain) \
+                and any(13 <= len(digits + lf) <= 19 and _passes_luhn(digits + lf) for lf in last_fours):
+            spans.append((chain[-1][0]["start"], chain[-1][-1]["end"], CARD_DIGITS_MASK))
+            for run in chain[:-1]:
+                rewrites.setdefault(run[0]["message"], []).append((run[0]["start"], run[-1]["end"], CARD_DIGITS_MASK))
+            break
     card_context = bool(spans) or any(CARD_NUMBER_MASK in p or CARD_DIGITS_MASK in p for p in previous[-2:]) \
         or any(_card_expiry_cue(text[:t["start"]][-30:], text, t) for t in tokens if t["role"] in ("month_pair", "month_year")) \
         or bool(re.search(r"\b(cvv2?|cvc2?|cid|csc|security\s+code|card\s+number)\b", text, re.IGNORECASE))
     spans += _code_and_expiry_spans(tokens, text, card_context, spans)
+    for index, parts in rewrites.items():  # the code typed beside the opening groups ("5555 5555 5555 737") is card data as well
+        earlier_text = normalize(previous[index])
+        parts += _code_and_expiry_spans(_tokens(earlier_text), earlier_text, True, parts)
     return _replace(text, spans), {index: _replace(normalize(previous[index]), parts) for index, parts in rewrites.items()}
+
+
+_MASK_NAMES = {CARD_NUMBER_MASK: ("card number", "card numbers"), CARD_DIGITS_MASK: ("part of a card number", "parts of a card number"),
+               SECURITY_CODE_MASK: ("security code", "security codes"), EXPIRY_MASK: ("expiry", "expiries"),
+               ONE_TIME_CODE_MASK: ("six-digit number typed while a one-time code was open", "six-digit numbers typed while a one-time code was open")}
+
+
+def removed_summary(typed: str, stored: str) -> str:
+    """What the harness removed from a customer message, for the model to read as a fact about that message. The model
+    sees the stored text; without this line it has to infer from the absence of digits whether masking ran, and a
+    round-5 review session had it say a number "was removed before it reached me" while the number sat in the store."""
+    added = Counter(m.group() for m in MASK_TOKEN.finditer(stored)) - Counter(m.group() for m in MASK_TOKEN.finditer(typed))
+    if not added:
+        return "nothing was removed from the customer's latest message: every digit in it is stored as typed"
+    return "removed from the customer's latest message before it reached you or any store: " + ", ".join(
+        f"{added[mask]} {one if added[mask] == 1 else many}" for mask, (one, many) in _MASK_NAMES.items() if added[mask]) + \
+        "; everything else in it is stored as typed"
 
 
 def turn_without_codes(record: dict, sent: str, codes: set[str]) -> dict:
