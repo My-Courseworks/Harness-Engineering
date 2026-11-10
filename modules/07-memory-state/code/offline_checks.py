@@ -25,7 +25,9 @@ What is covered, in the review's numbering:
        digits ("July / 29"), and a bare last four beside a ZIP masked as a security code right after a card paste. These
        fail on `f0300c2`; that "before" is in evidence/adversarial-before-sweep-shapes/. And the check of the check: the
        store scanner must see a secret that begins or ends a string stored as msgpack (LangGraph's checkpoints), which
-       the scanner of `f0300c2` did not (scanner-check-before.md in the same folder).
+       the scanner of `f0300c2` did not (scanner-check-before.md in the same folder);
+- fp3  (found by the tuning pass before the second final pass) the turn the harness returns carries no one-time code even
+       when the model repeated one the customer typed. Fails on `1a31895` (evidence/adversarial-before-reply-echo/).
 """
 
 import argparse
@@ -200,6 +202,18 @@ def check_scanner_reads_msgpack_stores(tmp: Path) -> list[tuple[str, bool, str]]
     found = store_audit.card_data_locations([path], {"pans": [], "codes": ["737"], "expiries": ["12/29"]})
     return [("fp2 the scanner sees an expiry that ends a msgpack-stored message", "expiry 12/29" in found, json.dumps(found)),
             ("fp2 the scanner sees a code that is a whole msgpack-stored string (a tool-call argument)", "security code 737" in found, json.dumps(found))]
+
+
+def check_reply_that_repeats_a_code() -> list[tuple[str, bool, str]]:
+    """The tuning pass before the second final pass, ADK: asked "did it go through? here's the code once more", the model
+    answered "... so I don't need 018899". It reads what the customer types, so it can repeat it; the turn the harness
+    returns (what the customer reads, what the evidence records) must not carry the code whatever the model wrote."""
+    record = {"customer": "Did it go through? Here's the code once more in case: 018899",
+              "tool_calls": [{"name": "get_case_status", "args": {"case_id": "the one I confirmed with 018899"}, "result": {}}],
+              "reply": "Yes, it went through - the code was accepted on the first try, so I don't need 018899."}
+    returned = masking.turn_without_codes(record, record["customer"], {"018899"})
+    return [("fp3 a reply that repeats a one-time code the customer typed is returned without it", "018899" not in json.dumps(returned),
+             json.dumps(returned))]
 
 
 def check_reasoning_last4() -> list[tuple[str, bool, str]]:
@@ -398,13 +412,13 @@ def main() -> int:
     rows: list[tuple[str, bool, str]] = []
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = Path(tmp_name)
-        for fn in (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
-                   check_code_said_twice, check_sweep_shapes):
-            rows += fn()
-        for fn in (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names, check_repeats_after_lost_result,
-                   check_scanner_reads_msgpack_stores):
+        without_files = (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
+                         check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code)
+        with_files = (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names,
+                      check_repeats_after_lost_result, check_scanner_reads_msgpack_stores)
+        for fn in (*without_files, *with_files):
             try:
-                rows += fn(tmp)
+                rows += fn(tmp) if fn in with_files else fn()
             except Exception as exc:  # a missing function on old code is a failed check, not a crash
                 rows.append((fn.__name__, False, f"{type(exc).__name__}: {exc}"))
     passed = sum(ok for _, ok, _ in rows)
