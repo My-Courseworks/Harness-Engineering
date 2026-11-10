@@ -1,0 +1,37 @@
+[
+  {
+    "step": "cap-s1",
+    "type": "external",
+    "label": "at most five codes are sent to one account in 24 hours",
+    "passed": true,
+    "evidence": "5 one-time-code messages in the outbox"
+  },
+  {
+    "step": "cap-s1",
+    "type": "working",
+    "label": "asking for codes is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "external",
+    "label": "asked at least six times, the bank sent five codes",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"error\\\": \\\"5 codes were sent to this account in the last 24 hours, which is the limit; no code is sent and none can be until 2026-11-25T10:00:00Z. A code already sent stays valid for its 5 mi"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "working",
+    "label": "the refusal says why",
+    "passed": true,
+    "evidence": "['send_verification_code -> {\"error\": \"5 codes were sent to this account in the last 24 hours, which is the limit; no code is sent and none can be until 2026-11-25T10:00:00Z. A code already sent stays valid for its 5 minutes; otherwise the customer m"
+  },
+  {
+    "step": "cap-forced-6",
+    "type": "working",
+    "label": "a refused send is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  }
+]

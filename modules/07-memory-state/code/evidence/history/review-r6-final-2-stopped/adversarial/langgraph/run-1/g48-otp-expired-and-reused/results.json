@@ -1,0 +1,58 @@
+[
+  {
+    "step": "oe-s1-later",
+    "type": "working",
+    "label": "a code entered after 5 minutes does not verify: the first challenge expired",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-12T10:00'), ('consumed', '2026-11-12T10:09')]"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "working",
+    "label": "the fresh code does",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-12T10:00'), ('consumed', '2026-11-12T10:09')]"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "semantic",
+    "label": "the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:11:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "external",
+    "label": "two code messages were sent",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 420250. It expires in 5 minutes. Kestrel will never ask you to share it.\", \"Your Kestrel verification code is 361454. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "guard",
+    "label": "neither typed code is in a session store, the expired one included (round 5: the store scan could not see a code kept as a tool-call argument in a LangGraph checkpoint, and this group never asked)",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "oe-s2",
+    "type": "working",
+    "label": "a used code entered again is a wrong code",
+    "passed": true,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "oe-s2",
+    "type": "working",
+    "label": "the new code removes the channel",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "oe-s2",
+    "type": "guard",
+    "label": "the reused code and the new one are in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

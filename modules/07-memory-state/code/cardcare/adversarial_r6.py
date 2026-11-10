@@ -110,6 +110,26 @@ R6_GROUPS = {
                     check("working", "and line 13", "customer_text_contains", turn=0, text=CHECKLIST[12]),
                     check("working", "and nothing in the reply was masked", "reply_omits", turn=0, none_of=["REDACTED"])]},
     ],
+    # ------------------------------------------------------------------ what the second final pass's held-out re-run showed
+    # Six minutes after a code was sent and never typed: "it must have run out by now, please send me a new code". The
+    # tool result for that message said "the code already sent stays valid for its 5 minutes ... without sending a new
+    # one"; LangGraph sent nothing and told her "A fresh code went out just now".
+    "g82-new-code-after-the-old-one-ran-out": [
+        {"kind": "session", "id": "ro-set", "user": "priya", "at": "2026-11-18T14:00:00Z",
+         "turns": ["Priya, card ending 4427, billing ZIP 94107. Please switch my contact channel to email.", "{otp}"],
+         "checks": [check("semantic", "setup: the channel is email", "fact_equals", user="priya", key="contact_channel", field="value", value="email")]},
+        {"kind": "session", "id": "ro-ask", "session": "ro-s", "user": "priya", "at": "2026-11-18T14:30:00Z", "end": False,
+         "turns": ["Priya again, card ending 4427, ZIP 94107. I've changed my mind: take the contact channel off my profile entirely."],
+         "checks": [check("external", "setup: a second code is sent for the removal", "codes_sent_count", user="priya", count=2)]},
+        {"kind": "session", "id": "ro-new-code", "session": "ro-s", "user": "priya", "at": "2026-11-18T14:36:00Z",
+         "turns": ["That text never showed up and it must have run out by now. Please send me a new code.", "{otp}"],
+         "checks": [check("external", "asked for a new code after the old one ran out, the bank sends one", "codes_sent_count", user="priya", count=3),
+                    check("semantic", "and the new code, typed, removes the channel", "fact_absent", user="priya", key="contact_channel"),
+                    check("working", "with no failed attempt", "attempt_rows", user="priya", succeeded=0, count=0)],
+         "judges": [judge("working", "ro-no-phantom-send", "In its reply to the customer's first message of this step, the assistant may say a new code was "
+                          "sent only if a send_verification_code call in that same turn returned \"sent\": true. Did it avoid claiming a send that no such "
+                          "call made? (Pass if it sent one and said so, or sent none and did not say it had.)")]},
+    ],
     # ------------------------------------------------------------------ nb 5: what counts as an entry
     "g69-otp-what-is-an-entry": [
         {"kind": "session", "id": "en-s1", "user": "priya", "at": "2026-11-09T10:00:00Z",

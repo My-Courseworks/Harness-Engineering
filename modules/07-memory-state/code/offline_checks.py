@@ -329,6 +329,8 @@ def check_blind_findings() -> list[tuple[str, bool, str]]:
     dated = ["It was charged on September 27 4242 4242 4242 4242 and again in October."]
     pattern_only = "I can't give those back: all I received was 120 identical `PL-[REDACTED ONE-TIME CODE]` lines."
     return [
+        _row("pass 2: what follows the code at that seam is marked as part of the card number, not as a second code",
+             lambda: (stored(paste)[2] == "CVC [REDACTED SECURITY CODE] [REDACTED CARD DIGITS]", json.dumps(stored(paste)[2]))),
         _row("blind: a code at the seam of a number sent in two goes, after an earlier card paste, is masked ('CVC 047 1111')",
              lambda: (left(paste, pans=["4111111111111111"], codes=["047"]) == [] and not re.search(r"\d", stored(paste)[2]), json.dumps(stored(paste)[1:]))),
         _row("blind: a month name and two digits directly before a card number are its expiry ('September 27 4242 ...')",
@@ -438,6 +440,17 @@ def check_r5_code_door(tmp: Path) -> list[tuple[str, bool, str]]:
                 firsts.add(re.search(r"\b(\d{6})\b", world.outbound_messages(bank)[-1]["body"]).group(1)[0])
         return "0" not in firsts and len(firsts) > 5, json.dumps(sorted(firsts))
 
+    def the_code_has_run_out():
+        from cardcare import memory_policy
+        from cardcare.clock import add_days, add_minutes
+        sent_at = add_days(NOW, 60)
+        world.issue_code(bank, "dana", "late", sent_at, MAX_VERIFICATION_ATTEMPTS)
+        message, later = "That text never showed up and it must have run out by now. Please send me a new code.", add_minutes(sent_at, 6)
+        taken = world.take_code_entry(bank, "dana", "late", message, later, MAX_VERIFICATION_ATTEMPTS)
+        told = json.dumps(memory_policy.describe_code_entry(taken["entry"], taken["text"]))
+        waits = world.waits_for_an_entry(bank, "dana", "late", taken["entry"], later)
+        return "expired" in told and "stays valid" not in told and "send_verification_code" in told and not waits, json.dumps({"told": told, "waits": waits})
+
     def waits_only_for_a_code_not_yet_answered():
         from cardcare.clock import add_minutes
         world.issue_code(bank, "dana", "w1", add_minutes(NOW, 30), MAX_VERIFICATION_ATTEMPTS)
@@ -461,7 +474,9 @@ def check_r5_code_door(tmp: Path) -> list[tuple[str, bool, str]]:
                  a_form_the_bank_does_not_take),
             _row("r6 an amount, a date, a clock time and a points balance are not codes: kept as typed, the code stays open", other_numbers_are_not_codes),
             _row("r6 the wait is for a code this turn's message did not answer", waits_only_for_a_code_not_yet_answered),
-            _row("r6 no code starts with a zero (200 sends)", no_code_starts_with_zero)]
+            _row("r6 no code starts with a zero (200 sends)", no_code_starts_with_zero),
+            _row("pass 2: asked for a new code six minutes after one was sent, the tool result says that code has expired, and nothing waits for it",
+                 the_code_has_run_out)]
     for form in ("123456", "123 456", "123-456", "123.456", "12 34 56", "1 2 3 4 5 6", "one two three four five six"):
         rows.append(_row(f"r5 2.2 the entry grammar reads {form!r} as one code",
                          lambda form=form: ([d for _, _, d in world.code_spans(f"ok it says {form} now")] == ["123456"], json.dumps(world.code_spans(f"ok it says {form} now")))))

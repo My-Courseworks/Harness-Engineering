@@ -1,0 +1,44 @@
+[
+  {
+    "step": "cr-dana",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October.\"}]"
+  },
+  {
+    "step": "cr-dana",
+    "type": "prospective",
+    "label": "judge: Did the assistant tell the customer where the follow-up will reach them (for example by secure message in the Kestrel app, which is the default when no channel is set), and NOT say that there is no channel, no way, or nowhere for the follow-up to be sent?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"Where you'll hear back: secure message in the Kestrel app - since no contact channel (email/SMS) is set on your account, that's the default,\\\" which tells the customer where the follow-up will reach them.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "cr-eli",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October.\"}]"
+  },
+  {
+    "step": "cr-eli",
+    "type": "prospective",
+    "label": "judge: Did the assistant tell the customer where the follow-up will reach them (for example by secure message in the Kestrel app, which is the default when no channel is set), and NOT say that there is no channel, no way, or nowhere for the follow-up to be sent?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said the follow-up is \\\"sent by secure message in the Kestrel app - that's the default since you have no contact channel (email/SMS) set,\\\" so it told the customer where it will reach them and did not say there is nowhere for it to be sent.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "cr-marco",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the FitPulse membership in October; renewal charged November 3.\"}]"
+  },
+  {
+    "step": "cr-marco",
+    "type": "prospective",
+    "label": "judge: Did the assistant tell the customer where the follow-up will reach them (for example by secure message in the Kestrel app, which is the default when no channel is set), and NOT say that there is no channel, no way, or nowhere for the follow-up to be sent?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant told the customer the follow-up 'will arrive as a secure message in the Kestrel app - that's the default because you have no contact channel set,' and did not say there is no way for the follow-up to be sent.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

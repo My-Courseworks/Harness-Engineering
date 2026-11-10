@@ -1,0 +1,100 @@
+[
+  {
+    "step": "oe-s1",
+    "type": "external",
+    "label": "otp: a challenge is open and a code was sent",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-12T10:00')]"
+  },
+  {
+    "step": "oe-s2-erase",
+    "type": "external",
+    "label": "otp: the open challenge dies with the erasure",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-12T10:00')]"
+  },
+  {
+    "step": "oe-s2-erase",
+    "type": "semantic",
+    "label": "otp: no fact remains",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "oe-s2-erase",
+    "type": "working",
+    "label": "otp: no transcript remains, the waiting chat included",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "oe-s2-erase",
+    "type": "episodic",
+    "label": "otp: no episode remains",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "oe-s1-dead-wait",
+    "type": "working",
+    "label": "otp: the real code typed into the erased chat changes nothing",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "oe-s1-dead-wait",
+    "type": "external",
+    "label": "otp: the dead challenge is not consumed",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-12T10:00')]"
+  },
+  {
+    "step": "oe-s1-dead-wait",
+    "type": "external",
+    "label": "otp: nothing is open",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-12T10:00')]"
+  },
+  {
+    "step": "oe-s1-dead-wait",
+    "type": "semantic",
+    "label": "otp: no fact was recreated",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "oe-s3-fresh",
+    "type": "semantic",
+    "label": "otp: a fresh chat after the erasure can send a code and change the channel",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:12:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "oe-s3-fresh",
+    "type": "external",
+    "label": "otp: exactly one challenge consumed",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-12T10:00'), ('consumed', '2026-11-12T10:10')]"
+  },
+  {
+    "step": "oe-s3-fresh",
+    "type": "external",
+    "label": "otp: nothing left open",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-12T10:00'), ('consumed', '2026-11-12T10:10')]"
+  },
+  {
+    "step": "oe-s3-fresh",
+    "type": "working",
+    "label": "otp: the dead wait cost no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "oe-s3-fresh",
+    "type": "guard",
+    "label": "otp: no code in a tool result or reply",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  }
+]

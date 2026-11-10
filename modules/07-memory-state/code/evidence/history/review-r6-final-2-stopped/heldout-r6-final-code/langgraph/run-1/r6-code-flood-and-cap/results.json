@@ -1,0 +1,93 @@
+[
+  {
+    "step": "r6c-send-4",
+    "type": "external",
+    "label": "r6 A7: four sends 65 seconds apart all go out",
+    "passed": true,
+    "evidence": "4 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-send-5-three-at-once",
+    "type": "external",
+    "label": "r6 A7: three sends in one response at the edge of the cap send one code: five in all",
+    "passed": true,
+    "evidence": "5 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-send-5-three-at-once",
+    "type": "working",
+    "label": "r6 A7: ...without crashing",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"error\\\": \\\"a code was sent 0 seconds ago and is still valid; ask the customer to enter it (a new one can be sent 60 seconds after the last)\\\", \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u"
+  },
+  {
+    "step": "r6c-send-6",
+    "type": "external",
+    "label": "r6 A7: the sixth send inside 24 hours sends nothing",
+    "passed": true,
+    "evidence": "5 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-send-6",
+    "type": "working",
+    "label": "r6 A7: a refused send is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6c-send-6",
+    "type": "working",
+    "label": "r6 A7: a refused send does not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"error\\\": \\\"5 codes were sent to this account in the last 24 hours, which is the limit; no code is sent and none can be until 2026-11-20T09:00:00Z. A code already sent stays valid for its 5 mi"
+  },
+  {
+    "step": "r6c-asks-for-more",
+    "type": "working",
+    "label": "r6 A7: five sends and a refusal did not lock the account: last four and ZIP still verify",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "r6c-asks-for-more",
+    "type": "working",
+    "label": "r6 A7: a send asked for in a new chat does not succeed",
+    "passed": true,
+    "evidence": "{\"error\": \"5 codes were sent to this account in the last 24 hours, which is the limit; no code is sent and none can be until 2026-11-20T09:00:00Z. A code already sent stays valid for its 5 minutes; ot"
+  },
+  {
+    "step": "r6c-asks-for-more",
+    "type": "external",
+    "label": "r6 A7: ...and sends nothing: the cap is the account's, not the conversation's",
+    "passed": true,
+    "evidence": "5 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-asks-for-more",
+    "type": "working",
+    "label": "judge: Did the assistant tell the customer that no further one-time code can be sent for now because a limit on how many codes can be sent to the account (per day, or in 24 hours) has been reached, without claiming that a new code was sent?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"I can't send another code, I'm afraid: five codes have already gone to your account in the last 24 hours, which is the daily limit. No new code can be sent until 09:00 UTC tomorrow (20 November).\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6c-send-evening",
+    "type": "external",
+    "label": "r6 A7: twelve hours later the five still count",
+    "passed": true,
+    "evidence": "5 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-send-next-morning",
+    "type": "external",
+    "label": "r6 A7: the window rolls: once the first send is 24 hours old, one more goes out",
+    "passed": true,
+    "evidence": "6 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6c-send-next-morning",
+    "type": "guard",
+    "label": "r6 D4: the run's record carries the hash of the code it ran on and a time",
+    "passed": true,
+    "evidence": "{\"code_sha256\": \"ce203ab0d155b4f58030368f610eb9bef51dc297e2b2d3b7a594e30a17157c19\", \"recorded_at\": \"2026-11-10T17:58:39Z\"}"
+  }
+]
