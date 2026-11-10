@@ -26,10 +26,10 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
     open_kind: str | None = None
     answer: AnswerStream | None = None
 
-    def close_current(final_text: str | None = None) -> None:
+    async def close_current(final_text: str | None = None) -> None:
         nonlocal open_kind, answer
         if open_kind == "answer" and answer is not None:
-            close_answer(answer, view, final_text)
+            await close_answer(console, answer, view, final_text)
             answer = None
         elif open_kind == "thinking":
             console.print()
@@ -54,7 +54,7 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                     # non partial even whose part is a function call.
                     # A tool call ends whatever segment was open: otherwise the tool lines
                     # get drawn above a still-running answer Live and the order scrambles.
-                    close_current()
+                    await close_current()
                     fc = part.function_call
                     print_tool_call(console=console, view=view, author=author, name=fc.name, args=fc.args)
                 elif part.function_response:
@@ -65,7 +65,7 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                     kind = "thinking" if part.thought else "answer"
                     if open_kind != kind:
                         # close previous mode of different kind and potentially open a new answer stream
-                        close_current()
+                        await close_current()
                         if kind == "thinking":
                             # prep for thinking print
                             print_thinking_header(console=console, view=view, author=author)
@@ -78,12 +78,12 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                         print_thinking_delta(console=console, view=view, delta = part.text)
                     else:
                         # append to answer stream with this part's text
-                        append_answer(stream=answer, view=view, delta=part.text)
+                        await append_answer(console=console, stream=answer, view=view, delta=part.text)
                 elif part.text and not part.thought:
                     # non-partial event not containing thinking tokens: aggregated final message from agent (LLM), authoritative
                     if open_kind != "answer":
                         # close non-answer mode
-                        close_current()
+                        await close_current()
                         answer = open_answer(console=console, view=view, author=author)
                         open_kind = "answer"
                     # add text from final message into stream and close it.
@@ -93,7 +93,7 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
                     # name-free version sits in custom_metadata; prefer it. Admin events
                     # never carry the key, so they fall through to the raw text.
                     masked_text: str | None = (event.custom_metadata or {}).get(DISPLAY_TEXT_KEY)
-                    close_current(final_text=masked_text or part.text)
+                    await close_current(final_text=masked_text or part.text)
     finally:
         # after turn completion, no stream needed to be open.
-        close_current()
+        await close_current()

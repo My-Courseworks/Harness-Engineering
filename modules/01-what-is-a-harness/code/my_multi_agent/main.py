@@ -2,9 +2,6 @@
 
 """
 
-import functools
-
-
 import asyncio
 
 import questionary
@@ -21,10 +18,11 @@ from rich.console import Console
 
 from agents.orchestrator import create_orchestrator_agent
 from chat.masking import (
-    build_mask_callback, collect_internal_names, 
-    substitute_internals, compile_name_patterns
+    MASKED_ROLE_INSTRUCTION,
+    build_mask_callback, build_unit_cleaner,
+    collect_internal_names, compile_name_patterns
 )
-from chat.render_chat import View, passthrough
+from chat.render_chat import View
 from chat.replay import replay_session
 from chat.runtime import build_runtime
 from chat.sessions import get_session_service, choose_session
@@ -53,18 +51,23 @@ async def main():
 
     # Masking: non-admins must never see internal agent or tool names.
     # The role is resolved exactly once, here; everything downstream receives
-    # functions (a callback on the agent, a render transform on the View) and
-    # never asks who the user is. Patterns are compiled once and shared so the
-    # callback and the renderer provably match against the same regexes.
+    # functions and never asks who the user is. Three layers, same patterns:
+    #   - a runner-wide instruction, so the model rarely narrates internals;
+    #   - clean_unit on the View: the live stream prints a unit only after it
+    #     has been checked, rewritten if needed, or withheld;
+    #   - a callback on the root agent that persists the same clean text for replay.
     # TODO: change the role check to an Enum once this starts working
-    render = passthrough
-    if user.role != "admin":
-        internal_names = await collect_internal_names(root_agent)
-        patterns = compile_name_patterns(internal_names)
-        root_agent.after_model_callback = build_mask_callback(patterns, create_model())
-        render = functools.partial(substitute_internals, patterns=patterns)
+    clean_unit = None
+    global_instruction = None
+    if config.features.masking and user.role != "admin":
+        patterns = compile_name_patterns(await collect_internal_names(root_agent))
+        clean_unit = build_unit_cleaner(patterns, create_model())
+        root_agent.after_model_callback = build_mask_callback(patterns, clean_unit)
+        if config.features.masked_role_instruction:
+            global_instruction = MASKED_ROLE_INSTRUCTION
 
-    chat_runtime = build_runtime(root_agent=root_agent, session_service=session_service)
+    chat_runtime = build_runtime(root_agent=root_agent, session_service=session_service,
+                                 global_instruction=global_instruction)
 
     session_id = await choose_session(
         session_service = session_service,
@@ -78,7 +81,7 @@ async def main():
 
     console = Console()
     view = View(styles=config.styles, labels=config.labels, display=config.displays[user.role],
-                root_agent_name=root_agent.name, render=render)
+                root_agent_name=root_agent.name, clean_unit=clean_unit)
 
     await replay_session(app_name=chat_runtime.app.name, session_id=session_id,  user_id = user.user_id,
         session_service=session_service, console=console, view=view)
