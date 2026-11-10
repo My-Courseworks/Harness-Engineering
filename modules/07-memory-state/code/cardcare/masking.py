@@ -91,6 +91,8 @@ _CODE_CUE = re.compile(
     r"(code|number|digits?)\s+(on|at|from)\s+(the\s+)?(back|reverse|front)|(on|at)\s+the\s+(back|reverse)(\s+of\s+(my|the)\s+card)?|"
     r"back\s+of\s+(my|the)?\s*card|signature\s+(strip|panel|box|line)|(by|next\s+to|beside|near|on|at)\s+the\s+signature|"
     r"(three|3|four|4)[\s-]+(digits?|numbers?)(\s+code)?)\b", re.IGNORECASE)
+_DATE_WORD_BEFORE = re.compile(r"\b(on|charged|since|dated|posted|from|until|billed|bought|paid|lost|stolen|missing|around|before|after|by)\W+(the\W+)?$",
+                               re.IGNORECASE)
 _WEAK_CODE_CUE = re.compile(r"\bcode\b", re.IGNORECASE)  # "my code is 737": for 3 digits only
 _EXPIRY_CUE = re.compile(r"\b(exp|expiry|expiration|exp\.?\s*date|valid\s+(thru|through|until|till)|good\s+(thru|through)|"
                          r"(card|it)\s+expires)\b", re.IGNORECASE)
@@ -199,8 +201,47 @@ def _tokens(text: str) -> list[dict]:
         if token["spoken"] and token["digits"] == "0" and token["text"].lower() == "oh":
             token.update(kind="word", digits=None, spoken=False)
     _classify(merged, text)
+    _classify_list_markers(merged, text)
     _release_card_groups(merged, text)
     return merged
+
+
+def _classify_list_markers(tokens: list[dict], text: str) -> None:
+    """The numerals that number a list are not digits of anything: "3. …", "4) …", "(5) …", "6: …", three or more of them
+    counting up by one. Read with the numbers inside the items, the numerals of a checklist made card numbers by chance:
+    a reply lost its lines 3 to 14 in round 6's blind held-out run, and 74 of 150 generated lists were damaged
+    (`fuzz-v2`, "a numbered list whose items hold other numbers"). A card number typed as a numbered list ("1. 5555 /
+    2. 5555 / …") keeps its groups: only the numerals and the items' own small numbers go (_mark_list)."""
+    shaped = [t for t in tokens if t["digits"] is not None and not t["spoken"] and t["role"] is None and len(t["digits"]) <= 2
+              and (t["start"] == 0 or text[t["start"] - 1] in " \t\n\r(*-")
+              and re.match(r"[.):]\s|\)\s", text[t["end"]:t["end"] + 2])]
+    chain: list[dict] = []
+    for t in [*shaped, None]:
+        if t is not None and chain and int(t["digits"]) == int(chain[-1]["digits"]) + 1:
+            chain.append(t)
+            continue
+        if len(chain) >= 3:
+            _mark_list(chain, tokens, text)
+        chain = [t] if t is not None else []
+
+
+def _mark_list(chain: list[dict], tokens: list[dict], text: str) -> None:
+    """The numerals of one list, and the small numbers inside its items. In an item that has words, a one- or two-digit
+    number is that item's own ("7. Carry 3 adapters", "12. Book 30 nights"): with the numerals gone, the quantities of
+    a long checklist still chained into a card number in 5 of 150 generated lists. A card number dictated as a list
+    keeps its groups, which are three digits or more."""
+    one_per_line = "\n" in text[chain[0]["end"]:chain[1]["start"]]
+    for k, marker in enumerate(chain):
+        marker["role"] = "list_marker"
+        if k + 1 < len(chain):
+            end = chain[k + 1]["start"]
+        else:
+            line_end = text.find("\n", marker["end"])
+            end = line_end if one_per_line and line_end != -1 else len(text)
+        if re.search(r"[^\W\d_]", text[marker["end"]:end]):
+            for t in tokens:
+                if marker["end"] <= t["start"] < end and t["digits"] is not None and not t["spoken"] and t["role"] is None and len(t["digits"]) <= 2:
+                    t["role"] = "list_item_number"
 
 
 # roles that are a reading of one token by its neighbours ("a year after a month and a day", "an identifier glued to a
@@ -539,6 +580,11 @@ def _card_sequences_from(runs: list[list[dict]], i: int, first: list[dict]) -> l
                     shape in ([4, 4, 4, 4], [4, 6, 5], [4, 4, 4, 4, 3], [5, 5, 5]) or (len(tokens) == 1 and len(digits) in (15, 16))):
                 found.append(tokens)
                 break
+        if found:
+            # the first complete number from this start is the number: what a later run adds is something else. "… 3530 1113
+            # 3330 0000 days ago, so it can't be that one" read the last word as a seventeenth digit, which passed Luhn
+            # by chance, and the words between went with the number (seen in round 6's blind held-out run)
+            break
         total += len(_digits(last_run))
         if total > 19:
             break
@@ -599,21 +645,36 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
         if t["digits"] is None or t["spoken"] or len(t["digits"]) != 2 or t["role"] not in (None, "date", "identifier") or inside(t):
             continue  # ("Oct-30" reads as an identifier, like "CN-77812")
         month = next((x for x in reversed(tokens[max(0, i - 4):i]) if x["kind"] == "word" and x["text"].lower() != "of"), None)
+        # ... and with no cue at all when they stand directly before the card number, as in a pasted card note ("September
+        # 27 4242 4242 4242 4242 / cvc 123": round 6's blind held-out run), unless a date word leads up to them ("charged
+        # on September 27 4242 …" is a day)
+        beside_the_number = month is not None and any(mask == CARD_NUMBER_MASK and re.fullmatch(r"[ \t]+", text[t["end"]:a]) for a, _, mask in taken) \
+            and not _DATE_WORD_BEFORE.search(text[max(0, month["start"] - 24):month["start"]])
         if month is not None and _MONTH.match(month["text"]) and re.fullmatch(r"(\s+of)?[\s/.,\-]{1,4}", text[month["end"]:t["start"]]) \
-                and _card_expiry_cue(_before(text, t, 30), text, t):
+                and (_card_expiry_cue(_before(text, t, 30), text, t) or beside_the_number):
             spans.append((month["start"], t["end"], EXPIRY_MASK))
     # "Fine, it's 5127 and ZIP 60614", typed right after a card paste: four bare digits beside a ZIP given after its cue, in
     # a message with no card number of its own, are the other half of a verification answer, not the security code
     answers_verification = not taken and any(t["role"] == "zip" for t in tokens)
     codes: set[str] = set()  # every code found in this message: the same digits again are the same secret
     unclaimed: list[list[dict]] = []
-    for run in _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True):  # never a last four, ZIP or year
-        first, last = run[0], run[-1]
-        digits = _digits(run)
-        n = len(digits)
-        before, after = _before(text, first, 45), text[last["end"]:last["end"] + 30]
+    queue = _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True)  # never a last four, ZIP or year
+    while queue:
+        run = queue.pop(0)
+        first = run[0]
+        before = _before(text, first, 45)
         cue = _CODE_CUE.search(before)
         cue_before = bool(cue) and not re.search(r"\d", before[cue.end():])
+        if cue_before and len(run) > 1 and len(first["digits"]) in (3, 4) and not _code_said_more_than_once(run):
+            # the cue names the token after it; what follows in the run is something else, read on its own. "CVC 047 1111"
+            # (the code, then the last group of a number whose first twelve digits came in the message before) was a
+            # seven-digit run that no rule took, and the code was stored (round 6's blind held-out run)
+            queue.insert(0, run[1:])
+            run = run[:1]
+        last = run[-1]
+        digits = _digits(run)
+        n = len(digits)
+        after = text[last["end"]:last["end"] + 30]
         cue_after = bool(re.match(r"\W{0,3}(is|are|was)?\W{0,3}(my|the)?\W{0,2}" + _CODE_CUE.pattern, after, re.IGNORECASE))
         weak_cue = bool(_WEAK_CODE_CUE.search(before[-20:]))
         spaced = len(run) == n  # "7 3 7": one digit per token
