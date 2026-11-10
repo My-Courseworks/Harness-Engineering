@@ -1,0 +1,58 @@
+[
+  {
+    "step": "ph-spaced",
+    "type": "semantic",
+    "label": "\"123 456\" is accepted: the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-09T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-spaced",
+    "type": "guard",
+    "label": "and the code is in no session store, in any spelling",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['lg_checkpoints.db', 'lg_checkpoints.db-wal']"
+  },
+  {
+    "step": "ph-dashed",
+    "type": "semantic",
+    "label": "\"ok it says 123-456\" is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-dashed",
+    "type": "guard",
+    "label": "and the code is in no session store",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['lg_checkpoints.db', 'lg_checkpoints.db-wal']"
+  },
+  {
+    "step": "ph-digits",
+    "type": "semantic",
+    "label": "\"1 2 3 4 5 6\" is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-24T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-digits",
+    "type": "guard",
+    "label": "and the code is in no session store",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['lg_checkpoints.db', 'lg_checkpoints.db-wal']"
+  },
+  {
+    "step": "ph-maintenance",
+    "type": "guard",
+    "label": "after the sessions ended and maintenance ran, still none of the three codes is stored",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "ph-maintenance",
+    "type": "guard",
+    "label": "every run record names the code it ran on and when",
+    "passed": true,
+    "evidence": "{\"code_sha256\": \"85bae00159a67654c5f14a27328fd1161fb20014341a2a803fcce3f5b7daf6c2\", \"recorded_at\": \"2026-11-10T15:52:18Z\"}"
+  }
+]

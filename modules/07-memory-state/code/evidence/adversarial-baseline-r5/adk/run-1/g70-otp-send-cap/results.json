@@ -1,0 +1,23 @@
+[
+  {
+    "step": "cap-s1",
+    "type": "external",
+    "label": "at most five codes are sent to one account in 24 hours",
+    "passed": false,
+    "evidence": "7 one-time-code messages in the outbox"
+  },
+  {
+    "step": "cap-s1",
+    "type": "working",
+    "label": "asking for codes is not a failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "cap-s1",
+    "type": "working",
+    "label": "the refusal says why",
+    "passed": false,
+    "evidence": "{\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": false}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}; {\"sent\": true, \"sent_to\": \"text message to \\u00b7\\u00b7\\u00b70188\", \"expires_in_minutes\": 5, \"resent\": true}"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "step": "tw-batch",
+    "type": "working",
+    "label": "the response sends one code",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "no turn of the conversation fails after two waits were opened at once",
+    "passed": false,
+    "evidence": "[\"BadRequestError: litellm.BadRequestError: DeepseekException - {\\\"error\\\":{\\\"message\\\":\\\"The `reasoning_content` in the thinking mode must be passed back to the API. (request_id: 490803c6-c459-4f06-886a-cfaeb159e89e)\\\",\\\"type\\\":\\\"invalid_request_error\\\",\\\"param\\\":null,\\\"code\\\":\\\"invalid_request_err"
+  },
+  {
+    "step": "tw-entry",
+    "type": "semantic",
+    "label": "the code is accepted and the channel changed",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:04:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "the conversation still answers: the third turn has a reply",
+    "passed": true,
+    "evidence": "Two answers for you:\n\n- **Contact channel:** email - that's what's on file now (the change is done; it was already email, so nothing effectively changed).\n- **Dispute window:** you can dispute a posted transaction within **75 days of its posting date**. After that, it can't be opened through the ass"
+  }
+]
