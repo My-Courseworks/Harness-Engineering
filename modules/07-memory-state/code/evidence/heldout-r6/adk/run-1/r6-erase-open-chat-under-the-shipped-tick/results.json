@@ -1,0 +1,107 @@
+[
+  {
+    "step": "r6g-open",
+    "type": "semantic",
+    "label": "r6 D1: (the travel notice was stored before the erasure)",
+    "passed": true,
+    "evidence": "{\"stored\": {\"travel_notice\": {\"value\": \"Tbilisi\", \"as_of\": \"2026-11-24T14:00:00Z\", \"valid_until\": \"2026-12-05\", \"expires_at\": \"2026-12-06T00:00:00Z\"}}, \"replaced\": null}"
+  },
+  {
+    "step": "r6g-open",
+    "type": "semantic",
+    "label": "r6 D1: the erasure's result names the kind of fact it removed",
+    "passed": true,
+    "evidence": "{\"erased_now\": {\"remembered_facts\": [\"travel_notice\"], \"past_conversation_summaries\": 0, \"other_conversation_transcripts\": 0, \"reminders_with_their_notes\": 0}, \"this_conversation\": \"its transcript is "
+  },
+  {
+    "step": "r6g-open",
+    "type": "semantic",
+    "label": "r6 D1: ...and no kind that was never stored",
+    "passed": true,
+    "evidence": "{\"erased_now\": {\"remembered_facts\": [\"travel_notice\"], \"past_conversation_summaries\": 0, \"other_conversation_transcripts\": 0, \"reminders_with_their_notes\": 0}, \"this_conversation\": \"its transcript is "
+  },
+  {
+    "step": "r6g-open",
+    "type": "semantic",
+    "label": "r6 B1: facts are deleted at the request",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r6g-open",
+    "type": "working",
+    "label": "judge: Look at the request_memory_erasure tool result shown in the transcript. Does it say that this conversation's transcript is deleted at whichever of these comes first: when the conversation ends, when it has been idle for 30 minutes, or when a scheduled follow-up (or reminder) of this customer falls due? All three must be stated to pass.",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The tool result states \\\"its transcript is deleted when the conversation ends, once it has been idle for 30 minutes if the customer just closes the chat, or when a scheduled follow-up of theirs falls due, whichever comes first.\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6g-open",
+    "type": "semantic",
+    "label": "judge: When confirming the erasure to the customer, did the assistant avoid saying that a contact-channel preference (or any saved fact other than the travel notice) was among the things it erased?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant only listed \\\"Your travel notice (Tbilisi, until 5 December)\\\" and said there were none in other categories, without claiming a contact-channel preference or any other saved fact was erased.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6g-tick-one-minute-later",
+    "type": "working",
+    "label": "r6 B1: the shipped tick a minute after the request leaves the requesting chat's transcript",
+    "passed": true,
+    "evidence": "transcripts of marco: ['r6g-open']"
+  },
+  {
+    "step": "r6g-tick-one-minute-later",
+    "type": "working",
+    "label": "r6 B3: ...and reports no erasure finished and no transcript deleted",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [], \"deleted_transcripts\": []}"
+  },
+  {
+    "step": "r6g-open-goes-on",
+    "type": "working",
+    "label": "r6 B1: the agent can still say what was typed before the request",
+    "passed": true,
+    "evidence": "From this conversation: Tbilisi, until 5 December, and your neighbour Ilse is looking after your cat.\n\nThat detail lives only in this conversation's transcript now - the travel notice itself has been deleted from your profile (so no travel notice is on file), and nothing about your trip or the cat i"
+  },
+  {
+    "step": "r6g-open-goes-on",
+    "type": "episodic",
+    "label": "r6 B1: nothing more is stored from the chat that asked",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "r6g-tick-29-idle",
+    "type": "working",
+    "label": "r6 B2: 29 minutes after the last turn the transcript is still there",
+    "passed": true,
+    "evidence": "transcripts of marco: ['r6g-open']"
+  },
+  {
+    "step": "r6g-tick-31-idle",
+    "type": "working",
+    "label": "r6 B2: 31 minutes after the last turn the tick deletes it",
+    "passed": true,
+    "evidence": "transcripts of marco: []"
+  },
+  {
+    "step": "r6g-tick-31-idle",
+    "type": "working",
+    "label": "r6 B3: ...and its own output names the customer and the transcript",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [\"marco\"], \"deleted_transcripts\": [\"r6g-open\"]}"
+  },
+  {
+    "step": "r6g-later",
+    "type": "episodic",
+    "label": "r6 B: nothing erased comes back in a later chat",
+    "passed": true,
+    "evidence": "Here's what I have on file:\n\n- **Contact channel:** none set - follow-ups and reminders go by secure message in the Kestrel app by default.\n- **Travel notice:** none on file.\n- **Prior conversations:** no record I can find - I don't have anything about a trip or a destination you mentioned.\n\nIf you'"
+  },
+  {
+    "step": "r6g-later",
+    "type": "guard",
+    "label": "r6 B: ...and it is in no memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  }
+]

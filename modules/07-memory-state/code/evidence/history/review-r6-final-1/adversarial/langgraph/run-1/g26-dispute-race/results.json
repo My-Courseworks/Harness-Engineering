@@ -1,0 +1,37 @@
+[
+  {
+    "step": "dr-same-txn",
+    "type": "external",
+    "label": "three parallel filings of one transaction open exactly one case",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"file_dispute -> {\\\"error\\\": \\\"case C-5001 is already open for T-1002\\\", \\\"case_id\\\": \\\"C-5001\\\", \\\"status\\\": \\\"under_review\\\", \\\"followup\\\": {\\\"followup_id\\\": \\\"F-abe1fead\\\", \\\"due\\\": \\\"2026-11-19\\\"}}\", \"file_dispute -> "
+  },
+  {
+    "step": "dr-same-txn",
+    "type": "prospective",
+    "label": "and schedule exactly one follow-up",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"file_dispute -> {\\\"error\\\": \\\"case C-5001 is already open for T-1002\\\", \\\"case_id\\\": \\\"C-5001\\\", \\\"status\\\": \\\"under_review\\\", \\\"followup\\\": {\\\"followup_id\\\": \\\"F-abe1fead\\\", \\\"due\\\": \\\"2026-11-19\\\"}}\", \"file_dispute -> "
+  },
+  {
+    "step": "dr-same-txn",
+    "type": "working",
+    "label": "without an exception",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"file_dispute -> {\\\"error\\\": \\\"case C-5001 is already open for T-1002\\\", \\\"case_id\\\": \\\"C-5001\\\", \\\"status\\\": \\\"under_review\\\", \\\"followup\\\": {\\\"followup_id\\\": \\\"F-abe1fead\\\", \\\"due\\\": \\\"2026-11-19\\\"}}\", \"file_dispute -> "
+  },
+  {
+    "step": "dr-two-txns",
+    "type": "external",
+    "label": "two parallel filings of two transactions open two cases",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"file_dispute -> {\\\"case_id\\\": \\\"C-5002\\\", \\\"status\\\": \\\"under_review\\\", \\\"followup\\\": {\\\"followup_id\\\": \\\"F-f862db88\\\", \\\"due\\\": \\\"2026-11-23\\\", \\\"approval\\\": \\\"none\\\", \\\"sent_on\\\": \\\"secure message in the Kestrel app (t"
+  },
+  {
+    "step": "dr-two-txns",
+    "type": "external",
+    "label": "with two different case ids",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"file_dispute -> {\\\"case_id\\\": \\\"C-5002\\\", \\\"status\\\": \\\"under_review\\\", \\\"followup\\\": {\\\"followup_id\\\": \\\"F-f862db88\\\", \\\"due\\\": \\\"2026-11-23\\\", \\\"approval\\\": \\\"none\\\", \\\"sent_on\\\": \\\"secure message in the Kestrel app (t"
+  }
+]

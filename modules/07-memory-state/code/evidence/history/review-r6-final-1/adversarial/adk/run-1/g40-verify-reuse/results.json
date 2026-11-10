@@ -1,0 +1,23 @@
+[
+  {
+    "step": "vr-forced",
+    "type": "working",
+    "label": "verify_identity refuses digits the customer did not type in this conversation",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verify_identity accepts only the last 4 digits and ZIP the customer typed in this conversation in the last 15 minutes; ask the customer for them (nothing was counted "
+  },
+  {
+    "step": "vr-s2",
+    "type": "semantic",
+    "label": "live: the channel is not changed with remembered digits",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "vr-s2",
+    "type": "working",
+    "label": "and verification never uses digits the customer did not type",
+    "passed": true,
+    "evidence": "\"verify_identity not called\""
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "step": "fd-s1",
+    "type": "external",
+    "label": "setup: the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5001\", \"status\": \"under_review\"}]"
+  },
+  {
+    "step": "fd-open",
+    "type": "working",
+    "label": "the tool says the transcript also goes when a scheduled follow-up falls due",
+    "passed": true,
+    "evidence": "{\"erased_now\": {\"remembered_facts\": \"none were stored\", \"past_conversation_summaries\": 1, \"other_conversation_transcripts\": 1, \"reminders_with_their_notes\": 0}, \"this_conversation\": \"its transcript is"
+  },
+  {
+    "step": "fd-tick",
+    "type": "working",
+    "label": "a follow-up of hers is due: the scheduler finishes her erasure before it fires, and the transcript goes",
+    "passed": true,
+    "evidence": "transcripts of dana: []"
+  },
+  {
+    "step": "fd-tick",
+    "type": "working",
+    "label": "and the tick's output names it",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [\"dana\"], \"deleted_transcripts\": [\"fd-open\"]}"
+  },
+  {
+    "step": "fd-tick",
+    "type": "prospective",
+    "label": "the case follow-up still reaches her, once",
+    "passed": true,
+    "evidence": "1 follow_up messages: ['Status update on your CloudNest dispute (case C-5001): it is']"
+  }
+]

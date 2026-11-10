@@ -1,0 +1,72 @@
+[
+  {
+    "step": "open-tab",
+    "type": "semantic",
+    "label": "the notice is stored",
+    "passed": true,
+    "evidence": "{\"value\": \"Kyoto\", \"as_of\": \"2026-11-13T10:00:00Z\", \"valid_until\": \"2026-12-20\", \"expires_at\": \"2026-12-21T00:00:00Z\"}"
+  },
+  {
+    "step": "open-tab-erase",
+    "type": "semantic",
+    "label": "the erasure removes the facts",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "open-tab-erase",
+    "type": "working",
+    "label": "the tool does not promise deletion at 'the next maintenance run': an open chat is kept until it is idle",
+    "passed": true,
+    "evidence": "{\"erased_now\": {\"remembered_facts\": [\"travel_notice\"], \"past_conversation_summaries\": 0, \"other_conversation_transcripts\": 0, \"reminders_with_their_notes\": 0}, \"this_conversation\": \"its transcript is "
+  },
+  {
+    "step": "open-tab-tick-1",
+    "type": "working",
+    "label": "a tick one minute later leaves the open chat's transcript alone (it is not idle)",
+    "passed": true,
+    "evidence": "1 transcripts: ['open-tab']"
+  },
+  {
+    "step": "open-tab-tick-1",
+    "type": "working",
+    "label": "and its output does not claim to have erased her",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [], \"deleted_transcripts\": []}"
+  },
+  {
+    "step": "open-tab-continues",
+    "type": "working",
+    "label": "the customer's own words a minute ago are still in the conversation",
+    "passed": true,
+    "evidence": "You said you're travelling to Kyoto until December 20 - that was your travel notice earlier in this chat. I erased the stored fact when you asked, so it's no longer on your profile; it only remains in this conversation's transcript, which is deleted when the chat ends."
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "working",
+    "label": "thirty minutes idle: maintenance finishes the erasure and the transcript goes",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "working",
+    "label": "and the tick's output names the customer it erased and the transcript it deleted",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [\"dana\"], \"deleted_transcripts\": [\"open-tab\"]}"
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "guard",
+    "label": "nothing she said is left in any memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "episodic",
+    "label": "no episode was written from the stale chat",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  }
+]

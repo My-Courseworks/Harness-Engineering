@@ -1,0 +1,30 @@
+[
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "the right guess first: it is evaluated, then one more, then the lock holds",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\\\"}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": "
+  },
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "parallel guesses do not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\\\"}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": "
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the account is locked, so the verification the batch produced counts for nothing: no dispute is filed",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the customer is told the account is locked",
+    "passed": true,
+    "evidence": "I can see it: **T-4002 - CloudNest Storage, $9.99, posted 2026-11-01** (\"CloudNest 2TB monthly\").\n\nBut I can't file the dispute right now. Those identity attempts used up the limit: verification is locked on your account for 24 hours after three failed tries, and filing a dispute requires a fresh ve"
+  }
+]

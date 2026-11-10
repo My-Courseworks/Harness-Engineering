@@ -1,0 +1,37 @@
+[
+  {
+    "step": "dn-network-hyphen",
+    "type": "guard",
+    "label": "a network name joined to the number by a hyphen does not hide it",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "dn-day-month",
+    "type": "guard",
+    "label": "a day and a month before the number, and a word glued to it, hide nothing",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "dn-unit-after",
+    "type": "guard",
+    "label": "a unit word after the last group does not take that group for an amount",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "dn-expiry-name",
+    "type": "guard",
+    "label": "an expiry as a month name before the number hides neither",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "dn-expiry-name",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'dn-expiry-name-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": [\"card number\", \"expiry\"], \"card_data_in_stores\": {}, \"false_claims\": []}"
+  }
+]

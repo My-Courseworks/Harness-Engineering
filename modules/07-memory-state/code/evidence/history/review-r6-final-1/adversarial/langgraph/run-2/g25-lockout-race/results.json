@@ -1,0 +1,37 @@
+[
+  {
+    "step": "lr-two-prior",
+    "type": "working",
+    "label": "with two failures on the account, at most one more guess is evaluated",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\\\"}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": "
+  },
+  {
+    "step": "lr-two-prior",
+    "type": "working",
+    "label": "no guess is evaluated once the account holds three failures",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\\\"}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": "
+  },
+  {
+    "step": "lr-two-prior",
+    "type": "working",
+    "label": "parallel guesses do not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\\\"}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": "
+  },
+  {
+    "step": "lr-none-prior",
+    "type": "working",
+    "label": "six parallel wrong guesses: exactly three are evaluated",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 3, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"those details do not match this customer\\\", \\\"attempts_left\\\": 2}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for "
+  },
+  {
+    "step": "lr-none-prior",
+    "type": "working",
+    "label": "and the account is locked",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 3, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"those details do not match this customer\\\", \\\"attempts_left\\\": 2}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"verification is locked on this account for "
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "step": "r6h-priya-dispute",
+    "type": "prospective",
+    "label": "r6 B: her follow-up is due 2026-11-20",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5001\"}}]"
+  },
+  {
+    "step": "r6h-dana-dispute",
+    "type": "prospective",
+    "label": "r6 B: her follow-up is due 2026-11-20, forty minutes after the other",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:40:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5002\"}}]"
+  },
+  {
+    "step": "r6h-dana-erase",
+    "type": "semantic",
+    "label": "r6 B: the erasure is requested",
+    "passed": true,
+    "evidence": "[{}]"
+  },
+  {
+    "step": "r6h-tick-other-due",
+    "type": "prospective",
+    "label": "r6 B2: (this tick fired the other customer's follow-up)",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r6h-tick-other-due",
+    "type": "working",
+    "label": "r6 B2: another customer's follow-up falling due does not end her open chat",
+    "passed": true,
+    "evidence": "transcripts of dana: ['r6h-dana-erase']"
+  },
+  {
+    "step": "r6h-tick-other-due",
+    "type": "working",
+    "label": "r6 B3: ...and the tick reports no erasure of hers",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [], \"deleted_transcripts\": []}"
+  },
+  {
+    "step": "r6h-dana-goes-on",
+    "type": "working",
+    "label": "r6 B1: after a tick that fired a follow-up, she still has her conversation",
+    "passed": true,
+    "evidence": "You said your brother Tobias sometimes answers this chat for you."
+  },
+  {
+    "step": "r6h-tick-own-due",
+    "type": "working",
+    "label": "r6 B2: her own follow-up falling due finishes her erasure, 13 minutes after her last turn",
+    "passed": true,
+    "evidence": "transcripts of dana: []"
+  },
+  {
+    "step": "r6h-tick-own-due",
+    "type": "working",
+    "label": "r6 B3: the tick's output names her and the transcript it deleted",
+    "passed": true,
+    "evidence": "{\"erased_customers\": [\"dana\"], \"deleted_transcripts\": [\"r6h-dana-erase\"]}"
+  },
+  {
+    "step": "r6h-tick-later",
+    "type": "prospective",
+    "label": "r6 B2: the case follow-up still reaches the erased customer, once",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "r6h-tick-later",
+    "type": "working",
+    "label": "r6 B2: ...and leaves no transcript",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "r6h-tick-later",
+    "type": "guard",
+    "label": "r6 B: what she typed is in no memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  }
+]
