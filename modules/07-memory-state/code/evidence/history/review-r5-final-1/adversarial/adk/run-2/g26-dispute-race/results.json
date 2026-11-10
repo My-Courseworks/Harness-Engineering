@@ -1,0 +1,37 @@
+[
+  {
+    "step": "dr-same-txn",
+    "type": "external",
+    "label": "three parallel filings of one transaction open exactly one case",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 1, \"distinct_case_ids\": 1, \"case_followups\": 1, \"evidence\": \"\", \"cases_for:T-1002\": 1, \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "dr-same-txn",
+    "type": "prospective",
+    "label": "and schedule exactly one follow-up",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 1, \"distinct_case_ids\": 1, \"case_followups\": 1, \"evidence\": \"\", \"cases_for:T-1002\": 1, \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "dr-same-txn",
+    "type": "working",
+    "label": "without an exception",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 1, \"distinct_case_ids\": 1, \"case_followups\": 1, \"evidence\": \"\", \"cases_for:T-1002\": 1, \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "dr-two-txns",
+    "type": "external",
+    "label": "two parallel filings of two transactions open two cases",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 2, \"distinct_case_ids\": 2, \"case_followups\": 2, \"evidence\": \" | \", \"cases_for:T-3001\": 1, \"cases_for:T-3002\": 1, \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "dr-two-txns",
+    "type": "external",
+    "label": "with two different case ids",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 2, \"distinct_case_ids\": 2, \"case_followups\": 2, \"evidence\": \" | \", \"cases_for:T-3001\": 1, \"cases_for:T-3002\": 1, \"otp_messages\": 0, \"open_challenges\": 0}"
+  }
+]

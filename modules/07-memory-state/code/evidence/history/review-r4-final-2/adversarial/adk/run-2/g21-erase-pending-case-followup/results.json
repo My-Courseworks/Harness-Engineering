@@ -1,0 +1,72 @@
+[
+  {
+    "step": "epc-s1",
+    "type": "prospective",
+    "label": "setup: the case follow-up is due 2026-11-19",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-19T10:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5001\"}}]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "prospective",
+    "label": "the case follow-up, which must still reach her, is delivered on the first attempt",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-31331cd4\", \"user_id\": \"priya\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "working",
+    "label": "it runs with read tools and notify_customer only, even though the erasure is pending",
+    "passed": true,
+    "evidence": "[\"find_transactions\", \"get_case_status\", \"list_my_followups\", \"load_memory\", \"notify_customer\", \"report_malformed_tool_call\", \"search_policy\"]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "working",
+    "label": "and leaves no transcript",
+    "passed": true,
+    "evidence": "transcripts with prefix followup-: none"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "episodic",
+    "label": "and no episode",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "epc-fire-1010",
+    "type": "prospective",
+    "label": "exactly one message reached her",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "epc-maint",
+    "type": "working",
+    "label": "no transcript remains",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "epc-maint",
+    "type": "guard",
+    "label": "nothing about her dispute is in a memory store (cases and follow-up records are the bank's)",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "epc-maint",
+    "type": "episodic",
+    "label": "no episode remains",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  },
+  {
+    "step": "epc-maint",
+    "type": "episodic",
+    "label": "no orphan embedding",
+    "passed": true,
+    "evidence": "vector-index rows with no stored item: 0"
+  }
+]

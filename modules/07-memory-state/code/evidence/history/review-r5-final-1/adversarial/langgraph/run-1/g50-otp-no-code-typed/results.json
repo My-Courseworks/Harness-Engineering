@@ -1,0 +1,30 @@
+[
+  {
+    "step": "on-s1",
+    "type": "working",
+    "label": "chatter instead of a code ends the wait and is answered",
+    "passed": true,
+    "evidence": "A chargeback is a dispute you raise with your card issuer to reverse a charge, which then goes to the merchant's bank to be contested.\n\nYour code is still valid for a few minutes - type it here whenever you're ready and I'll complete the switch to SMS."
+  },
+  {
+    "step": "on-s1",
+    "type": "prospective",
+    "label": "a resend after 60 seconds sends a second code",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 281443. It expires in 5 minutes. Kestrel will never ask you to share it.\", \"Your Kestrel verification code is 020343. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "on-s1",
+    "type": "working",
+    "label": "the first challenge was cancelled, the second consumed",
+    "passed": true,
+    "evidence": "challenges: [('cancelled', '2026-11-09T10:00'), ('consumed', '2026-11-09T10:04')]"
+  },
+  {
+    "step": "on-s1",
+    "type": "semantic",
+    "label": "the channel is sms",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-09T10:06:00Z\", \"expires_at\": null}"
+  }
+]

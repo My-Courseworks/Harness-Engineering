@@ -1,0 +1,51 @@
+[
+  {
+    "step": "sw-batch",
+    "type": "working",
+    "label": "the response sends one code and pauses for it",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "sw-batch",
+    "type": "working",
+    "label": "without an exception",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "sw-entry",
+    "type": "external",
+    "label": "the customer's entry two minutes later does not send a second code",
+    "passed": false,
+    "evidence": "[\"Your Kestrel verification code is 222273. It expires in 5 minutes. Kestrel will never ask you to share it.\", \"Your Kestrel verification code is 114636. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "sw-entry",
+    "type": "working",
+    "label": "the code they typed is the code that is checked: no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "sw-entry",
+    "type": "working",
+    "label": "one code, consumed",
+    "passed": true,
+    "evidence": "challenges: [('consumed', '2026-11-12T10:00'), ('open', '2026-11-12T10:02')]"
+  },
+  {
+    "step": "sw-entry",
+    "type": "semantic",
+    "label": "and the channel is changed",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "sw-entry",
+    "type": "guard",
+    "label": "the typed code is not in the stored transcript",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]
