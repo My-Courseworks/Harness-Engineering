@@ -49,7 +49,7 @@ from pydantic import BaseModel
 from cardcare import desk, privacy, procedures, scheduler, world
 from cardcare.clock import parse_instant, wall_clock_now
 from cardcare.episodes import build_episode, case_outcomes, group_by_customer_turn, own_case_ids, parse_reflection, reflection_prompt
-from cardcare.masking import MASK_TOKEN, mask_card_numbers, mask_customer_message, mask_customer_text, removed_fragments, scrub_fragments
+from cardcare.masking import MASK_TOKEN, ONE_TIME_CODE_MASK, mask_card_numbers, mask_customer_message, mask_customer_text, removed_fragments, scrub_fragments, turn_without_codes
 from cardcare.memory_policy import (
     DEFAULT_CHANNEL,
     VERIFICATION_TTL_MINUTES,
@@ -218,7 +218,6 @@ def _customer_texts(messages: list) -> list[str]:
 # holds and then WAIT for the customer to type it, and nobody is there to type it in a scheduler session.
 LIVE_ONLY_TOOLS = ("verify_identity", "file_dispute", "add_case_evidence", "remember_customer_fact", "forget_customer_fact",
                    "schedule_reminder", "cancel_reminder", "request_memory_erasure", "send_verification_code", "confirm_verification_code")
-ONE_TIME_CODE_MASK = "[REDACTED ONE-TIME CODE]"
 # Tools only an UNATTENDED session gets: one the scheduler starts when a follow-up or reminder falls due, with no
 # customer present. notify_customer is how that session reaches the customer (one message per follow-up). A live
 # conversation never gets it, because there the agent simply replies in the chat. A session is unattended only when
@@ -842,9 +841,7 @@ def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent: str,
     if not codes:
         return record
     scrub_earlier_messages(h, user_id, session_id, {code: ONE_TIME_CODE_MASK for code in codes})
-    calls = [{**call, "args": {k: (_replace_codes(v, codes) if isinstance(v, str) else v) for k, v in call["args"].items()}}
-             for call in record["tool_calls"]]
-    return {**record, "customer": _replace_codes(sent, codes), "tool_calls": calls}
+    return turn_without_codes(record, sent, codes)  # the reply too: the model can repeat a code the customer typed
 
 
 def _thread_text(h: Harness, user_id: str, session_id: str) -> str:
@@ -866,12 +863,6 @@ def waiting_for_code_line(bank_db: Path, user_id: str, now: str) -> str:
     where = f" by {code['sent_to']}" if code else ""
     return (f"A one-time code has been sent{where}; it cannot go anywhere else and is valid for 5 minutes. Please type it here when it "
             "arrives, and I will finish your request.")
-
-
-def _replace_codes(text: str, codes: set[str]) -> str:
-    for code in codes:
-        text = text.replace(code, ONE_TIME_CODE_MASK)
-    return text
 
 
 def complete_text(prompt: str) -> str:

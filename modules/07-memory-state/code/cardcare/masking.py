@@ -51,6 +51,7 @@ SECURITY_CODE_MASK = "[REDACTED SECURITY CODE]"
 EXPIRY_MASK = "[REDACTED EXPIRY]"
 CARD_DIGITS_MASK = "[REDACTED CARD DIGITS]"
 MASK_TOKEN = re.compile(r"\[REDACTED [A-Z ]+\]")
+ONE_TIME_CODE_MASK = "[REDACTED ONE-TIME CODE]"
 
 _DROP = dict.fromkeys(map(ord, "​‌‍⁠﻿­"), None)
 _UNITS = {"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
@@ -712,6 +713,21 @@ def mask_customer_message(text: str, previous: tuple[str, ...] = ()) -> tuple[st
         or bool(re.search(r"\b(cvv2?|cvc2?|cid|csc|security\s+code|card\s+number)\b", text, re.IGNORECASE))
     spans += _code_and_expiry_spans(tokens, text, card_context, spans)
     return _replace(text, spans), {index: _replace(normalize(previous[index]), parts) for index, parts in rewrites.items()}
+
+
+def turn_without_codes(record: dict, sent: str, codes: set[str]) -> dict:
+    """A turn record with every one of `codes` (one-time codes) replaced: in the customer's message, in every tool-call
+    argument, and in the reply. The model reads what the customer typed, so it can repeat a code typed there ("... so I
+    don't need 018899"); the procedure forbids that, and what the customer reads and the evidence records does not
+    depend on the procedure being followed."""
+    def without(text: str) -> str:
+        for code in codes:
+            text = text.replace(code, ONE_TIME_CODE_MASK)
+        return text
+
+    calls = [{**call, "args": {key: without(value) if isinstance(value, str) else value for key, value in call["args"].items()}}
+             for call in record["tool_calls"]]
+    return {**record, "customer": without(sent), "tool_calls": calls, "reply": without(record.get("reply") or "")}
 
 
 def _edit_distance(a: str, b: str) -> int:
