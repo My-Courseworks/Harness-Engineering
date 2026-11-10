@@ -1,0 +1,65 @@
+[
+  {
+    "step": "odd-comma",
+    "type": "working",
+    "label": "a code typed with a comma is no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "odd-comma",
+    "type": "guard",
+    "label": "written into the conversation in a form the bank does not take, the code is in no session store",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['adk_sessions.db']"
+  },
+  {
+    "step": "odd-comma",
+    "type": "working",
+    "label": "and that code can no longer be used: it is cancelled",
+    "passed": false,
+    "evidence": "challenges: [('consumed', '2026-11-09T10:00')]"
+  },
+  {
+    "step": "odd-four-two",
+    "type": "guard",
+    "label": "a code typed as four digits and two is in no session store",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['adk_sessions.db']"
+  },
+  {
+    "step": "odd-four-two",
+    "type": "working",
+    "label": "no failed attempt in the whole conversation",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "odd-four-two",
+    "type": "semantic",
+    "label": "a new code, typed as six digits, is accepted: the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "odd-other-numbers",
+    "type": "working",
+    "label": "amounts, a date and a points balance are not codes: no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "odd-other-numbers",
+    "type": "working",
+    "label": "and they are stored as typed",
+    "passed": true,
+    "evidence": "Before I type it: I paid $1,234.56 on 2026-11-13 and I have 123,456 points, right?"
+  },
+  {
+    "step": "odd-other-numbers",
+    "type": "semantic",
+    "label": "and the code typed after them is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-24T10:04:00Z\", \"expires_at\": null}"
+  }
+]

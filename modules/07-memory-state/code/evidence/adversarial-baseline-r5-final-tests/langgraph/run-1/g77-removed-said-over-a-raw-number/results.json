@@ -1,0 +1,16 @@
+[
+  {
+    "step": "rr-s1",
+    "type": "guard",
+    "label": "(the listed miss: a 4-digit label joined by spaces to a number in fours is stored)",
+    "passed": true,
+    "evidence": "The declined purchase was order 1234 5555 5555 5555 4444, can you look at my CloudNest charges?"
+  },
+  {
+    "step": "rr-s1",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'rr-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": [], \"card_data_in_stores\": {\"card number 5555\\u20264444\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}, \"false_claims\": []}"
+  }
+]
