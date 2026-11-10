@@ -540,17 +540,19 @@ def possession_proved_at(db_path: Path, user_id: str, session_id: str, now: str)
     return code["closed_at"]
 
 
-def codes_matching(db_path: Path, user_id: str, text: str) -> list[str]:
-    """The 6-digit runs in `text` that are one of this customer's one-time codes, open or dead, by salted hash. What
-    the harness redacts from a stored message when the customer typed a code outside a wait (nothing pending, so no
-    tool took it): a code the bank issued is never kept in a transcript, whatever happened to it."""
+def codes_matching(db_path: Path, text: str) -> list[str]:
+    """The 6-digit runs in `text` that are one of the bank's one-time codes, open or dead, by salted hash. What the
+    harness redacts from a stored message when the customer typed a code outside a wait (nothing pending, so no tool
+    took it): a code the bank issued is never kept in a transcript, whatever happened to it and whoever it was sent to
+    (a code read off someone else's phone is still a code). Every customer's challenges are compared: one hash per
+    challenge row per 6-digit run, which a deployment would bound by the challenge's age."""
     runs = sorted(set(re.findall(r"(?<!\d)\d{6}(?!\d)", text)))
     if not runs:
         return []
     with closing(_connect(db_path)) as conn:
         if "verification_challenges" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
             return []
-        rows = conn.execute("SELECT code_hash, salt FROM verification_challenges WHERE user_id = ?", (user_id,)).fetchall()
+        rows = conn.execute("SELECT code_hash, salt FROM verification_challenges").fetchall()
     return [run for run in runs if any(_code_hash(run, row["salt"]) == row["code_hash"] for row in rows)]
 
 

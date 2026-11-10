@@ -95,6 +95,8 @@ _EXPIRY_CUE = re.compile(r"\b(exp|expiry|expiration|exp\.?\s*date|valid\s+(thru|
 # after a card number, these words introduce its code or its expiry, never more of the number ("…1111, cvv 1 8 1")
 _AFTER_NUMBER_CUE = re.compile(r"\b(cvv2?|cvc2?|cid|csc|cvn|security\s+(code|number|digits)|verification\s+(code|value|number)|"
                                r"exp|expiry|expiration|expires)\b", re.IGNORECASE)
+_BARE_EXPIRY_CUE = re.compile(r"\b(expires|expiring|expired)\b", re.IGNORECASE)
+_CARD_SUBJECTS = {"card", "it", "that", "which", "this", "one", "and", "but", "also", "visa", "mastercard", "amex"}
 _TOKEN = re.compile(r"\d+|[^\W\d_]+|\S")
 
 
@@ -306,7 +308,10 @@ def _classify_dates(tokens: list[dict], text: str) -> None:
         # a month name with a day and/or a year: "Nov 3", "November 3rd 2026", "3 Nov", "Dec 2029" (a month/year pair)
         nums = [x for x in tokens[i + 1:i + 4] if x["digits"] is not None and x["start"] - t["end"] <= 12
                 and "\n" not in text[t["end"]:x["start"]]]
-        if nums and len(nums[0]["digits"]) <= 2 and int(nums[0]["digits"]) <= 31 and not nums[0]["spoken"] and nums[0]["role"] is None:
+        if nums and len(nums[0]["digits"]) == 2 and not nums[0]["spoken"] and nums[0]["role"] is None \
+                and re.fullmatch(r"\s*['’]", text[t["end"]:nums[0]["start"]]):
+            nums[0]["role"] = "month_year"  # "January '27": an apostrophe marks a year, never a day of the month
+        elif nums and len(nums[0]["digits"]) <= 2 and int(nums[0]["digits"]) <= 31 and not nums[0]["spoken"] and nums[0]["role"] is None:
             nums[0]["role"] = "date"
             if len(nums) > 1 and len(nums[1]["digits"]) == 4 and nums[1]["role"] is None and nums[1]["start"] - nums[0]["end"] <= 3:
                 nums[1]["role"] = "date"
@@ -538,11 +543,18 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
         cued = _card_expiry_cue(before, text, month) or card_context and bool(re.search(r"\bexpir\w*\W*$", before))  # "…4444 expires 12 29"
         if cued and (len(year["digits"]) == 2 or full_year) and re.fullmatch(r"[ ./\-]{1,3}", gap) or card_context and full_year and gap == " ":
             spans.append((month["start"], year["end"], EXPIRY_MASK))
-    # "exp Dec 29": after an expiry cue, a month name and two digits are a month and a year, not a day of the month
+    # "exp Dec 29", "expiry: July / 29", "exp Jul 33": after an expiry cue, a month name and two digits are a month and a
+    # year, not a day of the month, whatever separates them
     for i, t in enumerate(tokens):
-        if t["role"] == "date" and len(t["digits"]) == 2 and not t["spoken"] and not inside(t) and i and tokens[i - 1]["kind"] == "word" \
-                and _MONTH.match(tokens[i - 1]["text"]) and _card_expiry_cue(_before(text, t, 30), text, t):
-            spans.append((tokens[i - 1]["start"], t["end"], EXPIRY_MASK))
+        if t["digits"] is None or t["spoken"] or len(t["digits"]) != 2 or t["role"] not in (None, "date", "identifier") or inside(t):
+            continue  # ("Oct-30" reads as an identifier, like "CN-77812")
+        month = next((x for x in reversed(tokens[max(0, i - 4):i]) if x["kind"] == "word" and x["text"].lower() != "of"), None)
+        if month is not None and _MONTH.match(month["text"]) and re.fullmatch(r"(\s+of)?[\s/.,\-]{1,4}", text[month["end"]:t["start"]]) \
+                and _card_expiry_cue(_before(text, t, 30), text, t):
+            spans.append((month["start"], t["end"], EXPIRY_MASK))
+    # "Fine, it's 5127 and ZIP 60614", typed right after a card paste: four bare digits beside a ZIP given after its cue, in
+    # a message with no card number of its own, are the other half of a verification answer, not the security code
+    answers_verification = not taken and any(t["role"] == "zip" for t in tokens)
     codes: set[str] = set()  # every code found in this message: the same digits again are the same secret
     unclaimed: list[list[dict]] = []
     for run in _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True):  # never a last four, ZIP or year
@@ -556,7 +568,8 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
         weak_cue = bool(_WEAK_CODE_CUE.search(before[-20:]))
         spaced = len(run) == n  # "7 3 7": one digit per token
         said_twice = _code_said_more_than_once(run)
-        if n in (3, 4) and (len(run) == 1 or spaced) and (card_context or cue_before or cue_after or weak_cue and n == 3):
+        last_four = answers_verification and n == 4 and len(run) == 1 and not first["spoken"]
+        if n in (3, 4) and (len(run) == 1 or spaced) and (card_context and not last_four or cue_before or cue_after or weak_cue and n == 3):
             spans.append((first["start"], last["end"], SECURITY_CODE_MASK))
             codes.add(digits)
         elif card_context and n >= 8 and (all(len(t["digits"]) == 4 for t in run) or len(run) == 1 and n <= 12):
@@ -574,7 +587,7 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
     for i, t in enumerate(tokens):
         if t["role"] not in ("month_pair", "month_year") or inside(t):
             continue
-        cue = _card_expiry_cue(_before(text, t, 30), text, t)
+        cue = _card_expiry_cue(_before(text, t, 30), text, t) or t["role"] == "month_year" and _card_expiry_cue(_before(text, t, 40), text, t, bare=True)
         if card_context or cue:
             if t["role"] == "month_pair":
                 partner = next((x for x in tokens[i + 1:i + 3] if x["role"] == "month_pair"), None)
@@ -587,6 +600,10 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
     for t in tokens:
         if t["spoken"] and not inside(t) and t["role"] is None and len(t["digits"]) == 4 and 1 <= int(t["digits"][:2]) <= 12 \
                 and (card_context or _card_expiry_cue(_before(text, t, 30), text, t)):
+            spans.append((t["start"], t["end"], EXPIRY_MASK))
+        # ... and with a one-digit month, "expiry: seven twenty-nine" (three digits: only after its cue)
+        elif t["spoken"] and not inside(t) and t["role"] is None and len(t["digits"]) == 3 and t["digits"][0] != "0" \
+                and _card_expiry_cue(_before(text, t, 30), text, t):
             spans.append((t["start"], t["end"], EXPIRY_MASK))
     return spans
 
@@ -606,14 +623,20 @@ def _code_said_more_than_once(run: list[dict]) -> str | None:
     return None
 
 
-def _card_expiry_cue(before: str, text: str, token: dict) -> bool:
+def _card_expiry_cue(before: str, text: str, token: dict, bare: bool = False) -> bool:
     """An expiry cue right before the date ("exp 12/29", "expiry date: 12/29"), and not about something else
-    ("exp. delivery 11/24", "my travel notice expiration should be 12/10")."""
-    for cue in _EXPIRY_CUE.finditer(before):
+    ("exp. delivery 11/24", "my travel notice expiration should be 12/10"). With `bare`, for a month and a year that
+    cannot be a day ("expires end of January '27"): a plain "expires" too, when it has no subject of its own or its
+    subject is the card ("my subscription expires July 2029" is the subscription's)."""
+    cues = list(_EXPIRY_CUE.finditer(before))
+    if bare:
+        cues += [cue for cue in _BARE_EXPIRY_CUE.finditer(before)
+                 if (re.search(r"([^\W\d_]+)[ \t]+$", before[:cue.start()]) or [None, "it"])[1].lower() in _CARD_SUBJECTS]
+    for cue in cues:
         between = before[cue.end():]
         context = text[max(0, token["start"] - len(before) - 30):token["start"] - len(before) + cue.start()]
-        between = re.sub(_MONTHS + r"\.?[\W_]*$", "", between, flags=re.IGNORECASE)  # "expiry December 2029": the month is the expiry's
-        if re.fullmatch(r"[\W_]*((date|is|was|on|of|should\s+be|reads?|says?)[\W_]+)*", between, re.IGNORECASE) \
+        between = re.sub(_MONTHS + r"\.?[\W_]*(of[\W_]+)?$", "", between, flags=re.IGNORECASE)  # "expiry December 2029": the month is the expiry's
+        if re.fullmatch(r"[\W_]*((date|is|was|on|of|at|the|end|should\s+be|reads?|says?)[\W_]+)*", between, re.IGNORECASE) \
                 and not _NOT_CARD_EXPIRY.search(context + " " + between):
             return True
     return False

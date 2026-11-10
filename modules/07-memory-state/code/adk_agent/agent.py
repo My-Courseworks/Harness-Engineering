@@ -894,7 +894,7 @@ async def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent
     taken = any(call["name"] == "confirm_verification_code" and (call.get("result") or {}).get("customer_entered") == ONE_TIME_CODE_MASK
                 for call in record["tool_calls"])
     codes = set(re.findall(r"(?<!\d)\d{6}(?!\d)", sent)) if taken else set()
-    codes |= set(world.codes_matching(h.bank_db, user_id, await _session_text(h, user_id, session_id)))
+    codes |= set(world.codes_matching(h.bank_db, await _session_text(h, user_id, session_id)))
     if not codes:
         return record
     await scrub_earlier_messages(h, user_id, session_id, {code: ONE_TIME_CODE_MASK for code in codes})

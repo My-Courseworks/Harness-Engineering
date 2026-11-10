@@ -690,6 +690,8 @@ def _map_strings(value, fix):
         return {k: _map_strings(v, fix) for k, v in value.items()}
     if isinstance(value, BaseModel):
         return value.model_copy(update={name: _map_strings(getattr(value, name), fix) for name in type(value).model_fields})
+    if isinstance(value, Send):  # a tool call dispatched as its own task: the packet holds the call, arguments included
+        return Send(value.node, _map_strings(value.arg, fix))
     return value
 
 
@@ -742,7 +744,7 @@ def scrub_earlier_messages(h: Harness, user_id: str, session_id: str, replacemen
                 changed += 1
         for ns, cid, task, idx, kind, blob in conn.execute(
                 "SELECT checkpoint_ns, checkpoint_id, task_id, idx, type, value FROM writes WHERE thread_id = ? AND channel IN "
-                "('messages', '__resume__', '__interrupt__')", (thread_id,)).fetchall():
+                "('messages', '__resume__', '__interrupt__', '__pregel_tasks')", (thread_id,)).fetchall():
             new_kind, new_blob = serde.dumps_typed(_map_strings(serde.loads_typed((kind, blob)), fix))
             if new_blob != blob:
                 conn.execute("UPDATE writes SET type = ?, value = ? WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ? "
@@ -836,7 +838,7 @@ def without_one_time_codes(h: Harness, user_id: str, session_id: str, sent: str,
     taken = any(call["name"] == "confirm_verification_code" and (call.get("result") or {}).get("customer_entered") == ONE_TIME_CODE_MASK
                 for call in record["tool_calls"])
     codes = set(re.findall(r"(?<!\d)\d{6}(?!\d)", sent)) if taken else set()
-    codes |= set(world.codes_matching(h.bank_db, user_id, _thread_text(h, user_id, session_id)))
+    codes |= set(world.codes_matching(h.bank_db, _thread_text(h, user_id, session_id)))
     if not codes:
         return record
     scrub_earlier_messages(h, user_id, session_id, {code: ONE_TIME_CODE_MASK for code in codes})
