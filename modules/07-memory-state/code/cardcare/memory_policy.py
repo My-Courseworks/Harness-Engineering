@@ -222,6 +222,10 @@ def describe_code_entry(entry: dict | None, message: str, proved_at: str | None 
     if outcome == "expired":
         return {"verified": False, **wrote, "error": f"the code expired ({CODE_TTL_MINUTES} minutes) and no new code has been sent; tell the "
                 "customer and send a new one only if they ask (send_verification_code)"}
+    if (entry or {}).get("code_expired"):
+        return {"verified": False, **wrote, "note": f"the customer wrote this instead of a code, and the code sent earlier has expired "
+                f"({CODE_TTL_MINUTES} minutes): no code is open now. Answer them; if they still want the change, send a new code "
+                "(send_verification_code). Say a code was sent only after send_verification_code has returned \"sent\": true in this turn"}
     if outcome == "written_unusably":
         return {"verified": False, **wrote, "error": "the customer wrote the code in a form the bank does not take (for example with a comma, "
                 "or grouped four and two). It was removed from their message, and that code is now cancelled because it was written into "

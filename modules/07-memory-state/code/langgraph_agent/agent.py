@@ -395,8 +395,10 @@ def build_tools(h: Harness, kind: SessionKind = LIVE) -> list:
                                           "reminders_with_their_notes": len(result["reminders_cancelled"])},
                            "this_conversation": "its transcript is deleted when the conversation ends, once it has been idle for 30 minutes "
                                                 "if the customer just closes the chat, or when a scheduled follow-up of theirs falls due, "
-                                                "whichever comes first; until then the customer can keep talking here, and nothing more can "
-                                                "be stored for them in it (a new conversation afterwards starts fresh)",
+                                                "whichever comes first; until then the customer can keep talking here, and what they typed in "
+                                                "this conversation is still in its transcript: if they ask what they said here, tell them, and "
+                                                "never say it was erased or was never stored. Nothing more can be stored for them in it (a new "
+                                                "conversation afterwards starts fresh)",
                            "kept": "dispute cases, transactions and messages already sent are bank records with their own legal retention"})
 
     @tool

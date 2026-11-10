@@ -633,6 +633,15 @@ def take_code_entry(db_path: Path, user_id: str, session_id: str, text: str, now
         return {"text": kept, "entry": {"outcome": "written_unusably"}}
     if open_code["session_id"] != session_id:
         return {"text": kept, "entry": {"outcome": "other_conversation"} if spans else None}
+    if not usable and len(spans) != 1:
+        # This conversation's code has run out and the message is not an entry for it: the code is closed here, so that
+        # nothing waits for it and the model is told it expired. (A single span still goes to attempt_code, which answers
+        # "expired" and closes it.) Before, the tool result said "the code already sent stays valid"; asked for a new code
+        # six minutes after the send, LangGraph sent none and said one had gone out (round 6's second final pass).
+        with closing(_connect(db_path)) as conn, conn:
+            conn.execute("UPDATE verification_challenges SET status = 'expired', closed_at = ? WHERE user_id = ? AND status = 'open'",
+                         (format_instant(parse_instant(now)), user_id))
+        return {"text": kept, "entry": {"outcome": "several_numbers" if spans else "no_code_entered", "code_expired": True}}
     if not spans:
         return {"text": kept, "entry": {"outcome": "no_code_entered"}}
     if len(spans) > 1:

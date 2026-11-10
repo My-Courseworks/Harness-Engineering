@@ -659,9 +659,14 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
     codes: set[str] = set()  # every code found in this message: the same digits again are the same secret
     unclaimed: list[list[dict]] = []
     queue = _runs([t for t in tokens if t["role"] is None and not inside(t)], text, fine=True)  # never a last four, ZIP or year
+    after_a_cued_code: list[dict] = []  # the rest of a run that began with a cue and its code
     while queue:
         run = queue.pop(0)
         first = run[0]
+        if run is after_a_cued_code and card_context:
+            # in a card conversation, what follows the code in the same run is the rest of the number, not a second code
+            spans.append((first["start"], run[-1]["end"], CARD_DIGITS_MASK))
+            continue
         before = _before(text, first, 45)
         cue = _CODE_CUE.search(before)
         cue_before = bool(cue) and not re.search(r"\d", before[cue.end():])
@@ -669,7 +674,8 @@ def _code_and_expiry_spans(tokens: list[dict], text: str, card_context: bool, ta
             # the cue names the token after it; what follows in the run is something else, read on its own. "CVC 047 1111"
             # (the code, then the last group of a number whose first twelve digits came in the message before) was a
             # seven-digit run that no rule took, and the code was stored (round 6's blind held-out run)
-            queue.insert(0, run[1:])
+            after_a_cued_code = run[1:]
+            queue.insert(0, after_a_cued_code)
             run = run[:1]
         last = run[-1]
         digits = _digits(run)
