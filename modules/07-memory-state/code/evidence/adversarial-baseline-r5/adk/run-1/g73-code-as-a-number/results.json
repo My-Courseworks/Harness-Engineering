@@ -1,0 +1,30 @@
+[
+  {
+    "step": "num-wait",
+    "type": "working",
+    "label": "setup: a code is open",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-24T10:00')]"
+  },
+  {
+    "step": "num-batch",
+    "type": "guard",
+    "label": "a code a model response carries as a number is in no session store afterwards",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['adk_sessions.db']"
+  },
+  {
+    "step": "num-after",
+    "type": "working",
+    "label": "the conversation goes on without a failed turn",
+    "passed": true,
+    "evidence": "\"no errors\""
+  },
+  {
+    "step": "num-after",
+    "type": "guard",
+    "label": "and still holds no code",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['adk_sessions.db']"
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "step": "cl-cvv-first",
+    "type": "guard",
+    "label": "a security code typed before the number, in the same run, hides neither: both reach no store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cl-cvv-first",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'cl-cvv-first-claim' + store scan)",
+    "passed": false,
+    "evidence": "{\"agent_claimed_not_stored\": true, \"card_data_in_stores\": {\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"]}}"
+  },
+  {
+    "step": "cl-order-label",
+    "type": "guard",
+    "label": "an order number before the card number does not make the card a reference",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cl-order-label",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'cl-order-label-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": false, \"card_data_in_stores\": {\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"]}}"
+  },
+  {
+    "step": "cl-expiry-digits",
+    "type": "guard",
+    "label": "an expiry typed as four digits before an Amex number reaches no store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cl-pin-and-order-no",
+    "type": "guard",
+    "label": "a PIN before a dashed number and an order number before a spaced one: neither number reaches a store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 2223\\u20263222\": [\"lg_checkpoints.db-wal\"], \"card number 4000\\u20265556\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"], \"security code 7293\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cl-zip-then-last-group",
+    "type": "guard",
+    "label": "a ZIP in the message that opens a number does not exempt the number from the cross-message rule",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 2223\\u20263222\": [\"lg_checkpoints.db-wal\"], \"card number 4000\\u20265556\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"], \"security code 7293\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cl-last-four-then-rest",
+    "type": "guard",
+    "label": "the twelve digits that complete a last four already given reach no store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 2223\\u20263222\": [\"lg_checkpoints.db-wal\"], \"card number 4000\\u20265556\": [\"lg_checkpoints.db-wal\"], \"security code 737\": [\"lg_checkpoints.db-wal\"], \"security code 7293\": [\"lg_checkpoints.db-wal\"]}"
+  }
+]

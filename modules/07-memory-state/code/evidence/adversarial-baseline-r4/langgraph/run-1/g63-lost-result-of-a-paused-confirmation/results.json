@@ -1,0 +1,51 @@
+[
+  {
+    "step": "lp-pause",
+    "type": "working",
+    "label": "setup: the turn is paused on one open code",
+    "passed": false,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lp-pause",
+    "type": "working",
+    "label": "without an exception",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lp-entry",
+    "type": "working",
+    "label": "the process was killed after the customer's entry resumed the paused tool",
+    "passed": false,
+    "evidence": "exit code 0; stderr: [crash hook] nothing to patch: module 'cardcare.world' has no attribute 'attempt_code'\n"
+  },
+  {
+    "step": "lp-entry",
+    "type": "working",
+    "label": "and after the code was consumed",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "lp-resume",
+    "type": "working",
+    "label": "no second code is sent",
+    "passed": false,
+    "evidence": "[]"
+  },
+  {
+    "step": "lp-resume",
+    "type": "semantic",
+    "label": "the change asked for before the code is made from the bank's record of the proof",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-24T10:01:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "lp-resume",
+    "type": "guard",
+    "label": "the code typed before the crash is not left in the transcript",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

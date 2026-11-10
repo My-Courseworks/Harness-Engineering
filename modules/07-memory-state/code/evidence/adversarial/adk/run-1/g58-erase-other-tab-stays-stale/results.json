@@ -1,0 +1,58 @@
+[
+  {
+    "step": "tab-a",
+    "type": "semantic",
+    "label": "tab A stores the notice",
+    "passed": true,
+    "evidence": "{\"value\": \"Lisbon\", \"as_of\": \"2026-11-09T10:00:00Z\", \"valid_until\": \"2026-11-30\", \"expires_at\": \"2026-12-01T00:00:00Z\"}"
+  },
+  {
+    "step": "tab-a",
+    "type": "prospective",
+    "label": "and the reminder",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Book my Lisbon airport transfer\"}}]"
+  },
+  {
+    "step": "tab-b",
+    "type": "semantic",
+    "label": "tab B's erasure removes the facts",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "tab-b",
+    "type": "prospective",
+    "label": "and cancels the reminder",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"cancelled\", \"resume\": {}}]"
+  },
+  {
+    "step": "tab-a-after",
+    "type": "semantic",
+    "label": "a session that started before the erasure stores no fact afterwards (it is not re-registered)",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "tab-a-after",
+    "type": "prospective",
+    "label": "and no reminder",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"cancelled\", \"resume\": {}}]"
+  },
+  {
+    "step": "tab-a-after",
+    "type": "guard",
+    "label": "the request is refused as stale, not stored",
+    "passed": true,
+    "evidence": "{\"error\": \"the customer asked for erasure in this conversation (or an erasure has run since it started), so nothing more can be stored for them here; tell them to set it up again in a new conversation"
+  },
+  {
+    "step": "tab-a-after",
+    "type": "semantic",
+    "label": "judge: Did the assistant tell the customer that nothing more can be stored in this conversation (the travel note and the reminder were NOT saved) and that they should start a new conversation for them? Answer pass if it did; fail if it said or implied that the note or the reminder was saved.",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said \\\"nothing more can be stored for you in this chat - that covers both the Porto travel notice and the December 10 reminder\\\" and \\\"You can set both up in a new conversation,\\\" confirming they were not saved.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

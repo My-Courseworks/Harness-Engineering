@@ -1,0 +1,58 @@
+[
+  {
+    "step": "cs-newline",
+    "type": "guard",
+    "label": "a number pasted one group per line reaches no store",
+    "passed": false,
+    "evidence": "{\"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cs-newline",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'cs-newline-claim' + store scan)",
+    "passed": false,
+    "evidence": "{\"agent_claimed_not_stored\": true, \"card_data_in_stores\": {\"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"]}}"
+  },
+  {
+    "step": "cs-dictated",
+    "type": "guard",
+    "label": "a dictated read-out reaches no store",
+    "passed": false,
+    "evidence": "{\"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cs-dictated",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'cs-dictated-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": false, \"card_data_in_stores\": {\"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"]}}"
+  },
+  {
+    "step": "cs-amex-list",
+    "type": "guard",
+    "label": "an Amex number as a bulleted list, a spelled expiry and a 4-digit code reach no store",
+    "passed": false,
+    "evidence": "{\"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"], \"expiry 12/29\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cs-spelled",
+    "type": "guard",
+    "label": "a number spelled in pairs, a spelled expiry and a spelled code reach no store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"], \"expiry 12/29\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cs-opening-half",
+    "type": "guard",
+    "label": "the opening half of a number sent in two messages is removed from the store once the second half completes it",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"], \"card number fragment 6011\\u20261117\": [\"lg_checkpoints.db-wal\"], \"expiry 12/29\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "cs-semicolons",
+    "type": "guard",
+    "label": "groups separated by semicolons and full stops reach no store",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db-wal\"], \"card number 4111\\u20261111\": [\"lg_checkpoints.db-wal\"], \"card number 3782\\u20260005\": [\"lg_checkpoints.db-wal\"], \"card number 4242\\u20264242\": [\"lg_checkpoints.db-wal\"], \"card number fragment 6011\\u20261117\": [\"lg_checkpoints.db-wal\"], \"expiry 12/29\": [\"lg_checkpoints.db-wal\"]}"
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "step": "ph-spaced",
+    "type": "semantic",
+    "label": "\"123 456\" is accepted: the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-09T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-spaced",
+    "type": "guard",
+    "label": "and the code is in no session store, in any spelling",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "ph-dashed",
+    "type": "semantic",
+    "label": "\"ok it says 123-456\" is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-dashed",
+    "type": "guard",
+    "label": "and the code is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "ph-digits",
+    "type": "semantic",
+    "label": "\"1 2 3 4 5 6\" is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-24T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ph-digits",
+    "type": "guard",
+    "label": "and the code is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "ph-maintenance",
+    "type": "guard",
+    "label": "after the sessions ended and maintenance ran, still none of the three codes is stored",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "ph-maintenance",
+    "type": "guard",
+    "label": "every run record names the code it ran on and when",
+    "passed": true,
+    "evidence": "{\"code_sha256\": \"ce203ab0d155b4f58030368f610eb9bef51dc297e2b2d3b7a594e30a17157c19\", \"recorded_at\": \"2026-11-10T17:59:30Z\"}"
+  }
+]

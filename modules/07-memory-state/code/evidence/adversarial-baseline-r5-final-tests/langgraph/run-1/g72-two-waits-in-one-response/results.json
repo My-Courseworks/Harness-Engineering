@@ -1,0 +1,30 @@
+[
+  {
+    "step": "tw-batch",
+    "type": "working",
+    "label": "the response sends one code",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"tool_results\": [], \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "no turn of the conversation fails after two waits were opened at once",
+    "passed": false,
+    "evidence": "[\"RuntimeError: When there are multiple pending interrupts, you must specify the interrupt id when resuming. Docs: https://docs.langchain.com/oss/python/langgraph/interrupts#handling-multiple-interrupts.\", \"RuntimeError: When there are multiple pending interrupts, you must specify the interrupt id w"
+  },
+  {
+    "step": "tw-entry",
+    "type": "semantic",
+    "label": "the code is accepted and the channel changed",
+    "passed": false,
+    "evidence": "{}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "the conversation still answers: the third turn has a reply",
+    "passed": false,
+    "evidence": ""
+  }
+]

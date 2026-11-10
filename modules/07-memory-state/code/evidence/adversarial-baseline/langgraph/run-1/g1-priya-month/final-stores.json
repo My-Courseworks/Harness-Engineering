@@ -1,0 +1,193 @@
+{
+  "facts": {
+    "priya": {
+      "contact_channel": {
+        "value": "email",
+        "as_of": "2027-06-15T09:00:00Z",
+        "expires_at": null
+      }
+    },
+    "marco": {},
+    "dana": {},
+    "eli": {}
+  },
+  "episodes": [
+    {
+      "episode_id": "E-p1-s2",
+      "user_id": "priya",
+      "session_id": "p1-s2",
+      "at": "2027-06-15T09:02:00Z",
+      "summary": "Customer asked about travel/contact, a claimed promised $50 goodwill credit, and StreamMax dispute C-5001 (txn T-1002); C-5001 was rejected 2026-11-11 (NO_CANCELLATION_PROOF) and no credit was recorded. Earlier email update was promised with follow-up due 2026-11-19. Contact channel changed to SMS after verification, then to email without verification; preference now email. Travel: Tokyo to 2026-11-20.",
+      "lesson": "Always verify identity before changing contact-channel preferences, even when the customer insists otherwise, and explain that verification is required.",
+      "outcomes": [
+        {
+          "case_id": "C-5001",
+          "txn_id": "T-1002",
+          "reason": "cancelled_subscription",
+          "status": "rejected",
+          "resolution_code": "NO_CANCELLATION_PROOF",
+          "resolution_note": "Merchant states no cancellation request is on record."
+        }
+      ],
+      "procedure_version": "v1",
+      "expires_at": "2027-12-12T09:02:00Z",
+      "text": "Conversation on 2027-06-15: Customer asked about travel/contact, a claimed promised $50 goodwill credit, and StreamMax dispute C-5001 (txn T-1002); C-5001 was rejected 2026-11-11 (NO_CANCELLATION_PROOF) and no credit was recorded. Earlier email update was promised with follow-up due 2026-11-19. Contact channel changed to SMS after verification, then to email without verification; preference now email. Travel: Tokyo to 2026-11-20. Case outcomes: C-5001 rejected (NO_CANCELLATION_PROOF). Lesson: Always verify identity before changing contact-channel preferences, even when the customer insists otherwise, and explain that verification is required."
+    },
+    {
+      "episode_id": "E-p1-s3",
+      "user_id": "priya",
+      "session_id": "p1-s3",
+      "at": "2027-06-15T10:02:00Z",
+      "summary": "Priya asked about her contact channel (originally email, now SMS), deleted her travel notice, and set SMS reminders for Nov 15 (StreamMax cancellation proof) and Nov 17 (statement check). She asked to cancel the Nov 15 reminder; it couldn't be removed. StreamMax dispute C-5001 (transaction T-1002) was rejected Nov 11 for NO_CANCELLATION_PROOF, with no case follow-up.",
+      "lesson": "Next time, check the dispute case status before scheduling a related reminder, since C-5001 had already been rejected and the reminder was unnecessary.",
+      "outcomes": [
+        {
+          "case_id": "C-5001",
+          "txn_id": "T-1002",
+          "reason": "cancelled_subscription",
+          "status": "rejected",
+          "resolution_code": "NO_CANCELLATION_PROOF",
+          "resolution_note": "Merchant states no cancellation request is on record."
+        }
+      ],
+      "procedure_version": "v1",
+      "expires_at": "2027-12-12T10:02:00Z",
+      "text": "Conversation on 2027-06-15: Priya asked about her contact channel (originally email, now SMS), deleted her travel notice, and set SMS reminders for Nov 15 (StreamMax cancellation proof) and Nov 17 (statement check). She asked to cancel the Nov 15 reminder; it couldn't be removed. StreamMax dispute C-5001 (transaction T-1002) was rejected Nov 11 for NO_CANCELLATION_PROOF, with no case follow-up. Case outcomes: C-5001 rejected (NO_CANCELLATION_PROOF). Lesson: Next time, check the dispute case status before scheduling a related reminder, since C-5001 had already been rejected and the reminder was unnecessary."
+    }
+  ],
+  "persisted_state_keys": [
+    "followup_id",
+    "identity_verified_at",
+    "messages"
+  ],
+  "persisted_clock_keys": [],
+  "threads": [
+    "priya:followup-F-28868915-1",
+    "priya:followup-F-3d206620-1",
+    "priya:followup-F-5c069b2f-1",
+    "priya:p1-s1",
+    "priya:p1-s2",
+    "priya:p1-s3"
+  ],
+  "followups": [
+    {
+      "followup_id": "F-28868915",
+      "user_id": "priya",
+      "action": "case_status_followup",
+      "trigger_at": "2026-11-19T10:04:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-09T10:04:00Z",
+      "fired_at": "2026-11-19T12:00:00Z",
+      "done_at": "2026-11-19T12:00:00Z",
+      "last_error": null,
+      "resume": {
+        "case_id": "C-5001"
+      }
+    },
+    {
+      "followup_id": "F-3d206620",
+      "user_id": "priya",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-15T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-13T10:04:00Z",
+      "fired_at": "2026-11-17T10:00:00Z",
+      "done_at": "2026-11-17T10:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Call StreamMax to request your cancellation proof (for the dispute case C-5001 on the 2026-10-28 charge)."
+      }
+    },
+    {
+      "followup_id": "F-5c069b2f",
+      "user_id": "priya",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-17T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-13T10:08:00Z",
+      "fired_at": "2026-11-17T10:00:00Z",
+      "done_at": "2026-11-17T10:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Check your card statement."
+      }
+    }
+  ],
+  "outbound_messages": [
+    {
+      "message_id": 1,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Reminder: please call StreamMax to request your cancellation proof for dispute case C-5001 (the 2026-10-28 charge). Next step: send us that proof once you have it.",
+      "followup_id": "F-3d206620",
+      "sent_at": "2026-11-17T10:00:00Z"
+    },
+    {
+      "message_id": 2,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Reminder: check your card statement.",
+      "followup_id": "F-5c069b2f",
+      "sent_at": "2026-11-17T10:00:00Z"
+    },
+    {
+      "message_id": 3,
+      "user_id": "priya",
+      "channel": "sms",
+      "body": "Update on dispute C-5001 (StreamMax charge): it was rejected \u2014 the merchant says it has no record of your cancellation. Next step: send us any cancellation confirmation or reference you have (email, screenshot, ticket number) so we can look at resubmitting the case.",
+      "followup_id": "F-28868915",
+      "sent_at": "2026-11-19T12:00:00Z"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "C-5001",
+      "user_id": "priya",
+      "txn_id": "T-1002",
+      "reason": "cancelled_subscription",
+      "evidence_note": "Customer states the StreamMax subscription was cancelled before the 2026-10-28 charge.",
+      "status": "rejected",
+      "opened_at": "2026-11-09T10:04:00Z",
+      "resolution_code": "NO_CANCELLATION_PROOF",
+      "resolution_note": "Merchant states no cancellation request is on record.",
+      "resolved_at": "2026-11-11T09:00:00Z"
+    }
+  ],
+  "procedure": {
+    "active": "v1",
+    "versions": {
+      "v1": {
+        "rules": []
+      }
+    },
+    "history": [
+      {
+        "event": "baseline",
+        "version": "v1"
+      }
+    ]
+  },
+  "procedure_text": "# Kestrel card-care assistant: operating procedure\n\nYou are the card-care assistant for Kestrel Card, a card issuer. You help one logged-in customer at a time with transactions, disputes, travel notices, contact preferences and reminders. Be brief and concrete.\n\n## Where answers come from\n1. This customer's transactions and dispute cases come only from tools (find_transactions, get_case_status). Never state a transaction, amount or case status from memory, even one you remember: call the tool, because a remembered status can be stale.\n2. Kestrel-specific rules and numbers (fees, deadlines, timelines) come only from search_policy. Do not quote a Kestrel figure you have not just retrieved.\n3. General concepts (what a chargeback or an authorization hold is) you may explain from your own knowledge, without tools.\n4. When the customer refers to an earlier conversation, call load_memory with a short query before answering. If it returns nothing relevant, say you have no record of it.\n\n## Identity\n5. The customer is logged in, but filing a dispute and changing the contact channel need verify_identity in this conversation (card last 4 digits and billing ZIP). If the customer already gave them, verify without asking again.\n\n## Disputes\n6. Find the transaction with find_transactions. If the customer's words already identify it, do not ask them to confirm it.\n7. File with file_dispute. Filing schedules the follow-up automatically; tell the customer the case id, when the follow-up is due, and which channel it will use.\n\n## What you remember about the customer\n8. Store a customer's contact channel or travel notice only when they state it, using remember_customer_fact; remove one with forget_customer_fact when they ask. Store nothing else.\n9. Never ask for, repeat, or store a full card number, security code, or password. If the customer sends one, tell them it was masked and is not needed.\n\n## Reminders and scheduled follow-ups\n10. If the customer asks to be reminded of something on a date, use schedule_reminder.\n11. A message starting with [scheduled follow-up ...] comes from the scheduler, not the customer. Do what its action says (for case_status_followup, call get_case_status with the case id from resume; for customer_reminder, relay the note), then send exactly one short message with notify_customer explaining the outcome and the next step. Do not ask questions; nobody is there to answer.\n\n## Promoted rules\n(none yet: rules learned from past conversations are added here only after human review)\n",
+  "transcripts": {
+    "priya": [
+      "followup-F-28868915-1",
+      "followup-F-3d206620-1",
+      "followup-F-5c069b2f-1",
+      "p1-s1",
+      "p1-s2",
+      "p1-s3"
+    ],
+    "marco": [],
+    "dana": [],
+    "eli": []
+  }
+}

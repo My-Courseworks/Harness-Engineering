@@ -1,0 +1,30 @@
+[
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "the right guess first: it is evaluated, then one more, then the lock holds",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 2, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": true, \\\"valid_for_minutes\\\": 15}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"those details do not match this customer\\\", \\\"attempts_left\\\": 0}\", \"verify_identity -> {\\\"verif"
+  },
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "parallel guesses do not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 2, \"failed_attempts\": 3, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": true, \\\"valid_for_minutes\\\": 15}\", \"verify_identity -> {\\\"verified\\\": false, \\\"error\\\": \\\"those details do not match this customer\\\", \\\"attempts_left\\\": 0}\", \"verify_identity -> {\\\"verif"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the account is locked, so the verification the batch produced counts for nothing: no dispute is filed",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the customer is told the account is locked",
+    "passed": true,
+    "evidence": "I pulled up the charge - T-4002, CloudNest Storage, posted 1 Nov 2026, $9.99 - but I couldn't file the dispute.\n\nWhat happened: your first set of details matched, but the following five sets didn't, and after three failed attempts the bank locked verification on your account for 24 hours. While it's"
+  }
+]

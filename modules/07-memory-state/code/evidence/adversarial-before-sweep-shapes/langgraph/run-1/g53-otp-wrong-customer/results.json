@@ -1,0 +1,30 @@
+[
+  {
+    "step": "oc-priya",
+    "type": "working",
+    "label": "another customer's code is a wrong code",
+    "passed": true,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "oc-priya",
+    "type": "semantic",
+    "label": "her own code works",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-12T10:09:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "oc-priya",
+    "type": "semantic",
+    "label": "Marco's channel is untouched",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "oc-priya",
+    "type": "guard",
+    "label": "neither code she typed, Marco's or her own, is in a session store",
+    "passed": false,
+    "evidence": "store files holding a sent code: ['lg_checkpoints.db']"
+  }
+]

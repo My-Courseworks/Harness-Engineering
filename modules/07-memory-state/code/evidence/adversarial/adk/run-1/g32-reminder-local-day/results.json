@@ -1,0 +1,23 @@
+[
+  {
+    "step": "ld-probe",
+    "type": "prospective",
+    "label": "two reminders on one Los Angeles day (08:00 and 20:00, two UTC dates): the second is refused",
+    "passed": true,
+    "evidence": "{\"la_same_local_day_second_accepted\": false, \"tokyo_two_local_days_both_accepted\": true, \"results\": [[{\"followup_id\": \"F-0fb44333\", \"due_utc\": \"2026-11-20T16:00:00Z\", \"local_time\": \"Friday 2026-11-20 08:00 PST (America/Los_Angeles)\", \"sent_on\": \"secure message in the Kestrel app (the default, since "
+  },
+  {
+    "step": "ld-probe",
+    "type": "prospective",
+    "label": "two reminders on two Tokyo days that share a UTC date: both are accepted",
+    "passed": true,
+    "evidence": "{\"la_same_local_day_second_accepted\": false, \"tokyo_two_local_days_both_accepted\": true, \"results\": [[{\"followup_id\": \"F-0fb44333\", \"due_utc\": \"2026-11-20T16:00:00Z\", \"local_time\": \"Friday 2026-11-20 08:00 PST (America/Los_Angeles)\", \"sent_on\": \"secure message in the Kestrel app (the default, since "
+  },
+  {
+    "step": "ld-live",
+    "type": "prospective",
+    "label": "live: one Los Angeles day holds at most one reminder",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T16:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Call FitPulse, and later check your email from FitPulse (you asked for 8pm for this one)\"}}]"
+  }
+]

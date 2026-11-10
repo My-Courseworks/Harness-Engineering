@@ -1,0 +1,30 @@
+[
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "the right guess first: it is evaluated, then one more, then the lock holds",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lv-right-first",
+    "type": "working",
+    "label": "parallel guesses do not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 3, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 0, \"open_challenges\": 0}"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the account is locked, so the verification the batch produced counts for nothing: no dispute is filed",
+    "passed": true,
+    "evidence": "[]"
+  },
+  {
+    "step": "lv-after",
+    "type": "working",
+    "label": "the customer is told the account is locked",
+    "passed": true,
+    "evidence": "I can't file that dispute - the card and ZIP details didn't match, and after 3 failed attempts identity verification is now locked on your account for 24 hours, in every conversation. Only Kestrel can unlock it, so please call Kestrel to get verification reset (and you can file the CloudNest dispute"
+  }
+]

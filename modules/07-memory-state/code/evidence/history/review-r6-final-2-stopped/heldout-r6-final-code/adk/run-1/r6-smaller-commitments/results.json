@@ -1,0 +1,100 @@
+[
+  {
+    "step": "r6j-reminder",
+    "type": "prospective",
+    "label": "r6 D2: the first reminder is a scheduler record on 2026-11-27",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-27T13:15:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"note\": \"Post the CloudNest cancellation letter\"}}]"
+  },
+  {
+    "step": "r6j-second-reminder",
+    "type": "prospective",
+    "label": "r6 D2: a second reminder for the same local day is refused",
+    "passed": true,
+    "evidence": "{\"error\": \"a reminder is already scheduled for 2026-11-27 (America/Chicago): F-b86dd26e at 07:15 CST; one reminder per day, so put everything for that day in that one (cancel_reminder it first to repl"
+  },
+  {
+    "step": "r6j-second-reminder",
+    "type": "prospective",
+    "label": "r6 D2: the refusal carries the existing reminder's id",
+    "passed": true,
+    "evidence": "{\"error\": \"a reminder is already scheduled for 2026-11-27 (America/Chicago): F-b86dd26e at 07:15 CST; one reminder per day, so put everything for that day in that one (cancel_reminder it first to repl"
+  },
+  {
+    "step": "r6j-second-reminder",
+    "type": "prospective",
+    "label": "r6 D2: one reminder is pending, not two",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-27T13:15:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Post the CloudNest cancellation letter\"}}]"
+  },
+  {
+    "step": "r6j-second-reminder",
+    "type": "prospective",
+    "label": "judge: Look at the schedule_reminder tool result shown in the transcript. Does the refusal identify the reminder that already exists on that day by its id and state the time it is set for?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant states, \\\"There's already a reminder set for November 27 - F-b86dd26e at 07:15 Chicago time,\\\" identifying the existing reminder by id and time.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6j-ends-mid-wait",
+    "type": "episodic",
+    "label": "r6 D3: a chat that ends while waiting for the code writes an episode",
+    "passed": true,
+    "evidence": "1 episodes; purged 0"
+  },
+  {
+    "step": "r6j-ends-mid-wait",
+    "type": "episodic",
+    "label": "r6 D3: ...with no lesson against the code tool: the wait is the design",
+    "passed": true,
+    "evidence": "Conversation on 2026-11-17: Customer asked to switch their contact channel to email. Identity was verified for 15 minutes, and a verification code was sent by text to a number ending 0100, expiring in 5 minutes. The conversation is awaiting the customer's one-time code. No case or transaction ID was"
+  },
+  {
+    "step": "r6j-recall",
+    "type": "episodic",
+    "label": "r6 D3: the episode is what a later chat recalls",
+    "passed": true,
+    "evidence": "[{\"query\": \"what we sorted out last time\"}]"
+  },
+  {
+    "step": "r6j-recall",
+    "type": "episodic",
+    "label": "judge: Look at the load_memory tool result shown in the transcript. Answer 'fail' if a recalled summary contains a lesson that criticises the assistant for calling the code-confirmation tool (confirm_verification_code) or for waiting for the one-time code, for example saying it should have asked for or received the code before calling that tool. Answer 'pass' if there is no such lesson (including when the lesson is 'none' or about something else).",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The recalled summary says \\\"Lesson: none\\\" and does not criticise the assistant for calling confirm_verification_code or waiting for the one-time code.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6j-list",
+    "type": "guard",
+    "label": "r6 C5: a numbered list of sixteen lines keeps its lines 5 and 12",
+    "passed": true,
+    "evidence": "Here's your checklist, Eli - the Kestrel specifics are from our current policy docs:\n\n1. Add a travel notice with your destination and return date - it tells our fraud systems the foreign card use is expected.\n2. Note that the notice is deleted automatically after your return date, so a later trip n"
+  },
+  {
+    "step": "r6j-list",
+    "type": "guard",
+    "label": "r6 C5: ...and none of it is replaced by a masking token",
+    "passed": true,
+    "evidence": "Here's your checklist, Eli - the Kestrel specifics are from our current policy docs:\n\n1. Add a travel notice with your destination and return date - it tells our fraud systems the foreign card use is expected.\n2. Note that the notice is deleted automatically after your return date, so a later trip n"
+  },
+  {
+    "step": "r6j-erase-and-leave",
+    "type": "working",
+    "label": "r6 B2: the requesting chat's transcript is deleted when the conversation ends",
+    "passed": true,
+    "evidence": "transcripts of marco: []"
+  },
+  {
+    "step": "r6j-erase-and-leave",
+    "type": "guard",
+    "label": "r6 B2: ...and what he typed is in no memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "r6j-erase-and-leave",
+    "type": "guard",
+    "label": "r6 D4: the run's record carries the hash of the code it ran on and a time",
+    "passed": true,
+    "evidence": "{\"code_sha256\": \"ce203ab0d155b4f58030368f610eb9bef51dc297e2b2d3b7a594e30a17157c19\", \"recorded_at\": \"2026-11-10T17:58:02Z\"}"
+  }
+]

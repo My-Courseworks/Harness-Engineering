@@ -1,0 +1,51 @@
+[
+  {
+    "step": "en-s1",
+    "type": "working",
+    "label": "a message whose digits happen to total six is not a guess: no failed attempt",
+    "passed": false,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "en-s1",
+    "type": "semantic",
+    "label": "the code typed after it is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-09T10:04:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "en-other-chat-2",
+    "type": "working",
+    "label": "six digits typed in another conversation are not checked against the code: no attempt",
+    "passed": false,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "en-other-chat-2",
+    "type": "working",
+    "label": "the code stays open for the conversation that asked for it",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-12T10:00')]"
+  },
+  {
+    "step": "en-back",
+    "type": "working",
+    "label": "two numbers in one message are not checked, either of them: still no failed attempt",
+    "passed": false,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "en-back",
+    "type": "semantic",
+    "label": "then the code alone is accepted",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:04:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "en-back",
+    "type": "guard",
+    "label": "none of it is stored",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

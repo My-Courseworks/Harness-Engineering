@@ -1,0 +1,58 @@
+[
+  {
+    "step": "open-tab",
+    "type": "semantic",
+    "label": "the notice is stored",
+    "passed": true,
+    "evidence": "{\"value\": \"Kyoto\", \"as_of\": \"2026-11-13T10:00:00Z\", \"valid_until\": \"2026-12-20\", \"expires_at\": \"2026-12-21T00:00:00Z\"}"
+  },
+  {
+    "step": "open-tab-erase",
+    "type": "semantic",
+    "label": "the erasure removes the facts",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "open-tab-erase",
+    "type": "working",
+    "label": "the tool does not promise deletion at 'the next maintenance run': an open chat is kept until it is idle",
+    "passed": true,
+    "evidence": "{\"erased_now\": \"1 remembered facts, 0 past-conversation summaries, 0 other conversation transcripts, 0 reminders with their notes\", \"this_conversation\": \"its transcript is deleted when the conversatio"
+  },
+  {
+    "step": "open-tab-tick-1",
+    "type": "working",
+    "label": "a tick one minute later leaves the open chat's transcript alone (it is not idle)",
+    "passed": false,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "open-tab-continues",
+    "type": "working",
+    "label": "the customer's own words a minute ago are still in the conversation",
+    "passed": false,
+    "evidence": "I have no record of that - nothing came up from earlier conversations, and there's no travel notice on file for you right now.\n\nIf you tell me the destination (and the date you get back), I can add a travel notice to your profile so your card isn't flagged for use there."
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "working",
+    "label": "thirty minutes idle: maintenance finishes the erasure and the transcript goes",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "guard",
+    "label": "nothing she said is left in any memory store",
+    "passed": true,
+    "evidence": "found nowhere"
+  },
+  {
+    "step": "open-tab-tick-2",
+    "type": "episodic",
+    "label": "no episode was written from the stale chat",
+    "passed": true,
+    "evidence": "0 episodes; purged 0"
+  }
+]

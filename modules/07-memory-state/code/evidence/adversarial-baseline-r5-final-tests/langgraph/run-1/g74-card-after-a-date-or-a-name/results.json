@@ -1,0 +1,37 @@
+[
+  {
+    "step": "dn-network-hyphen",
+    "type": "guard",
+    "label": "a network name joined to the number by a hyphen does not hide it",
+    "passed": false,
+    "evidence": "{\"card number 4111\\u20261111\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "dn-day-month",
+    "type": "guard",
+    "label": "a day and a month before the number, and a word glued to it, hide nothing",
+    "passed": false,
+    "evidence": "{\"card number 3530\\u20260000\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"], \"card number 4000\\u20265556\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "dn-unit-after",
+    "type": "guard",
+    "label": "a unit word after the last group does not take that group for an amount",
+    "passed": false,
+    "evidence": "{\"card number 4242\\u20264242\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "dn-expiry-name",
+    "type": "guard",
+    "label": "an expiry as a month name before the number hides neither",
+    "passed": false,
+    "evidence": "{\"card number 5555\\u20264444\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "dn-expiry-name",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'dn-expiry-name-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": [\"expiry\"], \"card_data_in_stores\": {\"card number 5555\\u20264444\": [\"lg_checkpoints.db\", \"lg_checkpoints.db-wal\"]}, \"false_claims\": []}"
+  }
+]

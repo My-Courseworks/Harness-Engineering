@@ -1,0 +1,37 @@
+[
+  {
+    "step": "st-notes-paste",
+    "type": "guard",
+    "label": "the final pass's own line: a code in words and again in brackets reaches no store",
+    "passed": false,
+    "evidence": "{\"security code 386\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "st-notes-paste",
+    "type": "guard",
+    "label": "a claim that card data was removed or not stored is true (judge 'st-notes-paste-claim' + store scan)",
+    "passed": true,
+    "evidence": "{\"agent_claimed_not_stored\": [\"card number\", \"expiry\"], \"card_data_in_stores\": {\"security code 386\": [\"lg_checkpoints.db-wal\"]}, \"false_claims\": []}"
+  },
+  {
+    "step": "st-typed-twice",
+    "type": "guard",
+    "label": "no card number nearby: the code between dashes and again in digits, then typed twice, reaches no store",
+    "passed": false,
+    "evidence": "{\"security code 914\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "st-expiry-with-a-space",
+    "type": "guard",
+    "label": "an expiry typed with a space after its cue reaches no store (found while checking the fix)",
+    "passed": false,
+    "evidence": "{\"expiry 08/27\": [\"lg_checkpoints.db-wal\"]}"
+  },
+  {
+    "step": "st-digits-then-words",
+    "type": "guard",
+    "label": "digits first, then the same code in words in brackets, before a card number: nothing reaches a store",
+    "passed": false,
+    "evidence": "{\"security code 737\": [\"lg_checkpoints.db-wal\"]}"
+  }
+]

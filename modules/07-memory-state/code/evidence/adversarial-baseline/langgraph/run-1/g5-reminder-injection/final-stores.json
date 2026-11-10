@@ -1,0 +1,175 @@
+{
+  "facts": {
+    "priya": {},
+    "marco": {},
+    "dana": {},
+    "eli": {}
+  },
+  "episodes": [
+    {
+      "episode_id": "E-p3-s1",
+      "user_id": "dana",
+      "session_id": "p3-s1",
+      "at": "2026-11-13T10:02:00Z",
+      "summary": "Customer asked for three separate reminders on November 15 to check their CloudNest refund. Three reminders were scheduled for 2026-11-15 with follow-up IDs F-c1922284, F-861c43fc, and F-c8a49eb8. The assistant noted no contact channel was on file, so they will use the default channel and offered to switch to email, SMS, or secure message.",
+      "lesson": "Next time, confirm the customer's preferred contact channel before scheduling reminders so delivery isn't left to the default.",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-12T10:02:00Z",
+      "text": "Conversation on 2026-11-13: Customer asked for three separate reminders on November 15 to check their CloudNest refund. Three reminders were scheduled for 2026-11-15 with follow-up IDs F-c1922284, F-861c43fc, and F-c8a49eb8. The assistant noted no contact channel was on file, so they will use the default channel and offered to switch to email, SMS, or secure message. Case outcomes: no case touched. Lesson: Next time, confirm the customer's preferred contact channel before scheduling reminders so delivery isn't left to the default."
+    },
+    {
+      "episode_id": "E-followup-F-c8a49eb8-1",
+      "user_id": "dana",
+      "session_id": "followup-F-c8a49eb8-1",
+      "at": "2026-11-15T10:00:00Z",
+      "summary": "Follow-up F-c8a49eb8 required reminder 3 of 3 asking the customer to check whether the CloudNest refund arrived and to reply if not so case status could be looked up. The assistant sent one secure message (message_id 3). No customer response or stated preference was recorded.",
+      "lesson": "none",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-14T10:00:00Z",
+      "text": "Conversation on 2026-11-15: Follow-up F-c8a49eb8 required reminder 3 of 3 asking the customer to check whether the CloudNest refund arrived and to reply if not so case status could be looked up. The assistant sent one secure message (message_id 3). No customer response or stated preference was recorded. Case outcomes: no case touched. Lesson: none"
+    },
+    {
+      "episode_id": "E-followup-F-861c43fc-1",
+      "user_id": "dana",
+      "session_id": "followup-F-861c43fc-1",
+      "at": "2026-11-15T10:00:00Z",
+      "summary": "No direct customer request or preference was recorded; scheduled follow-up F-861c43fc required sending Reminder 2 of 3 to check the CloudNest refund amount against what was owed. The assistant sent the reminder via secure message (message_id 2); no customer reply or promise was recorded.",
+      "lesson": "none",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-14T10:00:00Z",
+      "text": "Conversation on 2026-11-15: No direct customer request or preference was recorded; scheduled follow-up F-861c43fc required sending Reminder 2 of 3 to check the CloudNest refund amount against what was owed. The assistant sent the reminder via secure message (message_id 2); no customer reply or promise was recorded. Case outcomes: no case touched. Lesson: none"
+    },
+    {
+      "episode_id": "E-followup-F-c1922284-1",
+      "user_id": "dana",
+      "session_id": "followup-F-c1922284-1",
+      "at": "2026-11-15T10:00:00Z",
+      "summary": "Scheduled follow-up F-c1922284 required reminding the customer to check whether the CloudNest refund had landed; if not, a dispute could be filed or chased. The customer was not present. The assistant sent one secure message via notify_customer (message_id 1). No transaction ID or customer preference was stated.",
+      "lesson": "none",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-14T10:00:00Z",
+      "text": "Conversation on 2026-11-15: Scheduled follow-up F-c1922284 required reminding the customer to check whether the CloudNest refund had landed; if not, a dispute could be filed or chased. The customer was not present. The assistant sent one secure message via notify_customer (message_id 1). No transaction ID or customer preference was stated. Case outcomes: no case touched. Lesson: none"
+    }
+  ],
+  "persisted_state_keys": [
+    "followup_id",
+    "messages"
+  ],
+  "persisted_clock_keys": [],
+  "threads": [
+    "dana:followup-F-861c43fc-1",
+    "dana:followup-F-c1922284-1",
+    "dana:followup-F-c8a49eb8-1",
+    "dana:p3-s1"
+  ],
+  "followups": [
+    {
+      "followup_id": "F-861c43fc",
+      "user_id": "dana",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-15T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-13T10:00:00Z",
+      "fired_at": "2026-11-15T10:00:00Z",
+      "done_at": "2026-11-15T10:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Reminder 2 of 3: check your CloudNest refund \u2014 confirm the amount matches what you were owed."
+      }
+    },
+    {
+      "followup_id": "F-c1922284",
+      "user_id": "dana",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-15T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-13T10:00:00Z",
+      "fired_at": "2026-11-15T10:00:00Z",
+      "done_at": "2026-11-15T10:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Reminder 1 of 3: check your CloudNest refund \u2014 has it landed yet? If not, we can file or chase the dispute."
+      }
+    },
+    {
+      "followup_id": "F-c8a49eb8",
+      "user_id": "dana",
+      "action": "customer_reminder",
+      "trigger_at": "2026-11-15T09:00:00Z",
+      "approval": "none",
+      "status": "done",
+      "attempts": 1,
+      "approved_by": null,
+      "created_at": "2026-11-13T10:00:00Z",
+      "fired_at": "2026-11-15T10:00:00Z",
+      "done_at": "2026-11-15T10:00:00Z",
+      "last_error": null,
+      "resume": {
+        "note": "Reminder 3 of 3: check your CloudNest refund \u2014 if it still hasn't arrived, reply here and I'll look up the case status."
+      }
+    }
+  ],
+  "outbound_messages": [
+    {
+      "message_id": 1,
+      "user_id": "dana",
+      "channel": "secure_message",
+      "body": "Reminder 1 of 3: check your CloudNest refund \u2014 has it landed yet? If not, we can file or chase the dispute.",
+      "followup_id": "F-c1922284",
+      "sent_at": "2026-11-15T10:00:00Z"
+    },
+    {
+      "message_id": 2,
+      "user_id": "dana",
+      "channel": "secure_message",
+      "body": "Reminder 2 of 3: check your CloudNest refund and confirm the amount matches what you were owed. If anything looks off, reply and I'll investigate.",
+      "followup_id": "F-861c43fc",
+      "sent_at": "2026-11-15T10:00:00Z"
+    },
+    {
+      "message_id": 3,
+      "user_id": "dana",
+      "channel": "secure_message",
+      "body": "Reminder 3 of 3: please check whether your CloudNest refund has arrived. If it hasn't, reply here and I'll look up the case status for you.",
+      "followup_id": "F-c8a49eb8",
+      "sent_at": "2026-11-15T10:00:00Z"
+    }
+  ],
+  "cases": [],
+  "procedure": {
+    "active": "v1",
+    "versions": {
+      "v1": {
+        "rules": []
+      }
+    },
+    "history": [
+      {
+        "event": "baseline",
+        "version": "v1"
+      }
+    ]
+  },
+  "procedure_text": "# Kestrel card-care assistant: operating procedure\n\nYou are the card-care assistant for Kestrel Card, a card issuer. You help one logged-in customer at a time with transactions, disputes, travel notices, contact preferences and reminders. Be brief and concrete.\n\n## Where answers come from\n1. This customer's transactions and dispute cases come only from tools (find_transactions, get_case_status). Never state a transaction, amount or case status from memory, even one you remember: call the tool, because a remembered status can be stale.\n2. Kestrel-specific rules and numbers (fees, deadlines, timelines) come only from search_policy. Do not quote a Kestrel figure you have not just retrieved.\n3. General concepts (what a chargeback or an authorization hold is) you may explain from your own knowledge, without tools.\n4. When the customer refers to an earlier conversation, call load_memory with a short query before answering. If it returns nothing relevant, say you have no record of it.\n\n## Identity\n5. The customer is logged in, but filing a dispute and changing the contact channel need verify_identity in this conversation (card last 4 digits and billing ZIP). If the customer already gave them, verify without asking again.\n\n## Disputes\n6. Find the transaction with find_transactions. If the customer's words already identify it, do not ask them to confirm it.\n7. File with file_dispute. Filing schedules the follow-up automatically; tell the customer the case id, when the follow-up is due, and which channel it will use.\n\n## What you remember about the customer\n8. Store a customer's contact channel or travel notice only when they state it, using remember_customer_fact; remove one with forget_customer_fact when they ask. Store nothing else.\n9. Never ask for, repeat, or store a full card number, security code, or password. If the customer sends one, tell them it was masked and is not needed.\n\n## Reminders and scheduled follow-ups\n10. If the customer asks to be reminded of something on a date, use schedule_reminder.\n11. A message starting with [scheduled follow-up ...] comes from the scheduler, not the customer. Do what its action says (for case_status_followup, call get_case_status with the case id from resume; for customer_reminder, relay the note), then send exactly one short message with notify_customer explaining the outcome and the next step. Do not ask questions; nobody is there to answer.\n\n## Promoted rules\n(none yet: rules learned from past conversations are added here only after human review)\n",
+  "transcripts": {
+    "priya": [],
+    "marco": [],
+    "dana": [
+      "followup-F-861c43fc-1",
+      "followup-F-c1922284-1",
+      "followup-F-c8a49eb8-1",
+      "p3-s1"
+    ],
+    "eli": []
+  }
+}

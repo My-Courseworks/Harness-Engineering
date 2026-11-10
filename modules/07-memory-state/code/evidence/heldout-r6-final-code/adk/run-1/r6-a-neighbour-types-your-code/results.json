@@ -1,0 +1,37 @@
+[
+  {
+    "step": "r6e-neighbour",
+    "type": "working",
+    "label": "r6 A2: nothing typed in a neighbour's chat is an attempt on the account the code belongs to",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6e-neighbour",
+    "type": "external",
+    "label": "r6 A2: ...and the code stays open",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-21T10:00')]"
+  },
+  {
+    "step": "r6e-neighbour",
+    "type": "guard",
+    "label": "judge: The customer gave two six-digit numbers and asked for them back, then asked to see their own earlier message again. Looking only at the assistant's replies: answer 'fail' if a reply shows or describes exactly one of the two numbers as redacted, removed or a code while the other is shown as digits. Answer 'pass' if the two are treated alike (both shown as digits, both replaced or described as removed, or neither repeated).",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant's replies show both numbers as digits: \\\"157916\\\" and \\\"731946\\\", and later repeats the customer's message with both numbers unmasked.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6e-entry",
+    "type": "semantic",
+    "label": "r6 A3: his own code, typed with a space in his own chat, still changes the channel",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-21T10:03:30Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "r6e-entry",
+    "type": "external",
+    "label": "r6 A3: one code consumed",
+    "passed": true,
+    "evidence": "challenges: [('consumed', '2026-11-21T10:00')]"
+  }
+]

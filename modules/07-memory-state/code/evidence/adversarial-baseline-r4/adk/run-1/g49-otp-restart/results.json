@@ -1,0 +1,23 @@
+[
+  {
+    "step": "or-cli-2",
+    "type": "working",
+    "label": "the wait survived the process ending: a second process takes the code",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-09T10:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "or-cli-2",
+    "type": "working",
+    "label": "one code, consumed",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "or-cli-2",
+    "type": "guard",
+    "label": "the typed code is not in the stored transcript",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

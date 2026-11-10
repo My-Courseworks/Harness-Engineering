@@ -1,0 +1,114 @@
+[
+  {
+    "step": "lr-verify",
+    "type": "working",
+    "label": "the process was killed after the attempt was recorded",
+    "passed": true,
+    "evidence": "exit code 137; stderr: [crash hook] attempt_verification done; exiting before its result is recorded\n"
+  },
+  {
+    "step": "lr-verify-resume",
+    "type": "working",
+    "label": "one wrong guess whose result was lost counts once, however the model repeats it",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "lr-verify-resume",
+    "type": "working",
+    "label": "the right digits then verify",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "lr-dispute",
+    "type": "external",
+    "label": "the process was killed after the case was opened",
+    "passed": true,
+    "evidence": "exit code 137; stderr: [crash hook] open_case done; exiting before its result is recorded\n"
+  },
+  {
+    "step": "lr-dispute-resume",
+    "type": "external",
+    "label": "one case, not two",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5002\", \"txn_id\": \"T-2002\", \"status\": \"under_review\"}]"
+  },
+  {
+    "step": "lr-dispute-resume",
+    "type": "prospective",
+    "label": "the follow-up the crash skipped is scheduled by the repeated filing (a $240 dispute: reviewed)",
+    "passed": false,
+    "evidence": "[]"
+  },
+  {
+    "step": "lr-dispute-resume",
+    "type": "external",
+    "label": "the customer is given the case id",
+    "passed": true,
+    "evidence": "002 is open/under review; no duplicate was filed. No follow-up was scheduled or promised; updates would go by secure app message. Case outcomes: C-5002 under_review. Lesson: When a dispute filing call is interrupted, check for an existing case or status before retrying to avoid a duplicate attempt.\n"
+  },
+  {
+    "step": "lr-evidence-setup",
+    "type": "external",
+    "label": "setup: the case exists",
+    "passed": true,
+    "evidence": "[{\"case_id\": \"C-5003\", \"txn_id\": \"T-3002\", \"status\": \"under_review\"}]"
+  },
+  {
+    "step": "lr-evidence",
+    "type": "external",
+    "label": "the process was killed after the note was attached",
+    "passed": true,
+    "evidence": "exit code 137; stderr: [crash hook] add_case_evidence done; exiting before its result is recorded\n"
+  },
+  {
+    "step": "lr-evidence-resume",
+    "type": "external",
+    "label": "the note is on the case once, not twice",
+    "passed": false,
+    "evidence": "[\"[2026-11-13] Cancellation reference: CN-77812\", \"[2026-11-13] Cancellation reference: CN-77812\"]"
+  },
+  {
+    "step": "lr-confirm-setup",
+    "type": "working",
+    "label": "setup: a code was sent",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "lr-confirm",
+    "type": "working",
+    "label": "the process was killed after the code was consumed",
+    "passed": false,
+    "evidence": "exit code 0; stderr: [crash hook] nothing to patch: module 'cardcare.world' has no attribute 'attempt_code'\n"
+  },
+  {
+    "step": "lr-confirm-resume",
+    "type": "working",
+    "label": "the consumed code entered again by the same conversation is the same proof: no new code is sent",
+    "passed": false,
+    "evidence": "[]"
+  },
+  {
+    "step": "lr-confirm-resume",
+    "type": "working",
+    "label": "one code, consumed",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "lr-confirm-resume",
+    "type": "semantic",
+    "label": "and the change the customer asked for is made",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-24T10:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "lr-confirm-resume",
+    "type": "guard",
+    "label": "the code typed before the crash is not left in the transcript",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

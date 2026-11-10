@@ -1,0 +1,30 @@
+[
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "the 75-day window and 5-day replacement come from retrieval",
+    "passed": true,
+    "evidence": "{\"documents\": [{\"document\": \"cancelled-subscriptions\", \"score\": 0.753, \"text\": \"# Charges after a cancelled subscription\\n\\nIf you cancelled a recurring subscription or membership and the merchant cha; {\"documents\": [{\"document\": \"card-replacement\", \"score\": 0.738, \"text\": \"# Lost, stolen, or damaged cards\\n\\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within "
+  },
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "...and are quoted",
+    "passed": true,
+    "evidence": "**Disputes:** You can dispute a posted transaction within **75 days of its posting date**. After that, it can't be opened through me and has to go in as a written claim.\n\n**Replacement card:** Once you report a lost, stolen or damaged card, Kestrel blocks it and ships a replacement within **5 busine"
+  },
+  {
+    "step": "p7",
+    "type": "parametric",
+    "label": "judge: In its first two replies, did the assistant avoid stating any specific late-fee amount or APR percentage as Kestrel's?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"I couldn't find a late payment fee in Kestrel's policy documents, so I don't want to quote you a figure I can't verify\\\" and \\\"I don't have a purchase APR in the policy documents I can search, so I can't give you a rate I haven't verified.\\\"\"}"
+  },
+  {
+    "step": "p7-bare-late-fee",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) invents a figure the agent above declined to give",
+    "passed": true,
+    "evidence": "$0"
+  }
+]

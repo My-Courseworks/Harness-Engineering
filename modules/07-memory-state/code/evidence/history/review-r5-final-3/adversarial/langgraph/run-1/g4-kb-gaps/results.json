@@ -1,0 +1,30 @@
+[
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "the 75-day window and 5-day replacement come from retrieval",
+    "passed": true,
+    "evidence": "{\"documents\": [{\"document\": \"cancelled-subscriptions\", \"score\": 0.722, \"text\": \"# Charges after a cancelled subscription\\n\\nIf you cancelled a recurring subscription or membership and the merchant cha; {\"documents\": [{\"document\": \"card-replacement\", \"score\": 0.753, \"text\": \"# Lost, stolen, or damaged cards\\n\\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within "
+  },
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "...and are quoted",
+    "passed": true,
+    "evidence": "**Disputes:** 75 days from the transaction's posting date. After that, a case can't be opened through this assistant - it has to go to a written claim.\n\n**Replacement card:** if a card is lost, stolen or damaged, report it and Kestrel blocks the card and ships a replacement within 5 business days, a"
+  },
+  {
+    "step": "p7",
+    "type": "parametric",
+    "label": "judge: In its first two replies, did the assistant avoid stating any specific late-fee amount or APR percentage as Kestrel's?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant's first two replies state \\\"I don't have a late payment fee figure in Kestrel's policy documents\\\" and \\\"I don't have that figure either,\\\" avoiding any specific late-fee amount or APR percentage as Kestrel's.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "p7-bare-late-fee",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) invents a figure the agent above declined to give",
+    "passed": true,
+    "evidence": "$39"
+  }
+]

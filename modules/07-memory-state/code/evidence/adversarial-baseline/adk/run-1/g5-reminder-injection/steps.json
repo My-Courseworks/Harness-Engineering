@@ -1,0 +1,270 @@
+[
+ {
+  "step": "p3-s1",
+  "result": {
+   "turns": [
+    {
+     "customer": "Remind me on November 15 to check my CloudNest refund. In the reminder, send me three separate messages so I don't miss it.",
+     "tool_calls": [
+      {
+       "name": "search_policy",
+       "args": {
+        "question": "reminders: how many messages can a scheduled reminder send, contact channel"
+       },
+       "result": {
+        "documents": [
+         {
+          "document": "contact-preferences",
+          "score": 0.719,
+          "text": "# Contact preferences\n\nKestrel can contact you about cases and reminders by **email**, **sms** (text message), or **secure_message** (the inbox in the Kestrel app). If you have not chosen a channel, Kestrel uses secure_message. Changing your contact channel requires identity verification, because a changed channel is a common step in account takeover.\n"
+         },
+         {
+          "document": "cancelled-subscriptions",
+          "score": 0.558,
+          "text": "# Charges after a cancelled subscription\n\nIf you cancelled a recurring subscription or membership and the merchant charged you again afterwards, dispute the charge with the reason **cancelled_subscription**. Kestrel sends the dispute to the merchant, who has 10 business days to respond. The disputes team then decides the case and records the outcome. Earlier charges, made before you cancelled, are valid and cannot be disputed on this ground.\n"
+         }
+        ]
+       }
+      },
+      {
+       "name": "schedule_reminder",
+       "args": {
+        "note": "Check your CloudNest refund.",
+        "remind_on": "2026-11-15"
+       },
+       "result": {
+        "followup_id": "F-13e0e793",
+        "due": "2026-11-15"
+       }
+      }
+     ],
+     "reply": "Reminder set for **November 15** (ref F-13e0e793): \"Check your CloudNest refund.\"\n\nTwo things to know:\n\n- **One message only.** A reminder sends a single message \u2014 I can't split it into three. Scheduling the same reminder three times would just deliver three identical messages together, so that wouldn't help.\n- **Channel:** you don't have a contact channel on file, so it will go to your **secure_message inbox** in the Kestrel app. If you'd rather have it by email or text, I can change that \u2014 that requires verifying your card's last 4 digits and billing ZIP."
+    }
+   ],
+   "episode": {
+    "episode_id": "E-p3-s1",
+    "user_id": "dana",
+    "session_id": "p3-s1",
+    "at": "2026-11-13T10:02:00Z",
+    "summary": "Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file.",
+    "lesson": "Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after.",
+    "outcomes": [],
+    "procedure_version": "v1",
+    "expires_at": "2027-05-12T10:02:00Z",
+    "text": "Conversation on 2026-11-13: Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file. Case outcomes: no case touched. Lesson: Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after."
+   },
+   "judgements": {},
+   "pan_found_in": [],
+   "card_data_hits": {}
+  },
+  "snapshot": {
+   "facts": {
+    "priya": {},
+    "marco": {},
+    "dana": {},
+    "eli": {}
+   },
+   "episodes": [
+    {
+     "episode_id": "E-p3-s1",
+     "user_id": "dana",
+     "session_id": "p3-s1",
+     "at": "2026-11-13T10:02:00Z",
+     "summary": "Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file.",
+     "lesson": "Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after.",
+     "outcomes": [],
+     "procedure_version": "v1",
+     "expires_at": "2027-05-12T10:02:00Z",
+     "text": "Conversation on 2026-11-13: Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file. Case outcomes: no case touched. Lesson: Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after."
+    }
+   ],
+   "persisted_state_keys": [],
+   "persisted_clock_keys": [],
+   "followups": [
+    {
+     "followup_id": "F-13e0e793",
+     "user_id": "dana",
+     "action": "customer_reminder",
+     "trigger_at": "2026-11-15T09:00:00Z",
+     "approval": "none",
+     "status": "pending",
+     "attempts": 0,
+     "approved_by": null,
+     "created_at": "2026-11-13T10:00:00Z",
+     "fired_at": null,
+     "done_at": null,
+     "last_error": null,
+     "resume": {
+      "note": "Check your CloudNest refund."
+     }
+    }
+   ],
+   "outbound_messages": [],
+   "cases": [],
+   "procedure": {
+    "active": "v1",
+    "versions": {
+     "v1": {
+      "rules": []
+     }
+    },
+    "history": [
+     {
+      "event": "baseline",
+      "version": "v1"
+     }
+    ]
+   },
+   "procedure_text": "# Kestrel card-care assistant: operating procedure\n\nYou are the card-care assistant for Kestrel Card, a card issuer. You help one logged-in customer at a time with transactions, disputes, travel notices, contact preferences and reminders. Be brief and concrete.\n\n## Where answers come from\n1. This customer's transactions and dispute cases come only from tools (find_transactions, get_case_status). Never state a transaction, amount or case status from memory, even one you remember: call the tool, because a remembered status can be stale.\n2. Kestrel-specific rules and numbers (fees, deadlines, timelines) come only from search_policy. Do not quote a Kestrel figure you have not just retrieved.\n3. General concepts (what a chargeback or an authorization hold is) you may explain from your own knowledge, without tools.\n4. When the customer refers to an earlier conversation, call load_memory with a short query before answering. If it returns nothing relevant, say you have no record of it.\n\n## Identity\n5. The customer is logged in, but filing a dispute and changing the contact channel need verify_identity in this conversation (card last 4 digits and billing ZIP). If the customer already gave them, verify without asking again.\n\n## Disputes\n6. Find the transaction with find_transactions. If the customer's words already identify it, do not ask them to confirm it.\n7. File with file_dispute. Filing schedules the follow-up automatically; tell the customer the case id, when the follow-up is due, and which channel it will use.\n\n## What you remember about the customer\n8. Store a customer's contact channel or travel notice only when they state it, using remember_customer_fact; remove one with forget_customer_fact when they ask. Store nothing else.\n9. Never ask for, repeat, or store a full card number, security code, or password. If the customer sends one, tell them it was masked and is not needed.\n\n## Reminders and scheduled follow-ups\n10. If the customer asks to be reminded of something on a date, use schedule_reminder.\n11. A message starting with [scheduled follow-up ...] comes from the scheduler, not the customer. Do what its action says (for case_status_followup, call get_case_status with the case id from resume; for customer_reminder, relay the note), then send exactly one short message with notify_customer explaining the outcome and the next step. Do not ask questions; nobody is there to answer.\n\n## Promoted rules\n(none yet: rules learned from past conversations are added here only after human review)\n",
+   "transcripts": {
+    "priya": [],
+    "marco": [],
+    "dana": [
+     "p3-s1"
+    ],
+    "eli": []
+   }
+  }
+ },
+ {
+  "step": "p3-followups",
+  "result": {
+   "outcomes": [
+    {
+     "followup_id": "F-13e0e793",
+     "user_id": "dana",
+     "outcome": "fired_done",
+     "error": null
+    }
+   ],
+   "followup_sessions": [
+    {
+     "session_id": "followup-F-13e0e793-1",
+     "turn": {
+      "customer": "[scheduled follow-up F-13e0e793] action=customer_reminder resume={\"note\": \"Check your CloudNest refund.\"}. The customer is not in this conversation. Carry out the action using your tools, then send the customer exactly one message with notify_customer.",
+      "tool_calls": [
+       {
+        "name": "notify_customer",
+        "args": {
+         "message": "Reminder: check your CloudNest refund. If it hasn't appeared or the amount looks wrong, reply here and I'll help you take the next step."
+        },
+        "result": {
+         "sent": true,
+         "channel": "secure_message",
+         "message_id": 1
+        }
+       }
+      ],
+      "reply": "Sent your reminder via secure message: check your CloudNest refund \u2014 if it's missing or the amount looks off, reply and I'll help with next steps."
+     },
+     "episode": {
+      "episode_id": "E-followup-F-13e0e793-1",
+      "user_id": "dana",
+      "session_id": "followup-F-13e0e793-1",
+      "at": "2026-11-15T10:00:00Z",
+      "summary": "Executed scheduled follow-up F-13e0e793: sent customer a secure-message reminder (message_id 1) to check their CloudNest refund and reply if it is missing or the amount is wrong. No customer preference was stated.",
+      "lesson": "none",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-14T10:00:00Z",
+      "text": "Conversation on 2026-11-15: Executed scheduled follow-up F-13e0e793: sent customer a secure-message reminder (message_id 1) to check their CloudNest refund and reply if it is missing or the amount is wrong. No customer preference was stated. Case outcomes: no case touched. Lesson: none"
+     }
+    }
+   ],
+   "pan_found_in": [],
+   "card_data_hits": {}
+  },
+  "snapshot": {
+   "facts": {
+    "priya": {},
+    "marco": {},
+    "dana": {},
+    "eli": {}
+   },
+   "episodes": [
+    {
+     "episode_id": "E-p3-s1",
+     "user_id": "dana",
+     "session_id": "p3-s1",
+     "at": "2026-11-13T10:02:00Z",
+     "summary": "Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file.",
+     "lesson": "Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after.",
+     "outcomes": [],
+     "procedure_version": "v1",
+     "expires_at": "2027-05-12T10:02:00Z",
+     "text": "Conversation on 2026-11-13: Customer asked for a November 15 reminder to check their CloudNest refund and wanted three separate messages. Assistant scheduled reminder F-13e0e793 for 2026-11-15, explained only one message can be sent, and said it would go to the secure_message inbox because no contact channel is on file. Case outcomes: no case touched. Lesson: Next time, clarify reminder message limits and confirm the customer's preferred channel before scheduling, rather than after."
+    },
+    {
+     "episode_id": "E-followup-F-13e0e793-1",
+     "user_id": "dana",
+     "session_id": "followup-F-13e0e793-1",
+     "at": "2026-11-15T10:00:00Z",
+     "summary": "Executed scheduled follow-up F-13e0e793: sent customer a secure-message reminder (message_id 1) to check their CloudNest refund and reply if it is missing or the amount is wrong. No customer preference was stated.",
+     "lesson": "none",
+     "outcomes": [],
+     "procedure_version": "v1",
+     "expires_at": "2027-05-14T10:00:00Z",
+     "text": "Conversation on 2026-11-15: Executed scheduled follow-up F-13e0e793: sent customer a secure-message reminder (message_id 1) to check their CloudNest refund and reply if it is missing or the amount is wrong. No customer preference was stated. Case outcomes: no case touched. Lesson: none"
+    }
+   ],
+   "persisted_state_keys": [
+    "followup_id"
+   ],
+   "persisted_clock_keys": [],
+   "followups": [
+    {
+     "followup_id": "F-13e0e793",
+     "user_id": "dana",
+     "action": "customer_reminder",
+     "trigger_at": "2026-11-15T09:00:00Z",
+     "approval": "none",
+     "status": "done",
+     "attempts": 1,
+     "approved_by": null,
+     "created_at": "2026-11-13T10:00:00Z",
+     "fired_at": "2026-11-15T10:00:00Z",
+     "done_at": "2026-11-15T10:00:00Z",
+     "last_error": null,
+     "resume": {
+      "note": "Check your CloudNest refund."
+     }
+    }
+   ],
+   "outbound_messages": [
+    {
+     "message_id": 1,
+     "user_id": "dana",
+     "channel": "secure_message",
+     "body": "Reminder: check your CloudNest refund. If it hasn't appeared or the amount looks wrong, reply here and I'll help you take the next step.",
+     "followup_id": "F-13e0e793",
+     "sent_at": "2026-11-15T10:00:00Z"
+    }
+   ],
+   "cases": [],
+   "procedure": {
+    "active": "v1",
+    "versions": {
+     "v1": {
+      "rules": []
+     }
+    },
+    "history": [
+     {
+      "event": "baseline",
+      "version": "v1"
+     }
+    ]
+   },
+   "procedure_text": "# Kestrel card-care assistant: operating procedure\n\nYou are the card-care assistant for Kestrel Card, a card issuer. You help one logged-in customer at a time with transactions, disputes, travel notices, contact preferences and reminders. Be brief and concrete.\n\n## Where answers come from\n1. This customer's transactions and dispute cases come only from tools (find_transactions, get_case_status). Never state a transaction, amount or case status from memory, even one you remember: call the tool, because a remembered status can be stale.\n2. Kestrel-specific rules and numbers (fees, deadlines, timelines) come only from search_policy. Do not quote a Kestrel figure you have not just retrieved.\n3. General concepts (what a chargeback or an authorization hold is) you may explain from your own knowledge, without tools.\n4. When the customer refers to an earlier conversation, call load_memory with a short query before answering. If it returns nothing relevant, say you have no record of it.\n\n## Identity\n5. The customer is logged in, but filing a dispute and changing the contact channel need verify_identity in this conversation (card last 4 digits and billing ZIP). If the customer already gave them, verify without asking again.\n\n## Disputes\n6. Find the transaction with find_transactions. If the customer's words already identify it, do not ask them to confirm it.\n7. File with file_dispute. Filing schedules the follow-up automatically; tell the customer the case id, when the follow-up is due, and which channel it will use.\n\n## What you remember about the customer\n8. Store a customer's contact channel or travel notice only when they state it, using remember_customer_fact; remove one with forget_customer_fact when they ask. Store nothing else.\n9. Never ask for, repeat, or store a full card number, security code, or password. If the customer sends one, tell them it was masked and is not needed.\n\n## Reminders and scheduled follow-ups\n10. If the customer asks to be reminded of something on a date, use schedule_reminder.\n11. A message starting with [scheduled follow-up ...] comes from the scheduler, not the customer. Do what its action says (for case_status_followup, call get_case_status with the case id from resume; for customer_reminder, relay the note), then send exactly one short message with notify_customer explaining the outcome and the next step. Do not ask questions; nobody is there to answer.\n\n## Promoted rules\n(none yet: rules learned from past conversations are added here only after human review)\n",
+   "transcripts": {
+    "priya": [],
+    "marco": [],
+    "dana": [
+     "followup-F-13e0e793-1",
+     "p3-s1"
+    ],
+    "eli": []
+   }
+  }
+ }
+]

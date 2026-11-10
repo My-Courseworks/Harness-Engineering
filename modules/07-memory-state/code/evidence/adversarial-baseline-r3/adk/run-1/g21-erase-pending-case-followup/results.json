@@ -1,0 +1,72 @@
+[
+  {
+    "step": "epc-s1",
+    "type": "prospective",
+    "label": "setup: the case follow-up is due 2026-11-19",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-19T10:00:00Z\", \"approval\": \"none\", \"status\": \"pending\", \"resume\": {\"case_id\": \"C-5001\"}}]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "prospective",
+    "label": "the case follow-up, which must still reach her, is delivered on the first attempt",
+    "passed": false,
+    "evidence": "[{\"followup_id\": \"F-0b3b4575\", \"user_id\": \"priya\", \"outcome\": \"retry\", \"error\": null}]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "working",
+    "label": "it runs with read tools and notify_customer only, even though the erasure is pending",
+    "passed": false,
+    "evidence": "[\"add_case_evidence\", \"cancel_reminder\", \"file_dispute\", \"find_transactions\", \"forget_customer_fact\", \"get_case_status\", \"list_my_followups\", \"load_memory\", \"remember_customer_fact\", \"report_malformed_tool_call\", \"request_memory_erasure\", \"schedule_reminder\", \"search_policy\", \"verify_identity\"]"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "working",
+    "label": "and leaves no transcript",
+    "passed": false,
+    "evidence": "transcripts with prefix followup-: ['followup-F-0b3b4575-1']"
+  },
+  {
+    "step": "epc-fire-1005",
+    "type": "episodic",
+    "label": "and no episode",
+    "passed": false,
+    "evidence": "1 episodes; purged 0"
+  },
+  {
+    "step": "epc-fire-1010",
+    "type": "prospective",
+    "label": "exactly one message reached her",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "epc-maint",
+    "type": "working",
+    "label": "no transcript remains",
+    "passed": false,
+    "evidence": "1 transcripts: ['followup-F-0b3b4575-1']"
+  },
+  {
+    "step": "epc-maint",
+    "type": "guard",
+    "label": "nothing about her dispute is in a memory store (cases and follow-up records are the bank's)",
+    "passed": false,
+    "evidence": "{\"StreamMax\": [\"adk_episodes.db\", \"adk_sessions.db\"]}"
+  },
+  {
+    "step": "epc-maint",
+    "type": "episodic",
+    "label": "no episode remains",
+    "passed": false,
+    "evidence": "1 episodes; purged 0"
+  },
+  {
+    "step": "epc-maint",
+    "type": "episodic",
+    "label": "no orphan embedding",
+    "passed": true,
+    "evidence": "vector-index rows with no stored item: 0"
+  }
+]

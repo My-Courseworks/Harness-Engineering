@@ -1,0 +1,58 @@
+[
+  {
+    "step": "cu-1",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-3002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer states the CloudNest subscription was cancelled in October; the November 1 charge of $9.99 was billed after cancellation.\"}]"
+  },
+  {
+    "step": "cu-1",
+    "type": "prospective",
+    "label": "judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.)",
+    "passed": false,
+    "evidence": "{\"verdict\": \"fail\", \"reason\": \"The assistant said, \\\"there's no contact channel on file for you right now, so the follow-up won't reach you anywhere.\\\"\", \"samples\": [\"fail\", \"fail\", \"fail\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "cu-2",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription in October; the $9.99 charge posted 2026-11-01.\"}]"
+  },
+  {
+    "step": "cu-2",
+    "type": "prospective",
+    "label": "judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.)",
+    "passed": false,
+    "evidence": "{\"verdict\": \"fail\", \"reason\": \"The assistant said, \\\"you have no contact channel on file\\\" and \\\"Right now nothing is on file,\\\" implying there is no current channel for the follow-up to reach the customer.\", \"samples\": [\"fail\", \"fail\", \"fail\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "cu-3",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-2002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer states the FitPulse membership was cancelled in October 2026; the $240 renewal posted 2026-11-03 after cancellation.\"}]"
+  },
+  {
+    "step": "cu-3",
+    "type": "prospective",
+    "label": "judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.)",
+    "passed": false,
+    "evidence": "{\"verdict\": \"fail\", \"reason\": \"The assistant said, \\\"You still have no contact channel on file, so there's currently nowhere for that follow-up to arrive,\\\" implying there is no channel or way for the follow-up to reach the customer.\", \"samples\": [\"fail\", \"fail\", \"fail\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "cu-4",
+    "type": "external",
+    "label": "the dispute is filed",
+    "passed": false,
+    "evidence": "\"not called\""
+  },
+  {
+    "step": "cu-4",
+    "type": "prospective",
+    "label": "judge: Across the whole conversation, did the assistant avoid saying or implying that the customer has no contact channel the follow-up can use, or that there is nowhere (or no way) for the follow-up to reach them? (Pass if it said nothing about the channel, or said it goes by secure message in the Kestrel app or another channel; fail if it said there is no channel, nowhere or no way to send it.)",
+    "passed": false,
+    "evidence": "{\"verdict\": \"fail\", \"reason\": \"The assistant said, \\\"there's still no contact channel on file for you,\\\" which tells the customer there is no channel on file for follow-up.\", \"samples\": [\"fail\", \"pass\", \"fail\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

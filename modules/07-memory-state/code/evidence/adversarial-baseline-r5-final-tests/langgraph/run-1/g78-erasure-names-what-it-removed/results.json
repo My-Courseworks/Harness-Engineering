@@ -1,0 +1,23 @@
+[
+  {
+    "step": "ek-s1",
+    "type": "semantic",
+    "label": "the erasure tool's result names the kind of fact it removed",
+    "passed": false,
+    "evidence": "{\"erased_now\": \"1 remembered facts, 0 past-conversation summaries, 0 other conversation transcripts, 0 reminders with their notes\", \"this_conversation\": \"its transcript is deleted when the conversatio"
+  },
+  {
+    "step": "ek-s1",
+    "type": "semantic",
+    "label": "and does not name one that was not there",
+    "passed": true,
+    "evidence": "{\"erased_now\": \"1 remembered facts, 0 past-conversation summaries, 0 other conversation transcripts, 0 reminders with their notes\", \"this_conversation\": \"its transcript is deleted when the conversatio"
+  },
+  {
+    "step": "ek-s1",
+    "type": "semantic",
+    "label": "judge: In its reply to the erasure request, did the assistant avoid saying that a contact-channel preference was deleted (none was stored; the only stored fact was a travel notice)?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant only said it erased the travel notice and did not mention a contact-channel preference: \\\"Done. That erased the travel notice I'd just saved (1 remembered fact)...\\\"\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

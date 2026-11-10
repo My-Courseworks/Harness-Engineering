@@ -1,0 +1,51 @@
+[
+  {
+    "step": "ect-tick",
+    "type": "semantic",
+    "label": "a closed tab does not drop the erasure: no fact remains",
+    "passed": false,
+    "evidence": "{\"travel_notice\": {\"value\": \"Lisbon\", \"as_of\": \"2026-11-09T10:00:00Z\", \"valid_until\": \"2026-11-30\", \"expires_at\": \"2026-12-01T00:00:00Z\"}, \"contact_channel\": {\"value\": \"email\", \"as_of\": \"2026-11-09T10:00:00Z\", \"expires_at\": null}}"
+  },
+  {
+    "step": "ect-tick",
+    "type": "episodic",
+    "label": "no episode remains, and the request did not become one",
+    "passed": false,
+    "evidence": "2 episodes; purged 0"
+  },
+  {
+    "step": "ect-tick",
+    "type": "working",
+    "label": "no transcript remains",
+    "passed": false,
+    "evidence": "2 transcripts: ['ect-s1', 'ect-s2']"
+  },
+  {
+    "step": "ect-tick",
+    "type": "prospective",
+    "label": "the customer's reminder is cancelled by the erasure",
+    "passed": false,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Book Lisbon airport transfer\"}}]"
+  },
+  {
+    "step": "ect-tick",
+    "type": "guard",
+    "label": "nothing she said is in any memory store",
+    "passed": false,
+    "evidence": "{\"Lisbon\": [\"adk_episodes.db\", \"scheduler.db\", \"adk_sessions.db\"], \"airport transfer\": [\"adk_episodes.db\", \"scheduler.db\", \"adk_sessions.db\"]}"
+  },
+  {
+    "step": "ect-remind-day",
+    "type": "prospective",
+    "label": "no message reaches the erased customer from her old reminder",
+    "passed": false,
+    "evidence": "[\"Reminder: Book your Lisbon airport transfer. (This reminder was scheduled at your request \\u2014 no action needed here; if yo\"]"
+  },
+  {
+    "step": "ect-remind-day",
+    "type": "episodic",
+    "label": "and no new memory is created about it",
+    "passed": false,
+    "evidence": "3 episodes; purged 0"
+  }
+]

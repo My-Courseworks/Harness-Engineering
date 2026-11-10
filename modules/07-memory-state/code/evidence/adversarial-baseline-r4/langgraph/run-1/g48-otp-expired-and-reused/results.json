@@ -1,0 +1,44 @@
+[
+  {
+    "step": "oe-s1-later",
+    "type": "working",
+    "label": "a code entered after 5 minutes does not verify: the first challenge expired",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "working",
+    "label": "the fresh code does",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "semantic",
+    "label": "the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:00:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "oe-s1-later",
+    "type": "external",
+    "label": "two code messages were sent",
+    "passed": false,
+    "evidence": "[]"
+  },
+  {
+    "step": "oe-s2",
+    "type": "working",
+    "label": "a used code entered again is a wrong code",
+    "passed": false,
+    "evidence": "not in snapshot"
+  },
+  {
+    "step": "oe-s2",
+    "type": "working",
+    "label": "the new code removes the channel",
+    "passed": true,
+    "evidence": "null"
+  }
+]

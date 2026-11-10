@@ -1,0 +1,58 @@
+[
+  {
+    "step": "bf-seam",
+    "type": "guard",
+    "label": "a code at the seam of a number sent in two goes, after an earlier card paste, reaches no store",
+    "passed": false,
+    "evidence": "{\"security code 047\": [\"adk_sessions.db\"]}"
+  },
+  {
+    "step": "bf-seam",
+    "type": "guard",
+    "label": "the message that completes the number holds a marker, not the code",
+    "passed": false,
+    "evidence": "CVC 047 1111"
+  },
+  {
+    "step": "bf-month-expiry",
+    "type": "guard",
+    "label": "a month name and two digits directly before the number are its expiry: nothing of the note reaches a store",
+    "passed": false,
+    "evidence": "{\"expiry 09/27\": [\"adk_sessions.db\"]}"
+  },
+  {
+    "step": "bf-unit-word",
+    "type": "guard",
+    "label": "a number followed by a unit word is masked",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "bf-unit-word",
+    "type": "working",
+    "label": "and the words after it are stored as typed",
+    "passed": false,
+    "evidence": "I stopped using [REDACTED CARD NUMBER]. Which card do you have on my account?"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "a numbered list whose items hold other numbers is stored whole: line 5",
+    "passed": false,
+    "evidence": "Unrelated to my card. This is my packing checklist, exactly as I wrote it:\n1. Charge 2 power banks\n2. Keep 75 euros in cash\n3. Verify your phone number\n[REDACTED CARD NUMBER]. Save the 7-hour helpline number\n11. Carry 3 adapters\n12. Book [REDACTED CARD NUMBER]. Verify your phone number\n17. Keep 2 eu"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "and line 13",
+    "passed": false,
+    "evidence": "Unrelated to my card. This is my packing checklist, exactly as I wrote it:\n1. Charge 2 power banks\n2. Keep 75 euros in cash\n3. Verify your phone number\n[REDACTED CARD NUMBER]. Save the 7-hour helpline number\n11. Carry 3 adapters\n12. Book [REDACTED CARD NUMBER]. Verify your phone number\n17. Keep 2 eu"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "and nothing in the reply was masked",
+    "passed": true,
+    "evidence": "10 lines - the numbering skips around (1, 2, 3, then unnumbered, 11, 12, 17, 18, 19), but there are ten lines of text.\n\nTwo things to flag: the two card numbers in your list were removed by masking before your message reached me or any record, and I don't need them - please don't send card numbers h"
+  }
+]

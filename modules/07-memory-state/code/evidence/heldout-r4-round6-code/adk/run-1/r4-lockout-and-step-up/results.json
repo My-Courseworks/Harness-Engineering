@@ -1,0 +1,58 @@
+[
+  {
+    "step": "r4l-ttl-a",
+    "type": "working",
+    "label": "r4: the step-up succeeds",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "r4l-ttl-b",
+    "type": "working",
+    "label": "r4: a 25-minute-old step-up in the same chat does not authorise a channel change",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r4l-s1",
+    "type": "working",
+    "label": "r4: the agent verifies only with digits the customer typed",
+    "passed": true,
+    "evidence": "[{\"card_last4\": \"6601\", \"postal_code\": \"73310\"}, {\"card_last4\": \"6610\", \"postal_code\": \"73031\"}, {\"card_last4\": \"6016\", \"postal_code\": \"73301\"}]"
+  },
+  {
+    "step": "r4l-s1",
+    "type": "working",
+    "label": "r4: three near-miss attempts change nothing",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r4l-tick",
+    "type": "semantic",
+    "label": "r4: the closed-tab erasure ran",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "r4l-tick",
+    "type": "working",
+    "label": "r4: ...and left no transcript",
+    "passed": true,
+    "evidence": "0 transcripts: []"
+  },
+  {
+    "step": "r4l-s3",
+    "type": "working",
+    "label": "r4: erasing memory does not reset the account lockout: the channel is not changed",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r4l-s3",
+    "type": "working",
+    "label": "r4: ...and verification does not succeed inside the 24 hours",
+    "passed": true,
+    "evidence": "{\"verified\": false, \"error\": \"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\"}"
+  }
+]

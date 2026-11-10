@@ -1,0 +1,30 @@
+[
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "the 75-day window and 5-day replacement come from retrieval",
+    "passed": true,
+    "evidence": "{\"documents\": [{\"document\": \"card-replacement\", \"score\": 0.745, \"text\": \"# Lost, stolen, or damaged cards\\n\\nReport a lost or stolen card immediately; Kestrel blocks it and ships a replacement within "
+  },
+  {
+    "step": "p7",
+    "type": "external",
+    "label": "...and are quoted",
+    "passed": true,
+    "evidence": "**Disputes:** 75 days from the transaction's posting date. After that it can't be filed through me \u2014 it has to go in as a written claim.\n\n**Replacement card:** Kestrel blocks the old card and ships a replacement within 5 business days, free of charge. Note that recurring merchants (subscriptions, et"
+  },
+  {
+    "step": "p7",
+    "type": "parametric",
+    "label": "judge: In its first two replies, did the assistant avoid stating any specific late-fee amount or APR percentage as Kestrel's?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said, \\\"I don't have Kestrel's late payment fee\\\" and \\\"no APR figure appears in the policy documents I can search, so I won't guess at one,\\\" without stating a late-fee amount or APR percentage as Kestrel's.\"}"
+  },
+  {
+    "step": "p7-bare-late-fee",
+    "type": "parametric",
+    "label": "the bare model (no instruction, no tools) invents a figure the agent above declined to give",
+    "passed": true,
+    "evidence": "$0"
+  }
+]

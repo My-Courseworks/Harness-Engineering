@@ -1,0 +1,107 @@
+[
+  {
+    "step": "r6a-main",
+    "type": "external",
+    "label": "r6 A: a code is open for him before anything else is typed",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-17T09:00')]"
+  },
+  {
+    "step": "r6a-notes",
+    "type": "guard",
+    "label": "r6 A2: of 120 pasted references, the reply shows none differently from the others",
+    "passed": true,
+    "evidence": "1 references in the reply, 1 shown as a marker"
+  },
+  {
+    "step": "r6a-notes",
+    "type": "guard",
+    "label": "r6 A6: the code pasted inside the list is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "r6a-notes",
+    "type": "working",
+    "label": "r6 A4: nothing pasted in another chat was checked: no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6a-main-derived",
+    "type": "semantic",
+    "label": "r6 A2: whatever the echo singled out, typed in the first chat, changes nothing",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r6a-main-derived",
+    "type": "external",
+    "label": "r6 A2: ...and consumes no code",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-17T09:00')]"
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "guard",
+    "label": "r6 A2: a six-digit number that is not the code is replaced too while a code is open",
+    "passed": true,
+    "evidence": "Thanks. One more that I scribbled on paper: [REDACTED ONE-TIME CODE]. Is that one already in the list? If not, just repeat it back to me so I can add it."
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "guard",
+    "label": "r6 A4: the real code typed in another chat is replaced",
+    "passed": true,
+    "evidence": "Oh, and a text from Kestrel has just come through on my phone, it says [REDACTED ONE-TIME CODE]. Do I type that here or in my other window?"
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "external",
+    "label": "r6 A4: ...and not checked: the code is not consumed there",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-17T09:00')]"
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "working",
+    "label": "r6 A4: ...and nothing typed there is a failed attempt",
+    "passed": false,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "guard",
+    "label": "r6 A5: no number the customer typed is passed to the code tool",
+    "passed": true,
+    "evidence": "[\"{}\", \"{}\"]"
+  },
+  {
+    "step": "r6a-notes-more",
+    "type": "guard",
+    "label": "judge: The customer typed one six-digit number in each of two messages (the first described as a pickup reference, the second as a text from Kestrel). Answer 'fail' if a reply repeats either number as digits, or if the replies show that the system handled the two numbers differently (for example one echoed back as digits while the other appears as a redaction marker or is said to have been removed). Answer 'pass' otherwise; the assistant telling the customer where to type a code is not a difference.",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"Both replies show the two six-digit numbers were handled the same way as removed/stripped and not echoed as digits, e.g., 'the six-digit part was removed before your message reached me' and 'any six-digit number typed here is stripped out and never checked'.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6a-main-entry",
+    "type": "semantic",
+    "label": "r6 A3: the code typed with a dot, in the chat it was sent from, changes the channel",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-17T09:04:40Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "r6a-main-entry",
+    "type": "working",
+    "label": "r6 A4: the detour through the other chat cost no failed attempt",
+    "passed": false,
+    "evidence": "1 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6a-main-entry",
+    "type": "guard",
+    "label": "r6 A6: the dotted code is in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

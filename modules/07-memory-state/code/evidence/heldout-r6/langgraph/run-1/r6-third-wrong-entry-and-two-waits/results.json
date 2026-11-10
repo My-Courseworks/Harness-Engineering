@@ -1,0 +1,121 @@
+[
+  {
+    "step": "r6d-wrong",
+    "type": "working",
+    "label": "r6 A3: three wrong entries are three failed attempts",
+    "passed": true,
+    "evidence": "3 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6d-wrong",
+    "type": "working",
+    "label": "r6 A8: the third wrong entry's result says verification is now locked",
+    "passed": true,
+    "evidence": "{\"verified\": false, \"error\": \"that code is not right, and it was failed attempt 3 of 3: verification is now locked on this account for 24 hours. No new code can be sent and nothing that needs verifica"
+  },
+  {
+    "step": "r6d-wrong",
+    "type": "working",
+    "label": "r6 A8: ...for 24 hours",
+    "passed": true,
+    "evidence": "{\"verified\": false, \"error\": \"that code is not right, and it was failed attempt 3 of 3: verification is now locked on this account for 24 hours. No new code can be sent and nothing that needs verifica"
+  },
+  {
+    "step": "r6d-wrong",
+    "type": "guard",
+    "label": "r6 A2: a wrong entry typed with a space is replaced like any other",
+    "passed": true,
+    "evidence": "Sorry, fat fingers. It's [REDACTED ONE-TIME CODE]"
+  },
+  {
+    "step": "r6d-wrong",
+    "type": "working",
+    "label": "judge: After the customer's third wrong code, did the assistant tell the customer that verification on the account is now locked (for 24 hours, or that they must call Kestrel), and avoid offering to send a new or fresh code?",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said 'verification is now locked on your account for 24 hours. No new code can be sent' and 'Please call Kestrel to get this handled,' without offering a new code.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  },
+  {
+    "step": "r6d-after",
+    "type": "external",
+    "label": "r6 A8: no code is sent to a locked account",
+    "passed": true,
+    "evidence": "1 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6d-after",
+    "type": "working",
+    "label": "r6 A8: a send, if tried, is refused",
+    "passed": true,
+    "evidence": "not called"
+  },
+  {
+    "step": "r6d-after",
+    "type": "semantic",
+    "label": "r6 A8: nothing changed",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "r6d-two-waits",
+    "type": "working",
+    "label": "r6 A9: a response that opens two waits does not crash",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"sent\\\": true, \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u00b70133\\\", \\\"expires_in_minutes\\\": 5, \\\"resent\\\": false}\", \"confirm_verification_code -> {\\\"verified\\\": false, \\\"error\\\": \\\"no c"
+  },
+  {
+    "step": "r6d-two-waits",
+    "type": "external",
+    "label": "r6 A9: ...and sends one code",
+    "passed": true,
+    "evidence": "1 one-time-code messages in the outbox"
+  },
+  {
+    "step": "r6d-two-waits-go-on",
+    "type": "working",
+    "label": "r6 A9: the conversation keeps working: no turn errors",
+    "passed": true,
+    "evidence": "\"no errors\""
+  },
+  {
+    "step": "r6d-two-waits-go-on",
+    "type": "semantic",
+    "label": "r6 A1: the code typed one digit at a time is accepted and the channel changes",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-20T16:01:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "r6d-two-waits-go-on",
+    "type": "working",
+    "label": "r6 A9: one wait was left, so the next message was a message: no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "r6d-two-waits-go-on",
+    "type": "semantic",
+    "label": "r6 A9: ...and it is answered",
+    "passed": true,
+    "evidence": "Yes - email is your contact channel on file now, as of a few minutes ago. Anything else?"
+  },
+  {
+    "step": "r6d-two-waits-go-on",
+    "type": "guard",
+    "label": "r6 A6: the six separate digits are in no session store",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  },
+  {
+    "step": "r6d-guesses-as-arguments",
+    "type": "working",
+    "label": "r6 A5: a guess passed as an argument is not an entry: none is evaluated",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 0, \"failed_attempts\": 0, \"tool_results\": [\"send_verification_code -> {\\\"sent\\\": true, \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u00b70188\\\", \\\"expires_in_minutes\\\": 5, \\\"resent\\\": false}\", \"confirm_verification_code -> {\\\"verified\\\": false, \\\"error\\\": \\\"no c"
+  },
+  {
+    "step": "r6d-guesses-as-arguments",
+    "type": "working",
+    "label": "r6 A5: ...so the model cannot spend the customer's attempts",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  }
+]

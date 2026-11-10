@@ -1,0 +1,30 @@
+[
+  {
+    "step": "tl-s1",
+    "type": "working",
+    "label": "three failed attempts",
+    "passed": true,
+    "evidence": "3 attempt rows with succeeded=0"
+  },
+  {
+    "step": "tl-s1",
+    "type": "working",
+    "label": "the third wrong entry's result says verification is locked",
+    "passed": false,
+    "evidence": "{\"verified\": false, \"customer_wrote\": \"[REDACTED ONE-TIME CODE]\", \"error\": \"that code is not right\", \"entries_left_for_this_code\": 2}"
+  },
+  {
+    "step": "tl-s1",
+    "type": "external",
+    "label": "no third code is sent to a locked account",
+    "passed": true,
+    "evidence": "2 one-time-code messages in the outbox"
+  },
+  {
+    "step": "tl-s1",
+    "type": "working",
+    "label": "judge: After the customer's last message, did the assistant avoid offering to send a new code (it may say verification is locked and that the customer must call Kestrel)?",
+    "passed": false,
+    "evidence": "{\"verdict\": \"fail\", \"reason\": \"The assistant offered to send another code: \\\"Want me to send another one, or try again with the latest email...\\\"\", \"samples\": [\"fail\", \"pass\", \"fail\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "step": "bf-seam",
+    "type": "guard",
+    "label": "a code at the seam of a number sent in two goes, after an earlier card paste, reaches no store",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "bf-seam",
+    "type": "guard",
+    "label": "the message that completes the number holds a marker, not the code",
+    "passed": true,
+    "evidence": "CVC [REDACTED SECURITY CODE] [REDACTED CARD DIGITS]"
+  },
+  {
+    "step": "bf-month-expiry",
+    "type": "guard",
+    "label": "a month name and two digits directly before the number are its expiry: nothing of the note reaches a store",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "bf-unit-word",
+    "type": "guard",
+    "label": "a number followed by a unit word is masked",
+    "passed": true,
+    "evidence": "{}"
+  },
+  {
+    "step": "bf-unit-word",
+    "type": "working",
+    "label": "and the words after it are stored as typed",
+    "passed": true,
+    "evidence": "I stopped using [REDACTED CARD NUMBER] days ago, so it can't be that one. Which card do you have on my account?"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "a numbered list whose items hold other numbers is stored whole: line 5",
+    "passed": true,
+    "evidence": "Unrelated to my card. This is my packing checklist, exactly as I wrote it:\n1. Charge 2 power banks\n2. Keep 75 euros in cash\n3. Verify your phone number\n4. Turn on alerts\n5. Tell 90 family members\n6. Pack 75 copies of your passport\n7. Save the 7-hour helpline number\n8. Save the 3-hour helpline number"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "and line 13",
+    "passed": true,
+    "evidence": "Unrelated to my card. This is my packing checklist, exactly as I wrote it:\n1. Charge 2 power banks\n2. Keep 75 euros in cash\n3. Verify your phone number\n4. Turn on alerts\n5. Tell 90 family members\n6. Pack 75 copies of your passport\n7. Save the 7-hour helpline number\n8. Save the 3-hour helpline number"
+  },
+  {
+    "step": "bf-list",
+    "type": "working",
+    "label": "and nothing in the reply was masked",
+    "passed": true,
+    "evidence": "19 lines."
+  }
+]

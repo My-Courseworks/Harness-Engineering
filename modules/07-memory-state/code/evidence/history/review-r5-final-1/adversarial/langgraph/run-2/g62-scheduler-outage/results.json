@@ -1,0 +1,65 @@
+[
+  {
+    "step": "so-set",
+    "type": "prospective",
+    "label": "the reminder exists",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Book my Lisbon airport transfer\"}}]"
+  },
+  {
+    "step": "so-outage-1",
+    "type": "prospective",
+    "label": "a fire during an outage is a retry, not a loss",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-64c66459\", \"user_id\": \"priya\", \"outcome\": \"retry\", \"error\": \"RuntimeError: InternalServerError: simulated provider outage (every model call returns HTTP 500)\"}]"
+  },
+  {
+    "step": "so-outage-3",
+    "type": "prospective",
+    "label": "three failed ticks in fifteen minutes do not end the reminder: it is still pending",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-20T09:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Book my Lisbon airport transfer\"}}]"
+  },
+  {
+    "step": "so-recovered",
+    "type": "prospective",
+    "label": "once the provider is back, the reminder fires",
+    "passed": true,
+    "evidence": "[{\"followup_id\": \"F-64c66459\", \"user_id\": \"priya\", \"outcome\": \"fired_done\", \"error\": null}]"
+  },
+  {
+    "step": "so-recovered",
+    "type": "external",
+    "label": "exactly one message reaches the customer",
+    "passed": true,
+    "evidence": "1 messages"
+  },
+  {
+    "step": "so-set-2",
+    "type": "prospective",
+    "label": "the reminder exists",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-25T09:00:00Z\", \"status\": \"pending\", \"resume\": {\"note\": \"Call FitPulse about the refund\"}}]"
+  },
+  {
+    "step": "so-long-outage-end",
+    "type": "prospective",
+    "label": "a two-day outage does end the reminder",
+    "passed": true,
+    "evidence": "[{\"trigger_at\": \"2026-11-25T09:00:00Z\", \"status\": \"failed\", \"resume\": {}}]"
+  },
+  {
+    "step": "so-long-outage-end",
+    "type": "external",
+    "label": "and the customer is told, by a message that carries none of the reminder's words",
+    "passed": true,
+    "evidence": "[\"Kestrel could not deliver a reminder you set that was due on 2026-11-25. Nothing on your account has changed. If you sti\"]"
+  },
+  {
+    "step": "so-long-outage-end",
+    "type": "guard",
+    "label": "the failure notice does not repeat the note",
+    "passed": true,
+    "evidence": "[\"Kestrel could not deliver a reminder you set that was due on 2026-11-25. Nothing on your account has changed. If you still need it, please set it up again in the card-care chat.\"]"
+  }
+]

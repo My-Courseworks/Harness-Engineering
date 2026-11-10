@@ -1,0 +1,93 @@
+[
+  {
+    "step": "ox-s1",
+    "type": "external",
+    "label": "otp: one code sent",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 679777. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "ox-s1",
+    "type": "external",
+    "label": "otp: one challenge open",
+    "passed": true,
+    "evidence": "challenges: [('open', '2026-11-13T10:00')]"
+  },
+  {
+    "step": "ox-s1",
+    "type": "semantic",
+    "label": "otp: no change yet",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "ox-s1-expired",
+    "type": "working",
+    "label": "otp: a code typed after five minutes does not change the channel",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "ox-s1-expired",
+    "type": "external",
+    "label": "otp: the expired challenge is not consumed",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-13T10:00')]"
+  },
+  {
+    "step": "ox-s1-expired",
+    "type": "external",
+    "label": "otp: and it is no longer open",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-13T10:00')]"
+  },
+  {
+    "step": "ox-s1-expired",
+    "type": "external",
+    "label": "otp: no new code is sent on its own",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 679777. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "ox-s1-expired",
+    "type": "guard",
+    "label": "otp: the code is in no tool result or reply",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  },
+  {
+    "step": "ox-s1-fresh",
+    "type": "external",
+    "label": "otp: a second code was sent on request, and only one",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 679777. It expires in 5 minutes. Kestrel will never ask you to share it.\", \"Your Kestrel verification code is 916415. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "ox-s1-fresh",
+    "type": "semantic",
+    "label": "otp: the fresh code, typed after a detour, changes the channel",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-13T10:12:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ox-s1-fresh",
+    "type": "external",
+    "label": "otp: exactly one challenge consumed",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-13T10:00'), ('consumed', '2026-11-13T10:08')]"
+  },
+  {
+    "step": "ox-s1-fresh",
+    "type": "external",
+    "label": "otp: nothing left open",
+    "passed": true,
+    "evidence": "challenges: [('expired', '2026-11-13T10:00'), ('consumed', '2026-11-13T10:08')]"
+  },
+  {
+    "step": "ox-s1-fresh",
+    "type": "guard",
+    "label": "otp: no code in a tool result or reply",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  }
+]

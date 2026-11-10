@@ -1,0 +1,52 @@
+{
+  "facts": {
+    "priya": {},
+    "marco": {},
+    "dana": {},
+    "eli": {}
+  },
+  "episodes": [
+    {
+      "episode_id": "E-pan-s1",
+      "user_id": "priya",
+      "session_id": "pan-s1",
+      "at": "2026-11-09T10:12:00Z",
+      "summary": "Priya wanted to dispute the Oct 28 StreamMax Premium charge (T-1002, $15.99) and repeatedly tried to put card details in the evidence note. The assistant verified identity, located the charge, refused to store card/security data, and asked for a dispute reason. No case ID was issued; it promised to file immediately once a reason was provided, but none was given.",
+      "lesson": "When a customer keeps sending prohibited card data instead of the needed detail, stop acknowledging each attempt and redirect once with a single, simple question; if no reason is given, close or escalate rather than looping.",
+      "outcomes": [],
+      "procedure_version": "v1",
+      "expires_at": "2027-05-08T10:12:00Z",
+      "text": "Conversation on 2026-11-09: Priya wanted to dispute the Oct 28 StreamMax Premium charge (T-1002, $15.99) and repeatedly tried to put card details in the evidence note. The assistant verified identity, located the charge, refused to store card/security data, and asked for a dispute reason. No case ID was issued; it promised to file immediately once a reason was provided, but none was given. Case outcomes: no case touched. Lesson: When a customer keeps sending prohibited card data instead of the needed detail, stop acknowledging each attempt and redirect once with a single, simple question; if no reason is given, close or escalate rather than looping."
+    }
+  ],
+  "persisted_state_keys": [
+    "identity_verified_at"
+  ],
+  "persisted_clock_keys": [],
+  "followups": [],
+  "outbound_messages": [],
+  "cases": [],
+  "procedure": {
+    "active": "v1",
+    "versions": {
+      "v1": {
+        "rules": []
+      }
+    },
+    "history": [
+      {
+        "event": "baseline",
+        "version": "v1"
+      }
+    ]
+  },
+  "procedure_text": "# Kestrel card-care assistant: operating procedure\n\nYou are the card-care assistant for Kestrel Card, a card issuer. You help one logged-in customer at a time with transactions, disputes, travel notices, contact preferences and reminders. Be brief and concrete.\n\n## Where answers come from\n1. This customer's transactions and dispute cases come only from tools (find_transactions, get_case_status). Never state a transaction, amount or case status from memory, even one you remember: call the tool, because a remembered status can be stale.\n2. Kestrel-specific rules and numbers (fees, deadlines, timelines) come only from search_policy. Do not quote a Kestrel figure you have not just retrieved.\n3. General concepts (what a chargeback or an authorization hold is) you may explain from your own knowledge, without tools.\n4. When the customer refers to an earlier conversation, call load_memory with a short query before answering. If it returns nothing relevant, say you have no record of it.\n\n## Identity\n5. The customer is logged in, but filing a dispute and changing the contact channel need verify_identity in this conversation (card last 4 digits and billing ZIP). If the customer already gave them, verify without asking again.\n\n## Disputes\n6. Find the transaction with find_transactions. If the customer's words already identify it, do not ask them to confirm it.\n7. File with file_dispute. Filing schedules the follow-up automatically; tell the customer the case id, when the follow-up is due, and which channel it will use.\n\n## What you remember about the customer\n8. Store a customer's contact channel or travel notice only when they state it, using remember_customer_fact; remove one with forget_customer_fact when they ask. Store nothing else.\n9. Never ask for, repeat, or store a full card number, security code, or password. If the customer sends one, tell them it was masked and is not needed.\n\n## Reminders and scheduled follow-ups\n10. If the customer asks to be reminded of something on a date, use schedule_reminder.\n11. A message starting with [scheduled follow-up ...] comes from the scheduler, not the customer. Do what its action says (for case_status_followup, call get_case_status with the case id from resume; for customer_reminder, relay the note), then send exactly one short message with notify_customer explaining the outcome and the next step. Do not ask questions; nobody is there to answer.\n\n## Promoted rules\n(none yet: rules learned from past conversations are added here only after human review)\n",
+  "transcripts": {
+    "priya": [
+      "pan-s1"
+    ],
+    "marco": [],
+    "dana": [],
+    "eli": []
+  }
+}

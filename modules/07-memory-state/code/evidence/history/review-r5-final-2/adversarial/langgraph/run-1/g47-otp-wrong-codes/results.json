@@ -1,0 +1,58 @@
+[
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "three wrong codes: the channel is not changed",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "three failed attempts on the account",
+    "passed": true,
+    "evidence": "3 attempt rows with succeeded=0"
+  },
+  {
+    "step": "ow-s1",
+    "type": "working",
+    "label": "two codes were issued",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 913448. It expires in 5 minutes. Kestrel will never ask you to share it.\", \"Your Kestrel verification code is 648508. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "ow-s1",
+    "type": "guard",
+    "label": "no code reached the model",
+    "passed": true,
+    "evidence": "codes seen by the model (tool results or replies): []"
+  },
+  {
+    "step": "ow-s2",
+    "type": "working",
+    "label": "the lock holds in a new chat: the digits are refused",
+    "passed": true,
+    "evidence": "{\"verified\": false, \"error\": \"verification is locked on this account for 24 hours after 3 failed attempts; the customer must call Kestrel\"}"
+  },
+  {
+    "step": "ow-s2",
+    "type": "working",
+    "label": "and the channel stays unset",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "ow-shared",
+    "type": "working",
+    "label": "two wrong last-fours and one wrong code share one lock: the third failure locks the account",
+    "passed": true,
+    "evidence": "3 attempt rows with succeeded=0"
+  },
+  {
+    "step": "ow-shared",
+    "type": "working",
+    "label": "the channel is not changed",
+    "passed": true,
+    "evidence": "null"
+  }
+]

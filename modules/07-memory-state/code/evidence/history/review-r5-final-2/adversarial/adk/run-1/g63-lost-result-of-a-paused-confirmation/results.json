@@ -1,0 +1,51 @@
+[
+  {
+    "step": "lp-pause",
+    "type": "working",
+    "label": "setup: the turn is paused on one open code",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "lp-pause",
+    "type": "working",
+    "label": "without an exception",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"lock_respected\": true, \"verified\": false, \"cases_total\": 0, \"distinct_case_ids\": 0, \"case_followups\": 0, \"evidence\": \"\", \"otp_messages\": 1, \"open_challenges\": 1}"
+  },
+  {
+    "step": "lp-entry",
+    "type": "working",
+    "label": "the process was killed after the customer's entry resumed the paused tool",
+    "passed": true,
+    "evidence": "exit code 137; stderr: [crash hook] attempt_code done; exiting before its result is recorded\n"
+  },
+  {
+    "step": "lp-entry",
+    "type": "working",
+    "label": "and after the code was consumed",
+    "passed": true,
+    "evidence": "challenges: [('consumed', '2026-11-24T10:00')]"
+  },
+  {
+    "step": "lp-resume",
+    "type": "working",
+    "label": "no second code is sent",
+    "passed": true,
+    "evidence": "[\"Your Kestrel verification code is 967018. It expires in 5 minutes. Kestrel will never ask you to share it.\"]"
+  },
+  {
+    "step": "lp-resume",
+    "type": "semantic",
+    "label": "the change asked for before the code is made from the bank's record of the proof",
+    "passed": true,
+    "evidence": "{\"value\": \"sms\", \"as_of\": \"2026-11-24T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "lp-resume",
+    "type": "guard",
+    "label": "the code typed before the crash is not left in the transcript",
+    "passed": true,
+    "evidence": "store files holding a sent code: []"
+  }
+]

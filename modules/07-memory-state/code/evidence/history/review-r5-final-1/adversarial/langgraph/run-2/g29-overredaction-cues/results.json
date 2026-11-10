@@ -1,0 +1,44 @@
+[
+  {
+    "step": "oc-eli",
+    "type": "working",
+    "label": "'For verification: my last four are 6610' verifies",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "oc-eli",
+    "type": "external",
+    "label": "and the dispute is filed in the same turn",
+    "passed": true,
+    "evidence": "[{\"transaction_id\": \"T-4002\", \"reason\": \"cancelled_subscription\", \"evidence_note\": \"Customer says they cancelled the CloudNest subscription before the November 1 charge of $9.99.\"}]"
+  },
+  {
+    "step": "oc-eli",
+    "type": "guard",
+    "label": "the last four reaches the model as typed",
+    "passed": true,
+    "evidence": "For verification: my last four are 6610 and my zip is 73301. CloudNest charged me $9.99 on November 1 after I cancelled; I want my money back, please dispute it."
+  },
+  {
+    "step": "oc-dana",
+    "type": "working",
+    "label": "'Security check: card ending 5127' verifies",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  },
+  {
+    "step": "oc-dana",
+    "type": "external",
+    "label": "the cancellation code reaches the case",
+    "passed": true,
+    "evidence": "[[\"C-5002\", \"Cancelled subscription on 10/26; merchant gave cancellation code 7781.\"]]"
+  },
+  {
+    "step": "oc-priya",
+    "type": "working",
+    "label": "'front' and 'back' near a last four and a ZIP do not mask them",
+    "passed": true,
+    "evidence": "{\"verified\": true, \"valid_for_minutes\": 15}"
+  }
+]

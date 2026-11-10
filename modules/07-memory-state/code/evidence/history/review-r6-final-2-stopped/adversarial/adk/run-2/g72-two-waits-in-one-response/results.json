@@ -1,0 +1,30 @@
+[
+  {
+    "step": "tw-batch",
+    "type": "working",
+    "label": "the response sends one code",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": true, \\\"valid_for_minutes\\\": 15}\", \"send_verification_code -> {\\\"sent\\\": true, \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u00b70133\\\", \\\"expires_in_minutes\\\": 5, \\\"resent\\\": false}\","
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "no turn of the conversation fails after two waits were opened at once",
+    "passed": true,
+    "evidence": "\"no errors\""
+  },
+  {
+    "step": "tw-entry",
+    "type": "semantic",
+    "label": "the code is accepted and the channel changed",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "the conversation still answers: the third turn has a reply",
+    "passed": true,
+    "evidence": "You can dispute a posted transaction within 75 days of its posting date. After that, it can't be opened through the assistant - it has to go in as a written claim."
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "step": "ro-set",
+    "type": "semantic",
+    "label": "setup: the channel is email",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-18T14:02:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "ro-ask",
+    "type": "external",
+    "label": "setup: a second code is sent for the removal",
+    "passed": true,
+    "evidence": "2 one-time-code messages in the outbox"
+  },
+  {
+    "step": "ro-new-code",
+    "type": "external",
+    "label": "asked for a new code after the old one ran out, the bank sends one",
+    "passed": true,
+    "evidence": "3 one-time-code messages in the outbox"
+  },
+  {
+    "step": "ro-new-code",
+    "type": "semantic",
+    "label": "and the new code, typed, removes the channel",
+    "passed": true,
+    "evidence": "null"
+  },
+  {
+    "step": "ro-new-code",
+    "type": "working",
+    "label": "with no failed attempt",
+    "passed": true,
+    "evidence": "0 attempt rows with succeeded=0"
+  },
+  {
+    "step": "ro-new-code",
+    "type": "working",
+    "label": "judge: In its reply to the customer's first message of this step, the assistant may say a new code was sent only if a send_verification_code call in that same turn returned \"sent\": true. Did it avoid claiming a send that no such call made? (Pass if it sent one and said so, or sent none and did not say it had.)",
+    "passed": true,
+    "evidence": "{\"verdict\": \"pass\", \"reason\": \"The assistant said \\\"A one-time code has been sent by text message to \\u00b7\\u00b7\\u00b70100\\\" after a send_verification_code call in that same turn returned \\\"sent\\\": true.\", \"samples\": [\"pass\", \"pass\", \"pass\"], \"model\": \"deepseek-v4-pro\"}"
+  }
+]

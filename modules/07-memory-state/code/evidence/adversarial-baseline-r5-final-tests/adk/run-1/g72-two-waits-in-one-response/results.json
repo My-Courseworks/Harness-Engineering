@@ -1,0 +1,30 @@
+[
+  {
+    "step": "tw-batch",
+    "type": "working",
+    "label": "the response sends one code",
+    "passed": true,
+    "evidence": "{\"error\": null, \"attempts_in_batch\": 1, \"failed_attempts\": 0, \"tool_results\": [\"verify_identity -> {\\\"verified\\\": true, \\\"valid_for_minutes\\\": 15}\", \"send_verification_code -> {\\\"sent\\\": true, \\\"sent_to\\\": \\\"text message to \\\\u00b7\\\\u00b7\\\\u00b70133\\\", \\\"expires_in_minutes\\\": 5, \\\"resent\\\": false}\","
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "no turn of the conversation fails after two waits were opened at once",
+    "passed": false,
+    "evidence": "[\"BadRequestError: litellm.BadRequestError: DeepseekException - {\\\"error\\\":{\\\"message\\\":\\\"The `reasoning_content` in the thinking mode must be passed back to the API. (request_id: 105867dd-7a39-4e5c-bec8-e0a63be802e2)\\\",\\\"type\\\":\\\"invalid_request_error\\\",\\\"param\\\":null,\\\"code\\\":\\\"invalid_request_err"
+  },
+  {
+    "step": "tw-entry",
+    "type": "semantic",
+    "label": "the code is accepted and the channel changed",
+    "passed": true,
+    "evidence": "{\"value\": \"email\", \"as_of\": \"2026-11-12T10:04:00Z\", \"expires_at\": null}"
+  },
+  {
+    "step": "tw-entry",
+    "type": "working",
+    "label": "the conversation still answers: the third turn has a reply",
+    "passed": true,
+    "evidence": "**75 days from the transaction's posting date.** After that, the case can't be opened through the assistant and has to go in as a written claim.\n\nFor reference, once a dispute is filed it goes to Kestrel's disputes team, who forward it to the merchant - currently reviewed in about 10 days."
+  }
+]
