@@ -5,6 +5,7 @@
 import asyncio
 
 import questionary
+from prompt_toolkit.history import InMemoryHistory
 
 from google.adk.sessions import DatabaseSessionService
 
@@ -17,20 +18,20 @@ from rich.console import Console
 
 
 from agents.orchestrator import create_orchestrator_agent
-from chat.masking import (
-    MASKED_ROLE_INSTRUCTION,
-    build_mask_callback, build_unit_cleaner,
-    collect_internal_names, compile_name_patterns
-)
+
+from chat.masking.masking_policy import apply_masking, MASKED_ROLE_INSTRUCTION
+from chat.masking.utils import CleanUnit
+
 from chat.render_chat import View
 from chat.replay import replay_session
 from chat.runtime import build_runtime
 from chat.sessions import get_session_service, choose_session
 from chat.turn import get_async_agent_response
 from chat.users import choose_user
+
 from commons.config import load_config
-from commons.create_model import create_model
 from commons.db import require_current_schema
+
 from models import User
 
 
@@ -54,22 +55,11 @@ async def main():
 
     root_agent = create_orchestrator_agent()
 
-    # Masking: non-admins must never see internal agent or tool names.
-    # The role is resolved exactly once, here; everything downstream receives
-    # functions and never asks who the user is. Three layers, same patterns:
-    #   - a runner-wide instruction, so the model rarely narrates internals;
-    #   - clean_unit on the View: the live stream prints a unit only after it
-    #     has been checked, rewritten if needed, or withheld;
-    #   - a callback on the root agent that persists the same clean text for replay.
-    # TODO: change the role check to an Enum once this starts working
-    clean_unit = None
-    global_instruction = None
-    if config.features.masking and user.role != "admin":
-        patterns = compile_name_patterns(await collect_internal_names(root_agent))
-        clean_unit = build_unit_cleaner(patterns, create_model())
-        root_agent.after_model_callback = build_mask_callback(patterns, clean_unit)
-        if config.features.masked_role_instruction:
-            global_instruction = MASKED_ROLE_INSTRUCTION
+    clean_unit: CleanUnit = await apply_masking(root_agent=root_agent, user_role=user.role, is_masking_enabled=config.features.masking)
+
+    global_instruction = None    
+    if config.features.masking and config.features.masked_role_instruction and user.role != "admin":
+        global_instruction = MASKED_ROLE_INSTRUCTION
 
     chat_runtime = build_runtime(root_agent=root_agent, session_service=session_service,
                                  global_instruction=global_instruction)

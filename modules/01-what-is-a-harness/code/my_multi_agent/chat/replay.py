@@ -5,7 +5,7 @@ from rich.console import Console
 
 from google.adk.sessions import DatabaseSessionService
 
-from chat.masking import DISPLAY_TEXT_KEY
+from chat.masking.masking_policy import DISPLAY_TEXT_KEY
 from chat.render_chat import (
     View,
     print_user, 

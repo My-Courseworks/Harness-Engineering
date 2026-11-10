@@ -9,7 +9,7 @@ from google.genai import types
 
 from rich.console import Console
 
-from chat.masking import DISPLAY_TEXT_KEY
+from chat.masking.masking_policy import DISPLAY_TEXT_KEY
 from chat.render_chat import (
     AnswerStream, View,
     open_answer, append_answer, close_answer,

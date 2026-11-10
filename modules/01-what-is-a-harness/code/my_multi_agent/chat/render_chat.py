@@ -12,7 +12,9 @@ from rich.live import Live
 from rich.markdown import Markdown
 from rich.text import Text
 
-from chat.masking import CleanUnit, NOTHING_TO_SHOW, split_units
+from chat.masking.utils import CleanUnit
+from chat.masking.units import NOTHING_TO_SHOW, split_units
+
 from commons.config import Styles, Display, Labels
 
 
