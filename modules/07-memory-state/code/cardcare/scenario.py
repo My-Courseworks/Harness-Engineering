@@ -500,6 +500,45 @@ def evaluate(spec: dict, result: dict, snapshot: dict) -> tuple[bool, str]:
         bodies = [m["body"] for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"]]
         hits = [b for b in bodies if _mentions(b, spec["none_of"])]
         return bool(bodies) and not hits, json.dumps(hits or bodies)[:300]
+    if kind == "transcript_listed":
+        transcripts = snapshot["transcripts"].get(spec["user"], [])
+        return (spec["session"] in transcripts) == spec.get("listed", True), f"transcripts of {spec['user']}: {transcripts}"
+    if kind == "tick_reports":
+        # the shipped tick's own printed output names what it erased and deleted (round-5 review: it printed empty lists
+        # while deleting a transcript)
+        printed = result.get("tick")
+        named = {"erased_customers": set(), "deleted_transcripts": set()}
+
+        def collect(value):
+            if isinstance(value, dict):
+                for key, inner in value.items():
+                    if key in named and isinstance(inner, list):
+                        named[key] |= {str(item) for item in inner}
+                    collect(inner)
+            elif isinstance(value, list):
+                for inner in value:
+                    collect(inner)
+
+        collect(printed)
+        wanted = [("erased_customers", spec["erased_customer"])] if spec.get("erased_customer") else []
+        wanted += [("deleted_transcripts", spec["deleted_transcript"])] if spec.get("deleted_transcript") else []
+        present = all(value in named[key] for key, value in wanted)
+        absent = all(value not in named[key] for key, value in wanted)
+        evidence = json.dumps({key: sorted(values) for key, values in named.items()}) if printed is not None else "the tick printed no JSON"
+        return printed is not None and (absent if spec.get("absent") else present), evidence
+    if kind == "reply_shows_no_code_difference":
+        # the list-echo oracle: of the PL-NNNNNN references the customer pasted, the reply must not show one differently
+        # from the others (the marker in place of its digits is a yes/no answer to "is this the code")
+        replies = [t.get("reply") or "" for t in _turns(result, spec.get("turn"))]
+        items = [item for reply in replies for item in re.findall(r"PL-(\[[^\]]*\]|\d{6})", reply)]
+        marked = sum(not item.isdigit() for item in items)
+        return marked in (0, len(items)), f"{len(items)} references in the reply, {marked} shown as a marker"
+    if kind == "codes_sent_count":
+        sent = [m for m in snapshot["outbound_messages"] if m["user_id"] == spec["user"] and m.get("purpose") == "one_time_code"]
+        return len(sent) == spec["count"], f"{len(sent)} one-time-code messages in the outbox"
+    if kind == "meta_has_code_hash":
+        meta = result.get("run_meta") or {}
+        return bool(re.fullmatch(r"[0-9a-f]{64}", meta.get("code_sha256", ""))) and bool(meta.get("recorded_at")), json.dumps(meta)
     if kind == "transcripts_count":
         transcripts = snapshot["transcripts"].get(spec["user"], [])
         return len(transcripts) == spec["count"], f"{len(transcripts)} transcripts: {transcripts}"

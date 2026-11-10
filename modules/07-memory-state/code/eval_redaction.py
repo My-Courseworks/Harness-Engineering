@@ -428,6 +428,43 @@ def fuzz_v2(seed: int = 11, per_family: int = 150) -> list[dict]:
                                    (code4, f"the security code is {code4}, zip {zip_code}"), (code3, f"it's {code3}, zip {zip_code}")])
         cases.append({"messages": ["my card is [REDACTED CARD NUMBER]", answer], "expect": "mask", "note": "a code with a zip after a card message",
                       "pans": [], "codes": [code], "expiries": []})
+    # ---- round 6, the round-5 review's 2.4: one family per token role that can take a group out of a card number (appended)
+    def number(pan: str) -> str:
+        return rng.choice([" ", "-"]).join(_groups(pan, rng) if len(pan) != 16 else [pan[i:i + 4] for i in range(0, 16, 4)])
+
+    for _ in range(per_family):  # the date role: a month name with a day or a year, or a day and a month, before the number
+        pan = _random_pan(rng)
+        month, day, year = rng.choice(_MONTHS), rng.randint(1, 28), rng.randint(26, 33)
+        lead = rng.choice([f"exp {month[:3]} {year}", f"valid thru {month[:3]} {year} -", f"charged {month} {day}:", f"it was refused {month[:3]} {day} -",
+                           f"on {day} {month[:3]}", f"charged {day} {month}:"])
+        cases.append({"messages": [f"{lead} {number(pan)}"], "expect": "mask", "note": "role date: a date before the number", "pans": [pan],
+                      "codes": [], "expiries": []})
+    for _ in range(per_family):  # the identifier role: a network name or a word joined by a hyphen, or glued on
+        pan = _random_pan(rng)
+        name = rng.choice(["Visa", "MC", "Mastercard", "Amex", "debit", "card", "Card", "CC"])
+        cases.append({"messages": [f"{rng.choice(['My ', '', 'the '])}{name}{rng.choice(['-', ''])}{number(pan)}{rng.choice([' keeps getting declined', '', ' is the one'])}"],
+                      "expect": "mask", "note": "role identifier: a name joined or glued to the number", "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # the amount role: a unit word after the last group, or a currency sign before the first
+        pan = _random_pan(rng)
+        text = rng.choice([f"I used {number(pan)} {rng.choice(['days', 'months', 'day'])} ago", f"${number(pan)} is what I typed in the box",
+                           f"the card {number(pan)} {rng.choice(['dollars', 'euros', 'USD'])} was the field I filled wrong"])
+        cases.append({"messages": [text], "expect": "mask", "note": "role amount: a unit word or a currency sign around the number", "pans": [pan],
+                      "codes": [], "expiries": []})
+    for _ in range(per_family):  # the phone role: a thirteen-digit number in fours after "call" or "phone"
+        pan = _luhn_complete("4" + "".join(rng.choice("0123456789") for _ in range(11)))
+        grouped = f"{pan[:4]} {pan[4:8]} {pan[8:12]} {pan[12:]}"
+        cases.append({"messages": [f"{rng.choice(['call me about', 'on the phone I read out', 'phone support has'])} {grouped}"], "expect": "mask",
+                      "note": "role phone: a thirteen-digit number after a phone cue", "pans": [pan], "codes": [], "expiries": []})
+    for _ in range(per_family):  # keep: the same roles doing their ordinary job
+        text = rng.choice([f"charged {rng.choice(_MONTHS)[:3]} {rng.randint(1, 28)} 2026 for the renewal, {rng.randint(5, 90)}.{rng.randint(10, 99)}",
+                           f"on {rng.randint(1, 28)} {rng.choice(_MONTHS)[:3]} 2027 I fly to Lisbon",
+                           f"case C-{rng.randint(5001, 5099)} and reference CN-{rng.randint(10000, 99999)}",
+                           f"Visa-ending {rng.randint(1000, 9999)}, ZIP {rng.randint(10000, 99999)}",
+                           f"I paid {rng.randint(10, 900)} dollars {rng.randint(2, 40)} days ago",
+                           f"call me on +1 {rng.randint(200, 999)} {rng.randint(200, 999)} {rng.randint(1000, 9999)} after {rng.randint(1, 12)} pm",
+                           f"MC-{rng.randint(1000, 9999)} is my membership number at the gym"])
+        cases.append({"messages": [text], "expect": "keep", "note": "the roles at their ordinary job: dates, identifiers, amounts, phones", "pans": [], "codes": [],
+                      "expiries": []})
     return cases
 
 

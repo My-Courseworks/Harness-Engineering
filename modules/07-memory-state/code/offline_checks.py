@@ -29,12 +29,18 @@ What is covered, in the review's numbering:
 - fp3  (found by the tuning pass before the second final pass) the turn the harness returns carries no one-time code even
        when the model repeated one the customer typed. Fails on `1a31895` (evidence/adversarial-before-reply-echo/);
 - fp4  (found by the second declared-final pass) the status of a decided case says what can still be done with it.
-       Fails on `5140524` (evidence/adversarial-before-case-next-step/).
+       Fails on `5140524` (evidence/adversarial-before-case-next-step/);
+- r5   the round-5 review: the code entry as one definition applied at the door (2.1, 2.2, nb 5), the cap and the lock
+       message (nb 4, nb 6), the masker when a date, a name or a unit word takes a group out of a number (2.4), splits with
+       a token at the seam and labels (nb 11, nb 15), a numbered list in a reply (nb 1), the marker's own words (nb 12),
+       what the masker removed as a record (nb 8), numbers in the scanner (nb 3), the wait as the reflection reads it
+       (nb 7), a second reminder (nb 14). These fail on `3644feb` (evidence/adversarial-baseline-r5/offline-checks-before.md).
 """
 
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -234,6 +240,182 @@ def check_decided_case_says_what_can_be_done(tmp: Path) -> list[tuple[str, bool,
             ("fp4 an open case's status makes no such statement", "next_step" not in open_view, json.dumps(open_view))]
 
 
+# ----------------------------------------------------------------------------------------------- the round-5 review
+def _row(label: str, property_holds) -> tuple[str, bool, str]:
+    """One check row from a thunk returning (passed, evidence). On older code the thunk may meet a function that does not
+    exist yet: that is this row failing, not the whole group."""
+    try:
+        passed, evidence = property_holds()
+        return label, bool(passed), evidence
+    except Exception as exc:
+        return label, False, f"{type(exc).__name__}: {exc}".replace(str(CODE_DIR), ".")
+
+
+# its own lines (2.4, nb 11, nb 15), which the masker of `3644feb` stores with the number raw
+R5_CARD_LEAKS = [
+    ["For the CloudNest dispute, here is the card it was on: exp Dec 29 5555 5555 5555 4444."],
+    ["My Visa-4111 1111 1111 1111 keeps getting declined at CloudNest."],
+    ["Card5555 5555 5555 4444"],
+    ["Visa4111-1111-1111-1111"],
+    ["on 1 Feb 3530 1113 3330 0000"],
+    ["charged December 14: 4000-0566-5566-5556"],
+    ["valid thru Oct 27 - 3530-1113-3330-0000"],
+    ["I used 5555 5555 5555 4444 days ago and it worked"],
+    ["my card is 5555 5555 5555", "CVV 737 4444"],
+    ["5555 5555 5555 737", "4444"],
+    ["order 12345, 5555 5555", "5555 4444"],
+    ["ticket 1042, 4111 1111 1111 1111 is the card"],
+    ["Booking 2291: 4242 4242 4242 4242"],
+    ["receipt 4821 3782 822463 10005"],
+]
+R5_CARD_KEEPS = [
+    ["charged Dec 29 2026 for the renewal, 15.99"],
+    ["on 1 Feb 2027 I fly to Lisbon"],
+    ["case C-5001 and reference CN-77812, order QX3-48213"],
+    ["Visa-ending 4427, ZIP 94107"],
+    ["I paid 240 dollars 14 days ago"],
+    ["tracking 9400 1234 5678 9012 3456 78"],
+]
+
+
+def check_r5_masker() -> list[tuple[str, bool, str]]:
+    secrets = {"pans": ["5555555555554444", "4111111111111111", "3530111333300000", "4000056655665556", "4242424242424242", "378282246310005"],
+               "codes": ["737"], "expiries": ["12/29", "10/27"]}
+    rows = []
+    for messages in R5_CARD_LEAKS:
+        stored = masking.mask_conversation(messages)
+        left = store_audit.secrets_left("\n".join(stored), secrets)
+        rows.append((f"r5 2.4/nb11/nb15 masked: {messages!r}", not left, json.dumps({"stored": stored, "left": left})))
+    for messages in R5_CARD_KEEPS:
+        stored = masking.mask_conversation(messages)
+        rows.append((f"r5 kept: {messages!r}", stored == [masking.normalize(m) for m in messages], json.dumps(stored)))
+    # nb 1: the reply path. A numbered list's own numerals (2 3 4 ... 13 = 2345678910111213, sixteen digits, Luhn-valid)
+    listed = "\n".join(f"{n}. item {n}" for n in range(1, 31))
+    rows.append(("r5 nb1 a thirty-line numbered list in a reply comes back whole", masking.mask_card_numbers(listed) == listed,
+                 masking.mask_card_numbers(listed)[:160]))
+    # nb 12: the words inside a marker are not digits, and a lone number word does not complete a number from an earlier message
+    earlier = "here are some numbers 5555 5555 5555 00"  # with "1" (ONE) and "2" (two) after it: sixteen digits that pass Luhn
+    later = "show it as a [REDACTED ONE-TIME CODE] marker instead of digits. Do not call any tool. Reply with only two things."
+    stored = masking.mask_conversation([earlier, later])
+    rows.append(("r5 nb12 a sentence that names the marker is stored as typed", stored[-1] == masking.normalize(later), json.dumps(stored)))
+    inside = [tok["text"] for tok in masking._tokens(masking.normalize(later)) if tok["digits"] is not None and tok["text"].upper() == "ONE"]
+    rows.append(("r5 nb12 the word ONE inside [REDACTED ONE-TIME CODE] is not a digit to the masker", not inside, json.dumps(inside)))
+    # nb 8: what the masker removed from a message, said from the record
+    def note_for(typed: str) -> str:
+        return masking.removed_summary(typed, masking.mask_conversation([typed])[0])
+
+    rows.append(_row("r5 nb8 the note for a message the masker left alone says nothing was removed",
+                     lambda: ("nothing" in note_for("order 1234 5555 5555 5555 4444").lower(), note_for("order 1234 5555 5555 5555 4444"))))
+    rows.append(_row("r5 nb8 the note for a masked message names what was removed",
+                     lambda: ("card number" in note_for("card 5555 5555 5555 4444 exp 12/29").lower()
+                              and "expiry" in note_for("card 5555 5555 5555 4444 exp 12/29").lower(), note_for("card 5555 5555 5555 4444 exp 12/29"))))
+    return rows
+
+
+def check_r5_code_door(tmp: Path) -> list[tuple[str, bool, str]]:
+    """2.1, 2.2, nb 5: one definition of a typed code, applied at the door. Nothing the customer can read distinguishes the
+    real code from another six-digit number, and only a single entry in the conversation that asked for it is compared."""
+    bank = tmp / "bank_door.db"
+    world.seed_bank(bank)
+    world.issue_code(bank, "dana", "s", NOW, MAX_VERIFICATION_ATTEMPTS)
+    code = re.search(r"\b(\d{6})\b", world.outbound_messages(bank)[-1]["body"]).group(1)
+    wrong = "".join(str((int(d) + 1) % 10) for d in code)
+    failures = lambda: world.failed_verifications(bank, "dana", NOW)
+    open_codes = lambda: sum(c["user_id"] == "dana" and c["status"] == "open" for c in world.list_challenges(bank))
+    door = lambda session, text: world.take_code_entry(bank, "dana", session, text, NOW, MAX_VERIFICATION_ATTEMPTS)
+    numbers = [f"{(int(code) * 7919 + i * 104729) % 10 ** 6:06d}" for i in range(1, 300)]
+    pasted = "\n".join(f"PL-{n}" for n in numbers[:150] + [code] + numbers[150:])
+    chatter = "It hasn't arrived. Is it going to the number ending 0100? I'm in 94"
+
+    def pasted_elsewhere():
+        taken = door("notes", pasted)
+        shown = set(re.findall(r"PL-(\S+)", taken["text"]))
+        return len(shown) == 1 and code not in taken["text"] and failures() == 0 and open_codes() == 1, json.dumps(
+            {"distinct renderings of the 300 references": len(shown), "failures": failures(), "open codes": open_codes()})
+
+    def pasted_in_the_waiting_chat():
+        taken = door("s", pasted)
+        return (taken["entry"] or {}).get("outcome") == "several_numbers" and failures() == 0 and open_codes() == 1, json.dumps(taken["entry"])
+
+    def not_an_entry():
+        taken = door("s", chatter)
+        return taken["text"] == chatter and (taken["entry"] or {}).get("outcome") == "no_code_entered" and failures() == 0, json.dumps(taken)
+
+    def one_wrong_entry():
+        taken = door("s", f"{wrong[:3]} {wrong[3:]}")
+        return failures() == 1 and wrong[:3] not in taken["text"], json.dumps(taken)
+
+    def as_the_phone_shows_it():
+        taken = door("s", f"ok it says {code[:3]}-{code[3:]}")
+        return (taken["entry"] or {}).get("outcome") == "matched" and not re.search(r"\d", taken["text"]), json.dumps(taken)
+
+    def typed_again_when_dead():
+        taken = door("s", f"here it is once more: {code}")
+        return code not in taken["text"], taken["text"]
+
+    def no_code_open():
+        taken = world.take_code_entry(bank, "marco", "m", "my order number is 482913", NOW, MAX_VERIFICATION_ATTEMPTS)
+        return taken["text"] == "my order number is 482913" and taken["entry"] is None, json.dumps(taken)
+
+    rows = [_row("r5 2.1 300 references pasted in another chat all read the same afterwards; no attempt is counted; the code stays open", pasted_elsewhere),
+            _row("r5 2.1 many numbers in the chat that waits: nothing is compared, nothing counted", pasted_in_the_waiting_chat),
+            _row("r5 nb5 a message whose digits total six is not a guess", not_an_entry),
+            _row("r5 a single wrong entry is one failed attempt, and its digits are not kept", one_wrong_entry),
+            _row("r5 2.2 the code typed as a phone shows it ('ok it says NNN-NNN') is accepted and nothing of it is kept", as_the_phone_shows_it),
+            _row("r5 a code typed again after it was used is removed too (the customer's own dead code)", typed_again_when_dead),
+            _row("r5 with no code open, six digits are just six digits", no_code_open)]
+    for form in ("123456", "123 456", "123-456", "123.456", "12 34 56", "1 2 3 4 5 6", "one two three four five six"):
+        rows.append(_row(f"r5 2.2 the entry grammar reads {form!r} as one code",
+                         lambda form=form: ([d for _, _, d in world.code_spans(f"ok it says {form} now")] == ["123456"], json.dumps(world.code_spans(f"ok it says {form} now")))))
+    for text in ("ending 0100? I'm in 94", "card 5555 5555 5555 4444", "call +1 415 555 0100", "it was 1,234,567"):
+        rows.append(_row(f"r5 nb5 the entry grammar finds no code in {text!r}", lambda text=text: (world.code_spans(text) == [], json.dumps(world.code_spans(text)))))
+    return rows
+
+
+def check_r5_code_limits(tmp: Path) -> list[tuple[str, bool, str]]:
+    """nb 4 and nb 6: the third wrong entry says the account is locked; at most MAX_CODES_PER_DAY codes per account per day."""
+    from cardcare import memory_policy
+    from cardcare.clock import add_minutes
+    bank = tmp / "bank_limits.db"
+    world.seed_bank(bank)
+    cap = getattr(memory_policy, "MAX_CODES_PER_DAY", 5)  # the contract's number, also where the constant does not exist yet
+    sent = [world.issue_code(bank, "eli", "s", add_minutes(NOW, 2 * i), MAX_VERIFICATION_ATTEMPTS) for i in range(cap + 1)]
+    messages = sum(m["user_id"] == "eli" and m.get("purpose") == "one_time_code" for m in world.outbound_messages(bank))
+    rows = [("r5 nb6 the sixth code in a day is refused and no message is sent", messages == cap and "24 hours" in str(sent[-1].get("error")),
+             json.dumps({"code messages": messages, "sixth send": sent[-1]})),
+            ("r5 nb6 a refused send is not a failed attempt", world.failed_verifications(bank, "eli", add_minutes(NOW, 20)) == 0, "")]
+    world.issue_code(bank, "priya", "p", NOW, MAX_VERIFICATION_ATTEMPTS)
+    results = [world.attempt_code(bank, "priya", "000001", NOW, MAX_VERIFICATION_ATTEMPTS, session_id="p") for _ in range(3)]
+    rows.append(("r5 nb4 the third wrong entry says the account is now locked", results[-1].get("account_locked") is True
+                 and not results[0].get("account_locked"), json.dumps(results[-1])))
+    return rows
+
+
+def check_r5_small(tmp: Path) -> list[tuple[str, bool, str]]:
+    """nb 3 (the scanner reads numbers), nb 7 (the wait as the reflection reads it), nb 14 (a second reminder names the first)."""
+    import sqlite3
+
+    import ormsgpack
+    from cardcare import desk, episodes
+    path = tmp / "lg_numbers.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute("CREATE TABLE writes (channel TEXT, value BLOB)")
+        conn.execute("INSERT INTO writes VALUES ('messages', ?)", (ormsgpack.packb({"name": "confirm_verification_code", "args": {"entered": 517391}, "id": "call_1"}),))
+    waiting = [{"role": "customer", "text": "Change my contact channel to email."},
+               {"role": "tool", "text": "called confirm_verification_code({})"},
+               {"role": "tool", "text": 'confirm_verification_code -> {"error": "This tool call requires confirmation, please approve or reject."}'}]
+    sched = tmp / "sched_names.db"
+    scheduler.create_scheduler(sched)
+    first = desk.schedule_customer_reminder(sched, "eli", "call FitPulse", "2026-11-25", "09:00", "America/Chicago", NOW)
+    second = desk.schedule_customer_reminder(sched, "eli", "call CloudNest", "2026-11-25", "18:00", "America/Chicago", NOW)
+    rendered = episodes.format_transcript(waiting)
+    return [("r5 nb3 the scanner reads a number stored as a number (a code passed as a msgpack integer)", "517391" in store_audit.store_text(path).split("\n"), ""),
+            ("r5 nb7 the reflection reads the wait for the code as a wait, not as an error", "requires confirmation" not in rendered
+             and "waiting for the customer" in rendered, rendered[-200:]),
+            ("r5 nb14 a second reminder for the same local day is refused and the refusal names the existing one",
+             "error" in second and first.get("followup_id", "?") in json.dumps(second) and "09:00" in json.dumps(second), json.dumps(second))]
+
+
 def check_reasoning_last4() -> list[tuple[str, bool, str]]:
     # the review's case sat in the reasoning of a turn whose message carried card data, so the code rule was armed
     text = "The customer gave card last4 8830 and ZIP 10011; the card number in their message was masked. I will verify."
@@ -431,9 +613,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp_name:
         tmp = Path(tmp_name)
         without_files = (check_masker_leaks, check_reasoning_last4, check_reply_two_numbers, check_empty_reflection, check_claim_pairing,
-                         check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code)
+                         check_code_said_twice, check_sweep_shapes, check_reply_that_repeats_a_code, check_r5_masker)
         with_files = (check_stale_tab, check_lock_applies_to_actions, check_scheduler_backoff, check_retract_two_names,
-                      check_repeats_after_lost_result, check_scanner_reads_msgpack_stores, check_decided_case_says_what_can_be_done)
+                      check_repeats_after_lost_result, check_scanner_reads_msgpack_stores, check_decided_case_says_what_can_be_done,
+                      check_r5_code_door, check_r5_code_limits, check_r5_small)
         for fn in (*without_files, *with_files):
             try:
                 rows += fn(tmp) if fn in with_files else fn()

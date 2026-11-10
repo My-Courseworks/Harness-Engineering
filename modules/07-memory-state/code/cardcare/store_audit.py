@@ -80,6 +80,8 @@ def _blob_strings(blob: bytes) -> list[str]:
     def strings(value) -> list[str]:
         if isinstance(value, str):
             return [value]
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return [str(value)]  # a code or a card number a model passed as a number is stored as one (round-5 review, nb 3)
         if isinstance(value, (bytes, bytearray)):
             return _blob_strings(bytes(value)) if value else []
         if isinstance(value, dict):
@@ -225,6 +227,11 @@ def expiry_present(text: str, expiry: str) -> bool:
             if re.search(pattern, view_text, re.IGNORECASE):
                 return True
     return False
+
+
+def spoken_to_digits(text: str) -> str:
+    """The text with every spoken number replaced by its digits: the view in which a secret typed in words is found."""
+    return _spoken_to_digits(text)
 
 
 def _spoken_to_digits(text: str) -> str:
