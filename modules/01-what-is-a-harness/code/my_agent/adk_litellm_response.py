@@ -31,10 +31,13 @@ async def run_sample_llm_request(llm: LiteLlm):
 
 def main():
 
-    deepseek_llm = LiteLlm(model="deepseek/deepseek-v4-flash", api_key=os.getenv('DEEPSEEK_API_KEY'))
+    # deepseek_llm = LiteLlm(model="deepseek/deepseek-v4-flash", api_key=os.getenv('DEEPSEEK_API_KEY'))
     # print(deepseek_llm.supported_models())
+    # asyncio.run(run_sample_llm_request(deepseek_llm))
 
-    asyncio.run(run_sample_llm_request(deepseek_llm))
+    gpt_6_luna_llm = LiteLlm(model="openai/gpt-6-luna", api_key=os.getenv('OPENAI_API_KEY'))
+    print(gpt_6_luna_llm.supported_models())
+    asyncio.run(run_sample_llm_request(gpt_6_luna_llm))
 
     
 
