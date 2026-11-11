@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import urllib.request
+import warnings
 from datetime import datetime, timezone
 from typing import Callable, Sequence
 
@@ -29,6 +30,18 @@ load_dotenv(ENV_FILE)
 # Without this LiteLLM prints a "Provider List" notice to the terminal for every
 # model name it cannot place while we look up what a model can do.
 litellm.suppress_debug_info = True
+
+# A LiteLLM defect, still present in 1.109.0. For OpenAI models it routes through the
+# Responses API (gpt-5.4 and later with tools), its own logging stores chat-format usage
+# in a field typed ResponseAPIUsage and then serializes it, so Pydantic warns on every
+# model call. This happens after the reply is delivered and changes nothing in the run.
+# Only that one warning is hidden; any other serializer warning still shows.
+# Remove once LiteLLM fixes _transform_usage_objects in litellm_logging.py.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Pydantic serializer warnings:\s+PydanticSerializationUnexpectedValue\(Expected `ResponseAPIUsage`",
+    category=UserWarning,
+)
 
 
 def providers_with_keys(providers: Sequence[Provider]) -> list[Provider]:
