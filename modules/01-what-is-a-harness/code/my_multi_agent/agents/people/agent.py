@@ -21,7 +21,8 @@ def create_people_agent(model: BaseLlm) -> Agent:
         description=build_description_from_tools(__file__, "description.md", people_tools),
         wait_for_output=True,
         instruction=build_instructions(__file__, "instructions.md",
-                                       state_section=listings_section(people_tools)),
+                                       state_section=listings_section(people_tools),
+                                       with_task_rules=True),
         tools = people_tools,
         mode="task"
     )

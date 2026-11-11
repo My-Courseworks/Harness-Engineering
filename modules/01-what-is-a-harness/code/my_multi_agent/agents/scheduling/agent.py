@@ -20,7 +20,7 @@ def create_scheduling_agent(model: BaseLlm) -> Agent:
         model=model,
         description=build_description_from_tools(__file__, "description.md", scheduling_tools),
         wait_for_output=True,
-        instruction=build_instructions(__file__, "instructions.md"),
+        instruction=build_instructions(__file__, "instructions.md", with_task_rules=True),
         tools = scheduling_tools,
         mode="task"
     )
