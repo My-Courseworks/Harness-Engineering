@@ -34,6 +34,9 @@ styles:
   agent: "#f97316"
   tool_call: "#c98b8b"
   tool_response: "#8b9cc9"
+  context: "grey62"               # the context usage line above the prompt
+  context_warn: "yellow"          # same line, once usage reaches context_warn_percent
+  context_critical: "red"         # same line, once usage reaches context_critical_percent
 
 labels:
   user: "[user]:"
@@ -49,6 +52,7 @@ display:
     show_agent_name: false
     show_error_details: false
     show_subagent_answers: false
+    show_context_usage: false     # the line above the prompt: how full the model's context window is
     code_theme: "monokai"
     width: 0                      # use default terminal width
     # masking:
@@ -61,6 +65,9 @@ display:
     show_agent_name: true
     show_error_details: true
     show_subagent_answers: true
+    show_context_usage: true      # the line above the prompt: how full the model's context window is
+    context_warn_percent: 70      # the line changes colour from here
+    context_critical_percent: 90  # and again from here
     tool_response_max_chars: 300
     code_theme: "monokai"
     width: 0                      # use default terminal width

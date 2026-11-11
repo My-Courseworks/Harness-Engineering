@@ -1,9 +1,9 @@
 """
 """
 
+from google.adk.events import Event
 from google.adk.runners import Runner
 from google.adk.agents import RunConfig
-# TODO: import RunConfig
 
 from google.genai import types
 
@@ -18,11 +18,15 @@ from chat.render_chat import (
 )
 
 
-async def get_async_agent_response(query: str, runner: Runner, run_config: RunConfig, 
-                                   user_id, session_id, console: Console, view: View):
+async def get_async_agent_response(query: str, runner: Runner, run_config: RunConfig,
+                                   user_id, session_id, console: Console, view: View) -> list[Event]:
     """
+    Send one user message, print everything the agents produce for it, and return
+    the complete events of the turn, in order. Streaming fragments (partial events)
+    are printed but left out: every one of them is repeated in a complete event.
     """
 
+    turn_events: list[Event] = []
     open_kind: str | None = None
     answer: AnswerStream | None = None
 
@@ -41,7 +45,10 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
         async for event in runner.run_async(user_id=user_id, session_id=session_id, 
                                             new_message=new_msg,
                                             run_config=run_config):
-            
+
+            if not event.partial:
+                turn_events.append(event)
+
             if not event.content or not event.content.parts:
                 continue
             
@@ -97,3 +104,5 @@ async def get_async_agent_response(query: str, runner: Runner, run_config: RunCo
     finally:
         # after turn completion, no stream needed to be open.
         await close_current()
+
+    return turn_events

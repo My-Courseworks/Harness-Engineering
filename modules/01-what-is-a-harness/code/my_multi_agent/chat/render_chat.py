@@ -17,6 +17,8 @@ from chat.masking.units import NOTHING_TO_SHOW, split_units
 
 from commons.config import Styles, Display, Labels
 
+CONTEXT_BAR_CELLS = 20      # width of the bar in the context usage line
+
 
 @dataclass
 class AnswerStream:
@@ -46,6 +48,46 @@ def shows_answer(view: View, author: str) -> bool:
 
 def print_user(console: Console, view: View, text: str) -> None:
     console.print(Text(f"\n{view.labels.user} {text}", style=view.styles.user))
+
+
+def _short_count(tokens: int) -> str:
+    """864 -> '864', 12400 -> '12.4k', 128000 -> '128k', 1047576 -> '1.05M'."""
+    if tokens >= 999_950:
+        return f"{tokens / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
+    if tokens >= 1_000:
+        return f"{tokens / 1_000:.1f}".rstrip("0").rstrip(".") + "k"
+    return str(tokens)
+
+
+def _context_usage_line(used: int, window: int | None) -> str:
+    """'context ██░░░░░░░░░░░░░░░░░░ 9.7% · 12.4k / 128k', or the count alone when the
+    window is unknown: a bar and a percentage would then be a guess."""
+    if window is None:
+        return f"context {_short_count(used)} tokens"
+    filled = min(CONTEXT_BAR_CELLS, round(CONTEXT_BAR_CELLS * used / window))
+    bar = "█" * filled + "░" * (CONTEXT_BAR_CELLS - filled)
+    return f"context {bar} {100 * used / window:.1f}% · {_short_count(used)} / {_short_count(window)}"
+
+
+def print_context_usage(console: Console, view: View, used: int | None, window: int | None) -> None:
+    """
+    One line saying how full the model's context window is, meant to sit just above
+    the prompt.
+
+    used: tokens the conversation occupies, or None before the first model call,
+        in which case nothing is printed.
+    window: input tokens the model accepts, or None when that is unknown.
+    """
+    if not view.display.show_context_usage or used is None:
+        return
+    percent = 100 * used / window if window else 0
+    if percent >= view.display.context_critical_percent:
+        style = view.styles.context_critical
+    elif percent >= view.display.context_warn_percent:
+        style = view.styles.context_warn
+    else:
+        style = view.styles.context
+    console.print(Text(f"\n{_context_usage_line(used, window)}", style=style))
 
 
 def print_tool_call(console: Console, view: View, author: str, name: str, args: dict | None) -> None:

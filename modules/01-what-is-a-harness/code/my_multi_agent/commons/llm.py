@@ -59,6 +59,15 @@ def _is_tool_calling_chat_model(model_str: str) -> bool:
     return info.get("mode") == "chat" and bool(info.get("supports_function_calling"))
 
 
+def context_window(model_str: str) -> int | None:
+    """How many input tokens the model accepts, according to LiteLLM's bundled registry.
+    None when the registry does not know the model, or knows it without this figure."""
+    try:
+        return litellm.get_model_info(model_str).get("max_input_tokens")
+    except Exception:
+        return None
+
+
 def list_chat_models(provider: Provider) -> list[str]:
     """
     The model names this provider offers for the configured key, limited to chat

@@ -18,6 +18,9 @@ class Styles:
     agent: str
     tool_call: str
     tool_response: str
+    context: str = "grey62"             # the context usage line above the prompt
+    context_warn: str = "yellow"        # same line, from Display.context_warn_percent
+    context_critical: str = "red"       # same line, from Display.context_critical_percent
 
 @dataclass(frozen=True)
 class Labels:
@@ -34,6 +37,9 @@ class Display:
     show_agent_name: bool = False
     show_error_details: bool = False     # tracebacks carry module and tool names
     show_subagent_answers: bool = False  # sub-agents narrate process; only the root agent answers the user
+    show_context_usage: bool = False     # a line above the prompt: how full the model's context window is
+    context_warn_percent: int = 70       # at or above this, the line is drawn in styles.context_warn
+    context_critical_percent: int = 90   # at or above this, in styles.context_critical
     tool_response_max_chars: int = 300
     code_theme: str = "monokai"
     width: int = 0                      # use default terminal width
