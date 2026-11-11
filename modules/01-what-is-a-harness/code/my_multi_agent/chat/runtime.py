@@ -39,8 +39,7 @@ def build_runtime(root_agent: Agent, session_service: DatabaseSessionService,
 
     runner = Runner(
         app=app,
-        session_service=session_service,
-        auto_create_session=True
+        session_service=session_service
     )
     run_config = RunConfig(streaming_mode=StreamingMode.SSE)
 

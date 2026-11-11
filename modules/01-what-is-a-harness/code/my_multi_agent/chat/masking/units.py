@@ -1,4 +1,10 @@
 """
+What a unit is, and the unit operations that need no model.
+
+An answer is checked in units: one complete line, one whole table, or one
+fenced code block. A unit is shown only after it has been checked, so nothing
+on screen ever has to be taken back. This module splits text into units,
+drops the table rows that name internals, and cleans a whole text unit by unit.
 """
 
 import re

@@ -1,4 +1,11 @@
 """
+The unit cleaner: what to do with one unit that names an internal.
+
+A clean unit passes through untouched. A table loses its offending rows, a
+code block is withheld, and a line of prose is rewritten by a model and then
+rechecked, and withheld if the rewrite fails or still names something.
+Results are cached, so the live stream and the after-model callback share one
+model call per offending unit.
 """
 
 import re

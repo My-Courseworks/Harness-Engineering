@@ -1,4 +1,10 @@
 """
+Types and one helper shared by the whole masking package.
+
+Kind names the two sorts of internal name, CleanUnit is the signature of the
+function that decides what happens to one unit of an answer, and
+response_text pulls the answer text out of a model response.
+This module imports nothing from the package, so every other module may use it.
 """
 
 from typing import Awaitable, Callable, Literal

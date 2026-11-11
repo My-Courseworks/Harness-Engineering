@@ -10,13 +10,22 @@ from utils.file_ops import read_file_if_exists
 
 
 
-def build_instructions(module_file, filename):
+def build_instructions(module_file, filename, state_section=None):
     # Return an InstructionProvider (ADK calls it every turn) so the date stays fresh.
     # The static body is read once; only now_local() is re-evaluated per turn.
+    #
+    # state_section, when given, is a function of the session state that returns text to
+    # append (or "" for nothing). ADK does not fill {key} placeholders in an instruction
+    # that comes from a function, so anything from state has to be added here.
     base = read_file_if_exists(module_file, filename)
 
     def provide(readonly_context=None):
-        return f"Today is {now_local(date=True)}\n\n{base}"
+        text = f"Today is {now_local(date=True)}\n\n{base}"
+        if state_section is not None and readonly_context is not None:
+            section = state_section(readonly_context.state)
+            if section:
+                text += f"\n\n{section}"
+        return text
 
     return provide
 

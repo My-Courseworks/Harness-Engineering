@@ -3,7 +3,7 @@
 
 from rich.console import Console
 
-from google.adk.sessions import DatabaseSessionService
+from google.adk.sessions.session import Session
 
 from chat.masking.masking_policy import DISPLAY_TEXT_KEY
 from chat.render_chat import (
@@ -14,20 +14,18 @@ from chat.render_chat import (
     print_tool_call, print_tool_response
 )
 
-async def replay_session(
-    app_name: str, session_id: str, user_id: str, session_service: DatabaseSessionService,
-    console: Console, view: View
-):
+async def replay_session(session: Session | None, console: Console, view: View):
     """
+    Print the last five turns of a stored session. The caller fetches the session,
+    so it can be read once and shared with whatever else needs it.
     """
-    # check if session exists, and retrieve last 5 messages to be displayed.
     try:
-        session = await session_service.get_session(
-            app_name=app_name, user_id=user_id, session_id = session_id
-        )
         if session:
             invocations = {}
             for event in getattr(session, 'events'):
+                # skip empty-invocation events like the missing-key additions to state of resumed sessions.
+                if not event.invocation_id:
+                    continue
                 if event.invocation_id not in invocations:
                     invocations[event.invocation_id] = event.timestamp
                 else:

@@ -1,4 +1,10 @@
 """
+Finding the internal names, and asking whether a piece of text contains one.
+
+The names are collected by walking the agent tree: every agent, every tool an
+agent carries, plus the tool names ADK injects at call time. They are compiled
+into one regular expression per kind. Detection is by identifier only: text
+that describes the design without naming anything is not caught here.
 """
 
 import re

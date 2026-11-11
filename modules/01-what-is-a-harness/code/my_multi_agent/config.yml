@@ -4,6 +4,23 @@ features:
   masked_role_instruction: true   # also tell the model not to narrate internals (prevention).
                                   # Turn off to see how the holdback performs on its own.
 
+initial_state:
+  read_page_size: 20              # 20 entries per page
+
+# Model providers offered at startup. A provider appears in the menu only when its key
+# is set in .env. The models of the chosen provider are fetched live.
+providers:
+  - label: DeepSeek
+    litellm_provider: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    api_base: https://api.deepseek.com    # DeepSeek is asked for its model list at this address
+    default_model: deepseek-v4-flash
+  - label: OpenAI
+    litellm_provider: openai
+    api_key_env: OPENAI_API_KEY
+    admin_key_env: OPENAI_ADMIN_KEY       # optional: lets the menu show this month's spend
+    default_model: gpt-4.1-mini
+
 # Where runtime state lives. Paths are relative to the project root unless absolute.
 # The whole data/ folder is gitignored. OPS_DESK_DB overrides database.path.
 database:

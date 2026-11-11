@@ -49,10 +49,25 @@ class Features:
     masked_role_instruction: bool = True
 
 @dataclass(frozen=True)
+class InitialState:
+    read_page_size: int = 20
+
+@dataclass(frozen=True)
+class Provider:
+    label: str                      # shown in the provider menu
+    litellm_provider: str           # the prefix LiteLLM expects in a model string, e.g. "openai"
+    api_key_env: str                # name of the environment variable that holds the key
+    default_model: str              # known-good model: preselected, and offered even if the listing fails
+    api_base: str | None = None     # only for providers that must be asked for their model list at their own address
+    admin_key_env: str | None = None  # optional: env var of a key allowed to read spend, for the provider menu
+
+@dataclass(frozen=True)
 class Config:
     styles: Styles
     labels: Labels
     displays: dict[str, Display]       # keyed by role == "user" or "admin"
+    providers: tuple[Provider, ...] = ()
+    initial_state: InitialState = InitialState()
     features: Features = Features()
     database: Database = Database()
 
@@ -69,4 +84,6 @@ def load_config(path: Path = CONFIG_FILE) -> Config:
                   for role, d in raw.get("display", {}).items()},
         features=Features(**raw.get("features", {})),
         database=Database(**raw.get("database", {})),
+        initial_state=InitialState(**raw.get("initial_state", {})),
+        providers=tuple(Provider(**p) for p in raw.get("providers", [])),
     )
